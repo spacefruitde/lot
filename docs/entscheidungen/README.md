@@ -8,9 +8,9 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0002](0002-einheiten-und-koordinaten.md) | Einheiten und Koordinaten | umgesetzt |
 | [0003](0003-swift-anbindung-uniffi.md) | Swift-Anbindung mit UniFFI | umgesetzt |
 | [0004](0004-3d-booleans-manifold-rust.md) | 3D-Booleans mit manifold-rust | umgesetzt |
-| [0005](0005-2d-polygone-clipper2.md) | 2D-Polygone mit clipper2-rust | für M1 |
+| [0005](0005-2d-polygone-clipper2.md) | 2D-Polygone mit clipper2-rust | umgesetzt |
 | [0006](0006-renderer-wgpu.md) | Renderer mit wgpu im NSView der App | umgesetzt |
-| [0007](0007-2d-tessellierung-lyon.md) | Planansicht auf dem Bildschirm mit lyon | für M1 |
+| [0007](0007-2d-tessellierung-lyon.md) | Planansicht auf dem Bildschirm mit lyon | umgesetzt |
 | [0008](0008-projektdatei-sqlite.md) | Projektdatei als SQLite | umgesetzt |
 | [0009](0009-testprojekte-ron.md) | Testprojekte als RON-Textdateien | umgesetzt |
 | [0010](0010-planausgabe-pdf-svg-png.md) | Planausgabe als PDF, SVG und PNG | umgesetzt |
@@ -22,3 +22,4 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0016](0016-pdf-als-unterlage.md) | PDF als Unterlage | für M4 |
 | [0017](0017-wandanschluesse-nach-schichtrang.md) | Wandanschlüsse nach Schichtrang | umgesetzt, Ben prüft |
 | [0018](0018-buerostandard-als-daten.md) | Bürostandard als Daten | umgesetzt, Vorschlag |
+| [0019](0019-bearbeiten-im-kern.md) | Werkzeuge, Fangen und Befehle im Kern | umgesetzt |

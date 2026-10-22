@@ -58,3 +58,7 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Bürostandard | `OfficeStandard` | | Materialien, Schraffuren, Stiftsets je Maßstab |
 | Detailgrad | `Detail` | | grob (1:200), mittel (1:100), fein (1:50) |
 | Schnittkante | `Pens::cut` | | Umriss geschnittener Bauteile |
+| Werkzeug | `Tool` | | Auswählen, Wand, Achse, Stütze |
+| Fangen, Fangpunkt | `snap`, `Snap` | | Einrasten an Wandenden, Wänden, Achsen, Winkeln |
+| Befehl | `Command` | | jede Funktion mit Kennung, für Befehlspalette und KI |
+| Planansicht | `ViewMode::Plan` | | Grundriss auf dem Bildschirm, wie gedruckt |
