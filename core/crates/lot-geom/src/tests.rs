@@ -498,3 +498,49 @@ fn random_constellations_with_arcs_never_overlap() {
         assert_no_overlaps(&r);
     }
 }
+
+#[test]
+fn every_arc_layer_is_one_piece() {
+    // Eine freie Bogenwand: Jede Schicht ist genau ein Ring, ohne Fuge an
+    // den Facettenstößen, für beliebige Lage, Länge und Stich.
+    let mut seed: u64 = 0x0b09_e11a;
+    let mut next = move |n: u64| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed % n
+    };
+    for _ in 0..300 {
+        let mut p = project();
+        let a = (next(2000) as f64 / 100.0 - 10.0, next(2000) as f64 / 100.0 - 10.0);
+        let b = (next(2000) as f64 / 100.0 - 10.0, next(2000) as f64 / 100.0 - 10.0);
+        let chord = (b.0 - a.0).hypot(b.1 - a.1);
+        if chord < 1.0 {
+            continue;
+        }
+        let wall_type = [WDVS, INNEN, TRENN][next(3) as usize];
+        let id = add_wall(&mut p, wall_type, a, b, WallAlignment::Center);
+        let sagitta = (next(1000) as f64 / 1000.0 - 0.5) * chord;
+        bend(&mut p, id, (sagitta * 100.0).round() / 100.0);
+        for r in regions(&p) {
+            let rings = r.area.rings();
+            assert_eq!(
+                rings.len(),
+                1,
+                "Schicht {} von {a:?} nach {b:?}, Stich {sagitta}: {} Ringe",
+                r.layer,
+                rings.len()
+            );
+            // Kein Schlitz: Keine Ecke kehrt um.
+            let ring = &rings[0];
+            let n = ring.len();
+            for k in 0..n {
+                let (u, v, w) = (ring[(k + n - 1) % n], ring[k], ring[(k + 1) % n]);
+                let d1 = [v[0] - u[0], v[1] - u[1]];
+                let d2 = [w[0] - v[0], w[1] - v[1]];
+                let cos = (d1[0] * d2[0] + d1[1] * d2[1]) / (d1[0].hypot(d1[1]) * d2[0].hypot(d2[1]));
+                assert!(cos > -0.99, "Schlitz in Schicht {} bei {v:?}, von {a:?} nach {b:?}, Stich {sagitta}", r.layer);
+            }
+        }
+    }
+}
