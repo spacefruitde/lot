@@ -7,7 +7,7 @@
 - `wandknoten-50.pdf`: Katalog mit 27 Wandknoten, 1:50, fünf Blätter A4 quer. **In Originalgröße drucken (100 %).**
 - `wandknoten-50-1.png` bis `-5.png`: dieselben Blätter zum Ansehen auf dem iPhone
 - `wandknoten-100.pdf`: der Katalog in 1:100, zum Vergleich der Detailstufen
-- `eg-100.pdf`, `eg-50.pdf`, `eg-200.pdf`: Grundriss EG des Testprojekts EFH in drei Maßstäben, dazu `eg-100.png` und `eg-50.png`
+- `eg-100.pdf`, `eg-50.pdf`, `eg-200.pdf`: Grundriss EG des Testprojekts EFH in drei Maßstäben, dazu `eg-50.png`, `eg-100.png` und `eg-200.png`
 - `kg-100.pdf`, `dg-100.pdf` und `dg-100.png`: Keller und Dachgeschoss
 - `efh-3d.png`: das ganze Haus in 3D, gerechnet vom Renderer der App
 - `eg-planansicht.png`: der Grundriss so, wie ihn die App auf dem Bildschirm zeigt
@@ -47,7 +47,7 @@ Antwort jeweils Ja oder Nein und ein Satz. Wo ein Vorschlag steht, reicht „Vor
 4. Knoten 12: Die Trockenbauwand stößt durch den Putz bis ans Mauerwerk. Vorschlag: so lassen, so wird es auch gebaut.
 5. In 1:50 sieht man keinen Putz: Die Schnittlinie mit 0,70 mm reicht 0,35 mm nach innen, 1,5 cm Putz sind dort nur 0,3 mm. Vorschlag: Schnittlinie in 1:50 auf 0,50 mm und Putz mit einer feinen Linie 0,13 abgrenzen.
 6. Knoten 23 und 24 (freie Wandenden): Im Modell läuft der Putz nicht um das Wandende herum, sobald er sichtbar ist (Frage 5), fehlt er an der Stirnseite. Vorschlag: in 1:50 um das Ende herumführen, in 1:100 und 1:200 nicht.
-7. Schraffuren (1:50): Mauerwerk 45° im Abstand 1,25 mm, Stahlbeton gekreuzt, harte Dämmung (WDVS) als Zickzack, weiche Dämmung (Mineralwolle, etwa im Trockenbau) als Schlangenlinie, Putz und Gipskarton leer. In 1:100 nur das Tragende schraffiert, in 1:200 nichts. Passt das? Vorschlag: ja, als Grundeinstellung des Bürostandards.
+7. Schraffuren (1:50): Mauerwerk 45° im Abstand 1,25 mm, Stahlbeton gekreuzt, harte Dämmung (WDVS) als Zickzack, weiche Dämmung (Mineralwolle, etwa im Trockenbau) als Schlangenlinie, Putz und Gipskarton leer. In 1:100 nur das Tragende schraffiert, die übrigen Schichten als Linie, in 1:200 schwarz gefüllt ohne Schichten (wie in PLAN.md vorgeschlagen). Passt das? Vorschlag: ja, als Grundeinstellung des Bürostandards.
 8. Knoten 17 und 18 (spitze Winkel): Die Spitze läuft voll aus. Gekappt wird sie erst, wenn sie mehr als zwei Wanddicken über den Knotenpunkt hinausragt, bei mittiger Achse also unter etwa 29°. Vorschlag: so lassen.
 9. Schnitthöhe 1,00 m über OKFF. Im DG (`dg-100.pdf`) liegt der Kniestock darunter und erscheint deshalb geschnitten, die Dachflächen kommen erst mit M3. Vorschlag: 1,00 m als Grundeinstellung, je Geschoss änderbar.
 10. **Abnahme:** In der App das EG des EFH in wenigen Minuten nachzeichnen: Außenwände, Innenwände, zwei Achsen, eine Stütze. Geht das ohne Anleitung, und fühlen sich Fangen und Verschieben richtig an?
