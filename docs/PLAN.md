@@ -110,10 +110,10 @@ core (Rust, plattformunabhängig, läuft auch headless unter Linux)
 8. **Bauteilklassen nach IFC.** Der IFC-Import (6.02) läuft in V1 voraussichtlich über IFClite, eine Rust-Bibliothek (MPL-2.0), die IFC auch schreiben kann. Damit wird der spätere IFC-Export (6.01) deutlich billiger. Alternativen sind IfcOpenShell und web-ifc. Importierte Modelle sind Referenzen: sichtbar, schneidbar, aber nicht bearbeitbar.
 9. **Eine Planpipeline, drei Ausgaben.** Aus einer Ansicht werden Planobjekte (Abschnitt „Planpipeline“), und diese Planobjekte gehen auf den Bildschirm, ins PDF und ins DXF. Dadurch sieht der Plan überall gleich aus.
 10. **Darstellungsregeln sind Daten:** Stiftsets, Schraffur je Material, Detailgrad je Maßstab, Farben für Bestand, Abbruch und Neubau. Sie liegen im Bürostandard (2.08) und kommen mit guten deutschen Voreinstellungen.
-11. **DWG:**
-    - In V1 lesen und schreiben wir DXF direkt.
-    - DWG läuft über den kostenlosen ODA File Converter als Zwischenschritt. Ob dessen Nutzungsbedingungen für Bens Büro passen, prüfen wir in M0. (Ergebnis M0: unklar bis unzulässig, Vorschlag acadrust, siehe ADR 0012.)
-    - Für das spätere Produkt kommt eine ODA-Mitgliedschaft mit dem Drawings SDK infrage.
+11. **DXF und DWG:**
+    - In V1 lesen und schreiben wir DXF und DWG direkt über die Rust-Bibliothek acadrust (MPL-2.0, als Bibliothek). Entschieden in M0, siehe ADR 0012.
+    - Den ODA File Converter nutzen wir nicht: Er ist nur für nichtkommerzielle Nutzung frei, und ausliefern dürfen wir ihn nicht.
+    - Für das spätere Produkt bleibt eine ODA-Mitgliedschaft mit dem Drawings SDK die Rückfallebene.
 12. **PDF als Unterlage (6.05):** Auf dem Mac rendert PDFKit die Seite. Kalibriert wird über zwei Punkte mit bekanntem Abstand, Vektorlinien werden nach Möglichkeit als Fangpunkte genutzt.
 
 ### Bibliotheken (geprüft in M0, Details in `docs/entscheidungen/`)
@@ -129,7 +129,7 @@ core (Rust, plattformunabhängig, läuft auch headless unter Linux)
 | Projektdatei | SQLite 3.53 über rusqlite 0.40 | gemeinfrei / MIT | | 0008 |
 | PDF-Ausgabe | krilla 0.8 | MIT/Apache-2.0 | Exakte Linienbreiten, Schrift als Teilmenge eingebettet. Schraffuren als einzelne Linien | 0010 |
 | PDF-Unterlage | PDFKit (Mac), später pdfium für Windows | Apple / BSD-3 | für M4 | 0016 |
-| DXF und DWG | **Vorschlag:** acadrust statt dxf-Crate und ODA File Converter | MPL-2.0 | dxf-Crate verwirft Schraffuren. ODA-Converter für den Büroeinsatz lizenzrechtlich unklar | 0012 |
+| DXF und DWG | acadrust statt dxf-Crate und ODA File Converter (Ben, M0) | MPL-2.0 | dxf-Crate verwirft Schraffuren. ODA-Converter für den Büroeinsatz lizenzrechtlich unklar | 0012 |
 | IFC lesen und schreiben | IFClite (`ifc-lite-core`) | MPL-2.0 | Baut nativ ohne WASM. Bei M4 neu bewerten (häufige Hauptversionen) | 0013 |
 | Planschrift nach ISO 3098 | osifont, Datei `osifont-lgpl3fe.ttf` | LGPL-3.0 mit Font-Ausnahme | Einbetten in PDFs erlaubt. Zur Laufzeit geladen. Keine deutschen Anführungszeichen | 0011 |
 | Snapshot-Tests | eigene Golden-Tests, insta ab M1 | Apache-2.0 | | 0015 |
@@ -374,7 +374,7 @@ Die Fälle im `wandknoten`-Katalog:
 - Beta mit 3-5 befreundeten kleinen Büros, ein Preismodell finden
 - IFC-Export (6.01) und Zertifizierung bei buildingSMART, Mehrbenutzer (7.01), Cloud-Sync (7.04)
 - Windows-App mit demselben Kern, iPad-App (8.02)
-- ODA-Mitgliedschaft für natives DWG
+- ODA-Mitgliedschaft für natives DWG, falls acadrust nicht reicht (ADR 0012)
 - Revit-Brücke (6.06), voraussichtlich über den Speckle-Connector
 - KI-Assistent (8.06) auf Basis der Befehle
 
@@ -390,7 +390,7 @@ Die Fälle im `wandknoten`-Katalog:
 
 ### Vorbereitung
 
-1. Xcode in aktueller Version, Rust über `rustup`, Git, Claude Code
+1. Xcode in aktueller Version, Rust über `rustup` (Version steht in `core/rust-toolchain.toml`), Git, Claude Code
 2. Ein neues privates Repository anlegen, `CLAUDE.md` und `docs/PLAN.md` hineinlegen
 3. Falls relevant, das ArchiPedia-Repository daneben klonen, damit die Session es lesen kann
 

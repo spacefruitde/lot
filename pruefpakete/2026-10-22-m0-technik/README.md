@@ -35,16 +35,19 @@ Antwort jeweils Ja oder Nein und ein Satz.
 9. Ist osifont (Reihe F) als Planschrift für Lot in Ordnung? Vorschlag: ja, bis der Bürostandard in M5 eine eigene Wahl erlaubt.
 10. `3d.png`: Taugt der Look (helles Arbeitsmodell mit dunklen Kanten) als Ausgangspunkt? Vorschlag: ja, Materialien und Schatten kommen später.
 
-## Entscheidungen, die ich von dir brauche
+## Entschieden
 
-1. **DWG ohne ODA File Converter** (ADR 0012). Der kostenlose Converter ist laut ODA nur für nichtkommerzielle Nutzung frei; für den Büroalltag ist das unklar, mit Lot ausliefern ist verboten. Die Rust-Bibliothek acadrust (MPL-2.0) liest und schreibt DXF und DWG und hat im Test echte Pläne samt Schraffuren gelesen. **Vorschlag:** acadrust für DXF und DWG, der ODA-Converter entfällt. Betrifft erst M4.
-2. **rustup statt Homebrew-Rust** (ADR 0001). Mit Homebrew-Rust läuft die App nur ab macOS 26 und nur auf Apple Silicon. rustup ändert den Suchpfad in deiner Shell. **Vorschlag:** jetzt umstellen; ich mache das auf dein Ja.
+Ben: „ich folge deinen beiden empfehlungen“
 
-## Was ich nicht prüfen konnte
+1. **DWG über acadrust**, kein ODA File Converter (ADR 0012). Umsetzung in M4.
+2. **rustup statt Homebrew-Rust** (ADR 0001). Erledigt: Die App läuft jetzt ab macOS 14 und auf Apple Silicon und Intel. Neue Terminal-Fenster finden cargo über `~/.zshrc`.
 
-- Die App selbst habe ich nicht gesehen, der Bildschirmzugriff war gesperrt. Laut Protokoll startet die 3D-Ansicht ohne Fehler (1240 × 1000 Pixel, Metal).
+## Was ich geprüft habe und was nicht
+
+- App: startet, zeichnet die Wand, Breite per Pfeil von 1,50 auf 1,60 m und zweimal Widerrufen zurück auf 1,50 m. Eine ungültige Eingabe zeigt eine Meldung, das Modell bleibt unverändert.
+- Behoben: Startete die App auf einem verdeckten Space, blieb die 3D-Ansicht leer, bis man sie berührte.
+- Nicht prüfen konnte ich die Trackpad-Gesten selbst (Fragen 4 bis 6).
 - Unter Linux habe ich nicht gebaut. Alle Bibliotheken im Kern sind reines Rust oder C (SQLite), Probleme erwarte ich keine. Die erste Cloud-Session zeigt es.
-- 120 Hz auf ProMotion-Displays: Die Ansicht zeichnet nur bei Änderungen. Ob macOS dabei die Bildrate senkt, zeigt Frage 6.
 
 ## Messwerte
 

@@ -1,6 +1,8 @@
 # 0012 DXF und DWG
 
-Status: **Vorschlag, Entscheidung durch Ben offen** · 22.10.2026
+Status: entschieden, Umsetzung in M4 · 22.10.2026
+
+Ben: „ich folge deinen beiden empfehlungen“
 
 ## Kontext
 
@@ -17,7 +19,7 @@ PLAN.md sieht vor: DXF lesen und schreiben wir direkt, DWG über den kostenlosen
 
 **acadrust** (0.6.6, MPL-2.0, reines Rust): liest und schreibt DXF **und DWG** von R12 bis 2018+, 48 Elementtypen mit Schraffuren. Der DWG-Teil ist aus ACadSharp (MIT) portiert. Im Test wurden vier DXF und zwei echte DWG fehlerfrei gelesen, DWG in 27 bis 60 ms. Sehr jung (seit Januar 2026), häufige Versionen.
 
-## Vorschlag
+## Entscheidung
 
 DXF und DWG über **acadrust**, als Bibliothek (MPL-2.0 erlaubt das), fest gepinnt und hinter einer eigenen Schnittstelle in `lot-io`. Der ODA File Converter entfällt. Abgesichert mit Golden-Tests an echten Plänen aus Bens Büro. Rückfallebene für das Produkt bleibt eine ODA-Mitgliedschaft.
 
@@ -29,4 +31,6 @@ DXF und DWG über **acadrust**, als Bibliothek (MPL-2.0 erlaubt das), fest gepin
 
 ## Folgen
 
-Wenn Ben zustimmt: PLAN.md, Abschnitt 4, Punkt 11 anpassen, die Prüfung echter DXF/DWG-Pläne in M4 einplanen.
+- PLAN.md, Abschnitt 4, Punkt 11 ist angepasst.
+- In M4: acadrust fest pinnen, eigene Schnittstelle in `lot-io`, Golden-Tests mit echten DXF- und DWG-Plänen aus Bens Büro (anonymisiert oder nur lokal, nicht im Repository).
+- Der ODA File Converter wird nicht verwendet, auch nicht im Büroalltag als Zwischenschritt.
