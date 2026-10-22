@@ -1,0 +1,18 @@
+# Rust
+/core/target/
+**/*.rs.bk
+
+# Xcode
+/app-mac/build/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# Ausgaben der Kommandozeile
+/out/
+
+# macOS
+.DS_Store
+
+# Lokale Testdaten mit ungeklärter Lizenz
+/testprojekte/ifc-referenz/dateien/
