@@ -20,3 +20,5 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0014](0014-brep-rueckfallebene.md) | B-Rep als Rückfallebene | kein B-Rep in V1 |
 | [0015](0015-tests-golden-und-snapshots.md) | Golden-Tests und Snapshot-Tests | umgesetzt |
 | [0016](0016-pdf-als-unterlage.md) | PDF als Unterlage | für M4 |
+| [0017](0017-wandanschluesse-nach-schichtrang.md) | Wandanschlüsse nach Schichtrang | umgesetzt, Ben prüft |
+| [0018](0018-buerostandard-als-daten.md) | Bürostandard als Daten | umgesetzt, Vorschlag |

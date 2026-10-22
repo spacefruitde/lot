@@ -9,7 +9,14 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Schicht | `Layer` | IfcMaterialLayer | |
 | Schichtfunktion | `LayerFunction` | | Tragschicht, Dämmung, Installationsebene, Bekleidung, Luftschicht |
 | Tragschicht | `LayerFunction::Structure` | | höchste Priorität bei Anschlüssen |
-| Wandachse | `WallAxis` | | Bezugslinie der Wand |
+| Bezugslinie | `Wall::start`, `Wall::end` | | Linie, an der eine Wand gezeichnet wird |
+| Lage der Bezugslinie | `WallAlignment` | | Mitte, Außenkante, Innenkante des Aufbaus |
+| Oberkante | `Top` | | feste Höhe oder bis zum nächsten Geschoss |
+| Unterkante über OKFF | `base_offset` | | |
+| OKFF | `Storey::elevation` | | Oberkante Fertigfußboden über ±0,00 |
+| Geschosshöhe | `Storey::height` | | OKFF bis OKFF darüber |
+| Schichtrang | `LayerFunction::priority` | | 1 = Tragschicht, bestimmt das Ineinandergreifen an Anschlüssen |
+| Kniestock | | | niedrige Außenwand im Dachgeschoss, `Top::Height` |
 | Anschluss, Wandknoten | `Join` | | |
 | Geschoss | `Storey` | IfcBuildingStorey | |
 | Achsraster | `Grid` | IfcGrid | |
@@ -48,4 +55,6 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Bestand, Abbruch, Neubau | `Phase::{Existing, Demolished, New}` | | Farbkonvention nach Bauvorlagenverordnung |
 | Abstandsfläche | `SetbackArea` | | nach Landesbauordnung |
 | Variante | `Variant` | | |
-| Bürostandard | `OfficeTemplate` | | |
+| Bürostandard | `OfficeStandard` | | Materialien, Schraffuren, Stiftsets je Maßstab |
+| Detailgrad | `Detail` | | grob (1:200), mittel (1:100), fein (1:50) |
+| Schnittkante | `Pens::cut` | | Umriss geschnittener Bauteile |
