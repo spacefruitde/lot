@@ -34,6 +34,7 @@ impl LotError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Enum)]
 pub enum ParamKind {
     WallLength,
+    WallSagitta,
     WallHeight,
     WallTopOffset,
     BaseOffset,
@@ -51,6 +52,7 @@ impl From<ParamKind> for Param {
     fn from(k: ParamKind) -> Self {
         match k {
             ParamKind::WallLength => Param::WallLength,
+            ParamKind::WallSagitta => Param::WallSagitta,
             ParamKind::WallHeight => Param::WallHeight,
             ParamKind::WallTopOffset => Param::WallTopOffset,
             ParamKind::BaseOffset => Param::BaseOffset,
@@ -66,8 +68,9 @@ impl From<ParamKind> for Param {
     }
 }
 
-const ALL_PARAMS: [ParamKind; 12] = [
+const ALL_PARAMS: [ParamKind; 13] = [
     ParamKind::WallLength,
+    ParamKind::WallSagitta,
     ParamKind::WallHeight,
     ParamKind::WallTopOffset,
     ParamKind::BaseOffset,
@@ -202,8 +205,8 @@ mod tests {
     #[test]
     fn sample_has_all_parameters() {
         let doc = LotDocument::new_sample();
-        // Geschoss: Höhe und Lage; Wand: Länge, Höhe, Versatz; Öffnung: vier Maße.
-        assert_eq!(doc.parameters(Vec::new()).len(), 2 + 3 + 4);
+        // Geschoss: Höhe und Lage; Wand: Länge, Stich, Höhe, Versatz; Öffnung: vier Maße.
+        assert_eq!(doc.parameters(Vec::new()).len(), 2 + 4 + 4);
         assert_eq!(doc.parameters(vec![4]).len(), 4);
         assert_eq!(value(&doc, ParamKind::OpeningWidth), 1.5);
     }

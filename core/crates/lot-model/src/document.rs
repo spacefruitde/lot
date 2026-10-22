@@ -225,6 +225,18 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                 if w.length() < MIN_LENGTH {
                     return Err(invalid("Eine Wand muss mindestens 1 cm lang sein"));
                 }
+                if w.sagitta.abs() > w.chord() / 2.0 + TOLERANCE {
+                    return Err(invalid(
+                        "Der Stich einer Bogenwand darf höchstens die halbe Sehne betragen (Halbkreis)",
+                    ));
+                }
+                if let (Some(arc), Some(t)) = (w.arc(), project.wall_type(w.wall_type)) {
+                    let offsets = w.layer_offsets(t);
+                    let inner = arc.radius_at(offsets[0].0).min(arc.radius_at(offsets[offsets.len() - 1].1));
+                    if inner < MIN_LENGTH {
+                        return Err(invalid("Der Bogen ist zu eng für die Wanddicke"));
+                    }
+                }
                 check_height(project, w.storey, w.base_offset, w.top, "Wand")?;
             }
             Element::Opening(o) => {

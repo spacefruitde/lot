@@ -321,6 +321,7 @@ impl Viewport {
                     match e.tool {
                         Tool::Select => "select",
                         Tool::Wall => "wall",
+                        Tool::ArcWall => "arc",
                         Tool::Grid => "grid",
                         Tool::Column => "column",
                     }

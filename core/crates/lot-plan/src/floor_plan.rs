@@ -148,20 +148,22 @@ fn insulation(objects: &mut Vec<PlanObject>, region: &LayerRegion, soft: bool, p
     if thickness <= 0.0 {
         return;
     }
-    let rings: Vec<Vec<PaperPoint>> = region.area.rings().iter().map(|r| paper(r, viewport)).collect();
-    let Some((lo, hi)) = region.area.bounds() else { return };
-    // Längsbereich der Fläche auf der Wandrichtung.
-    let corners = [[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]];
-    let along =
-        corners.map(|c| (c[0] - band.origin[0]) * band.direction[0] + (c[1] - band.origin[1]) * band.direction[1]);
-    let (s0, s1) = along.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), s| (a.min(*s), b.max(*s)));
+    let model_rings = region.area.rings();
+    let rings: Vec<Vec<PaperPoint>> = model_rings.iter().map(|r| paper(r, viewport)).collect();
+    // Längsbereich der Fläche entlang der Bezugslinie (bei Bögen entlang des Bogens).
+    let (s0, s1) = model_rings
+        .iter()
+        .flatten()
+        .map(|p| band.locate(*p).0)
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), s| (a.min(s), b.max(s)));
+    if !s0.is_finite() {
+        return;
+    }
     let mid = (band.left + band.right) / 2.0;
     let amplitude = thickness / 2.0 * 0.9;
     let period = thickness;
-    let normal = [-band.direction[1], band.direction[0]];
     let point = |s: f64, t: f64| {
-        let x = band.origin[0] + band.direction[0] * s + normal[0] * t;
-        let y = band.origin[1] + band.direction[1] * s + normal[1] * t;
+        let [x, y] = band.point(s, t);
         viewport.to_paper(x, y)
     };
     let start = (s0 / period).floor() * period;

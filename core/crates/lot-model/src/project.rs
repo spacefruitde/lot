@@ -194,6 +194,7 @@ impl Project {
                 alignment: WallAlignment::Center,
                 base_offset: 0.0,
                 top: Top::Height(2.6),
+                sagitta: 0.0,
             }),
         );
         p.elements.insert(

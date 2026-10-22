@@ -68,6 +68,8 @@ impl Response {
 pub enum Tool {
     Select,
     Wall,
+    /// Bogenwand: Anfang, Ende, dann der Stich
+    ArcWall,
     /// Achse: zwei Klicks
     Grid,
     /// Stütze: ein Klick
@@ -109,6 +111,8 @@ pub struct Editor {
     pub alignment: WallAlignment,
     pub selection: Vec<ElementId>,
     chain_start: Option<Point2>,
+    /// Endpunkt einer Bogenwand, deren Stich noch fehlt.
+    arc_end: Option<Point2>,
     drag: Option<Drag>,
     pointer: Option<Snap>,
     typed: String,
@@ -125,6 +129,7 @@ impl Editor {
             alignment: WallAlignment::Center,
             selection: Vec::new(),
             chain_start: None,
+            arc_end: None,
             drag: None,
             pointer: None,
             typed: String::new(),
@@ -145,7 +150,12 @@ impl Editor {
 
     pub fn pointer_moved(&mut self, project: &Project, input: Input) -> Response {
         match self.tool {
-            Tool::Wall | Tool::Grid | Tool::Column => {
+            Tool::ArcWall if self.arc_end.is_some() => {
+                // Der Stich folgt dem Zeiger, gerundet auf 1 cm.
+                self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
+                Response::redraw()
+            }
+            Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column => {
                 self.pointer = Some(snap::snap(
                     project,
                     self.storey,
@@ -202,6 +212,33 @@ impl Editor {
                     }
                     Some(_) => Response::redraw(),
                 }
+            }
+            Tool::ArcWall => {
+                if clicks >= 2 {
+                    self.end_chain();
+                    return Response::redraw();
+                }
+                if let (Some(start), Some(end)) = (self.chain_start, self.arc_end) {
+                    self.pointer = None;
+                    return self.add_arc_wall(doc, start, end, sagitta_from(start, end, input.point));
+                }
+                let p = snap::snap(
+                    doc.project(),
+                    self.storey,
+                    input.point,
+                    input.tolerance,
+                    self.chain_start,
+                    input.shift,
+                    &[],
+                )
+                .point;
+                self.pointer = None;
+                match self.chain_start {
+                    None => self.chain_start = Some(p),
+                    Some(start) if start.distance(p) >= 0.01 => self.arc_end = Some(p),
+                    Some(_) => {}
+                }
+                Response::redraw()
             }
             Tool::Wall => {
                 if clicks >= 2 {
@@ -330,6 +367,8 @@ impl Editor {
         match key {
             Key::Escape => {
                 if self.drag.take().is_some() {
+                } else if self.arc_end.is_some() {
+                    self.arc_end = None;
                 } else if self.chain_start.is_some() {
                     self.end_chain();
                 } else if self.tool != Tool::Select {
@@ -341,6 +380,14 @@ impl Editor {
                 Response::redraw()
             }
             Key::Enter => {
+                if let (Some(start), Some(end), Some(height)) =
+                    (self.chain_start, self.arc_end, parse_length(&self.typed))
+                {
+                    // Getippter Stich, zur Seite des Zeigers.
+                    let side = self.pointer.map_or(1.0, |p| sagitta_from(start, end, p.point).signum());
+                    self.typed.clear();
+                    return self.add_arc_wall(doc, start, end, side * height);
+                }
                 if let (Some(start), Some(length)) = (self.chain_start, parse_length(&self.typed)) {
                     let target = self.pointer.map_or(Point2::new(start.x + 1.0, start.y), |s| s.point);
                     let (dx, dy) = (target.x - start.x, target.y - start.y);
@@ -348,6 +395,10 @@ impl Editor {
                     let (ux, uy) = if len > 1e-9 { (dx / len, dy / len) } else { (1.0, 0.0) };
                     self.typed.clear();
                     let end = Point2::new(start.x + ux * length, start.y + uy * length);
+                    if self.tool == Tool::ArcWall {
+                        self.arc_end = Some(end);
+                        return Response::redraw();
+                    }
                     return self.add_wall(doc, start, end);
                 }
                 self.end_chain();
@@ -378,6 +429,7 @@ impl Editor {
                 Response::redraw()
             }
             Command::WallTool => self.set_tool(Tool::Wall),
+            Command::ArcWallTool => self.set_tool(Tool::ArcWall),
             Command::GridTool => self.set_tool(Tool::Grid),
             Command::ColumnTool => self.set_tool(Tool::Column),
             Command::SetWallType(id) => {
@@ -449,6 +501,7 @@ impl Editor {
         let mut list = vec![
             CommandInfo::new(Command::SelectTool, "Auswählen", "V", "Werkzeug"),
             CommandInfo::new(Command::WallTool, "Wand zeichnen", "W", "Werkzeug"),
+            CommandInfo::new(Command::ArcWallTool, "Bogenwand zeichnen", "B", "Werkzeug"),
             CommandInfo::new(Command::GridTool, "Achse zeichnen", "A", "Werkzeug"),
             CommandInfo::new(Command::ColumnTool, "Stütze setzen", "S", "Werkzeug"),
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
@@ -518,6 +571,32 @@ impl Editor {
                 ]);
             }
         }
+        if self.tool == Tool::ArcWall {
+            overlay.snap = self.pointer.filter(|_| self.arc_end.is_none());
+            match (self.chain_start, self.arc_end, self.pointer) {
+                (Some(start), Some(end), Some(p)) => {
+                    if let Some(mut wall) = self.new_wall(start, end) {
+                        wall.sagitta = sagitta_from(start, end, p.point);
+                        if !self.typed.is_empty() {
+                            wall.sagitta = wall.sagitta.signum() * parse_length(&self.typed).unwrap_or(0.0);
+                        }
+                        overlay.preview = Some(footprint(project, &wall));
+                        let text = format!("Stich {}", format_m(wall.sagitta.abs()));
+                        overlay.label = Some((wall.point_at(wall.length() / 2.0, 0.0), text));
+                    }
+                }
+                (Some(start), None, Some(p)) => {
+                    if let Some(wall) = self.new_wall(start, p.point) {
+                        overlay.preview = Some(footprint(project, &wall));
+                        let mid = Point2::new((start.x + p.point.x) / 2.0, (start.y + p.point.y) / 2.0);
+                        let text =
+                            if self.typed.is_empty() { format_m(wall.length()) } else { format!("{} m", self.typed) };
+                        overlay.label = Some((mid, text));
+                    }
+                }
+                _ => {}
+            }
+        }
         if self.tool == Tool::Wall {
             overlay.snap = self.pointer;
             if let (Some(start), Some(p)) = (self.chain_start, self.pointer)
@@ -542,12 +621,17 @@ impl Editor {
             (Tool::Wall, Some(_), _) => {
                 "Endpunkt klicken oder Länge tippen. ⇧: nur rechte Winkel. Doppelklick oder Esc: fertig.".into()
             }
+            (Tool::ArcWall, None, _) => "Bogenwand: Anfangspunkt klicken. Esc: zurück zum Auswählen.".into(),
+            (Tool::ArcWall, Some(_), _) if self.arc_end.is_some() => {
+                "Stich ziehen und klicken oder tippen, ⏎ übernimmt. Esc: Endpunkt neu.".into()
+            }
+            (Tool::ArcWall, Some(_), _) => "Bogenwand: Endpunkt klicken oder Sehne tippen.".into(),
             (Tool::Grid, None, _) => "Achse: Anfangspunkt klicken. Esc: zurück zum Auswählen.".into(),
             (Tool::Grid, Some(_), _) => "Achse: Endpunkt klicken. ⇧: nur rechte Winkel.".into(),
             (Tool::Column, _, _) => "Stütze 30/30: Mittelpunkt klicken. Esc: zurück zum Auswählen.".into(),
             (Tool::Select, _, Some(_)) => "Loslassen setzt ab. Esc bricht ab.".into(),
             (Tool::Select, _, None) if self.selection.is_empty() => {
-                "Anklicken wählt. W: Wand, A: Achse, S: Stütze. ⌘K: Befehle.".into()
+                "Anklicken wählt. W: Wand, B: Bogenwand, A: Achse, S: Stütze. ⌘K: Befehle.".into()
             }
             (Tool::Select, _, None) => {
                 "Ziehen verschiebt, Enden ziehen ändert die Länge. ⌫ löscht. F dreht um. ⌘K: Befehle.".into()
@@ -564,6 +648,7 @@ impl Editor {
 
     fn end_chain(&mut self) {
         self.chain_start = None;
+        self.arc_end = None;
         self.typed.clear();
     }
 
@@ -576,6 +661,7 @@ impl Editor {
             alignment: self.alignment,
             base_offset: 0.0,
             top: Top::Storey { offset: 0.0 },
+            sagitta: 0.0,
         })
     }
 
@@ -589,6 +675,19 @@ impl Editor {
         let result = doc.insert(Element::Wall(wall)).map(|_| ());
         if result.is_ok() {
             self.chain_start = Some(end);
+        }
+        Response::from_result(result)
+    }
+
+    fn add_arc_wall(&mut self, doc: &mut Document, start: Point2, end: Point2, sagitta: f64) -> Response {
+        let Some(mut wall) = self.new_wall(start, end) else {
+            return Response { error: Some("Im Projekt gibt es noch keinen Wandaufbau".into()), ..Default::default() };
+        };
+        wall.sagitta = sagitta;
+        let result = doc.insert(Element::Wall(wall)).map(|_| ());
+        if result.is_ok() {
+            self.chain_start = Some(end);
+            self.arc_end = None;
         }
         Response::from_result(result)
     }
@@ -639,6 +738,8 @@ impl Editor {
             let Some(w) = project.wall(*id) else { continue };
             let mut n = w.clone();
             std::mem::swap(&mut n.start, &mut n.end);
+            // Der Bogen bleibt, wo er ist: links und rechts tauschen auch hier.
+            n.sagitta = -w.sagitta;
             ops.push(Operation::Replace { id: *id, old: Element::Wall(w.clone()), new: Element::Wall(n) });
             // Öffnungen bleiben an ihrem Ort: Abstand nun vom anderen Ende.
             for (oid, o) in project.openings_in(*id) {
@@ -680,6 +781,18 @@ fn next_grid_label(project: &Project, a: Point2, b: Point2) -> String {
     } else {
         ('A'..='Z').map(String::from).find(|l| !used.contains(l)).unwrap_or_else(|| "?".into())
     }
+}
+
+/// Stich für eine Bogenwand von `start` nach `end` durch den Zeiger `p`: sein
+/// Abstand von der Sehne (links positiv), auf 1 cm gerundet, höchstens ein Halbkreis.
+fn sagitta_from(start: Point2, end: Point2, p: Point2) -> f64 {
+    let chord = start.distance(end);
+    if chord < 1e-9 {
+        return 0.0;
+    }
+    let (dx, dy) = ((end.x - start.x) / chord, (end.y - start.y) / chord);
+    let t = -(p.x - start.x) * dy + (p.y - start.y) * dx;
+    ((t / snap::ROUND).round() * snap::ROUND).clamp(-chord / 2.0, chord / 2.0)
 }
 
 /// Getippte Länge in Metern, Komma oder Punkt als Dezimalzeichen.

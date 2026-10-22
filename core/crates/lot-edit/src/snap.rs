@@ -113,8 +113,18 @@ fn find(
 
     // 4. Auf einer Wand oder Achse; mit Winkel: Schnitt der Richtung mit der Wand.
     let mut on_line: Option<(Point2, f64, SnapKind)> = None;
+    for (_, w) in walls.iter().filter(|(_, w)| w.is_curved()) {
+        let ray = from.zip(angled).map(|(start, q)| (start, unit(start, q)));
+        if let Some(q) = on_arc(w, p, ray) {
+            let dist = q.distance(p);
+            if dist <= tolerance && on_line.is_none_or(|(_, bd, _)| dist < bd) {
+                on_line = Some((q, dist, SnapKind::OnWall));
+            }
+        }
+    }
     let lines = walls
         .iter()
+        .filter(|(_, w)| !w.is_curved())
         .map(|(_, w)| (w.start, w.end, SnapKind::OnWall))
         .chain(grids.iter().map(|g| (g.start, g.end, SnapKind::Grid)));
     for (a, b, kind) in lines {
@@ -144,6 +154,36 @@ fn find(
         return Snap { point: q, kind: SnapKind::Angle };
     }
     Snap { point: Point2::new((p.x / ROUND).round() * ROUND, (p.y / ROUND).round() * ROUND), kind: SnapKind::Free }
+}
+
+/// Punkt auf dem Bogen einer gebogenen Wand: der nächste zu `p`, oder mit
+/// `ray` (Anfang, Richtung) der Schnitt dieses Strahls mit dem Bogen.
+fn on_arc(w: &lot_model::Wall, p: Point2, ray: Option<(Point2, (f64, f64))>) -> Option<Point2> {
+    let arc = w.arc()?;
+    let on = |q: Point2| {
+        let (s, _) = w.locate(q);
+        (-1e-9..=w.length() + 1e-9).contains(&s)
+    };
+    match ray {
+        None => {
+            let (s, _) = w.locate(p);
+            Some(w.point_at(s.clamp(0.0, w.length()), 0.0))
+        }
+        Some((start, d)) => {
+            // |start + u d - c|² = r²
+            let (ox, oy) = (start.x - arc.center.x, start.y - arc.center.y);
+            let b = d.0 * ox + d.1 * oy;
+            let disc = b * b - (ox * ox + oy * oy - arc.radius * arc.radius);
+            if disc < 0.0 {
+                return None;
+            }
+            [-b - disc.sqrt(), -b + disc.sqrt()]
+                .into_iter()
+                .map(|u| Point2::new(start.x + d.0 * u, start.y + d.1 * u))
+                .filter(|q| on(*q))
+                .min_by(|a, b| a.distance(p).total_cmp(&b.distance(p)))
+        }
+    }
 }
 
 fn unit(a: Point2, b: Point2) -> (f64, f64) {

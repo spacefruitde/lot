@@ -56,6 +56,7 @@ struct ContentView: View {
         ToolbarItemGroup {
             toolButton("Auswählen", systemImage: "cursorarrow", tool: "select", command: "SelectTool", key: "V")
             toolButton("Wand", systemImage: "square.split.diagonal.2x2", tool: "wall", command: "WallTool", key: "W")
+            toolButton("Bogenwand", systemImage: "point.topleft.down.curvedto.point.bottomright.up", tool: "arc", command: "ArcWallTool", key: "B")
             toolButton("Achse", systemImage: "line.diagonal", tool: "grid", command: "GridTool", key: "A")
             toolButton("Stütze", systemImage: "square.fill", tool: "column", command: "ColumnTool", key: "S")
             commandMenu("Wandaufbau", systemImage: "square.stack.3d.up", group: "Wandaufbau")

@@ -289,6 +289,7 @@ final class MetalViewportNSView: NSView {
             }
             switch c {
             case "w": model?.run("WallTool")
+            case "b": model?.run("ArcWallTool")
             case "v": model?.run("SelectTool")
             case "a": model?.run("GridTool")
             case "s": model?.run("ColumnTool")

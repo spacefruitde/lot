@@ -12,7 +12,7 @@ pub mod poly;
 
 use std::collections::BTreeMap;
 
-pub use joins::{Band, LayerRegion, column_area, layer_regions};
+pub use joins::{Band, LayerRegion, column_area, layer_regions, wall_section};
 use lot_model::{Element, ElementId, Project};
 use manifold_rust::linalg::{Vec2, Vec3};
 use manifold_rust::manifold::Manifold;
@@ -152,10 +152,9 @@ pub fn plan_extent(project: &Project) -> Option<([f64; 2], [f64; 2])> {
             Element::Wall(w) => {
                 let Some(t) = project.wall_type(w.wall_type) else { continue };
                 let offsets = w.layer_offsets(t);
-                let (dx, dy) = w.direction();
-                for off in [offsets[0].0, offsets[offsets.len() - 1].1] {
-                    points.push([w.start.x - dy * off, w.start.y + dx * off]);
-                    points.push([w.end.x - dy * off, w.end.y + dx * off]);
+                let faces = (offsets[0].0, offsets[offsets.len() - 1].1);
+                if let Some((lo, hi)) = joins::wall_section(w, (0.0, w.length()), faces).bounds() {
+                    points.extend([lo, hi]);
                 }
             }
             Element::Column(c) => {

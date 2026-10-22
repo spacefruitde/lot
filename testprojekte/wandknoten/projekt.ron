@@ -124,5 +124,12 @@ Project(
         61: Wall(storey: 1, wall_type: 5, start: (x: 10.0, y: -40.2), end: (x: 11.4722, y: -41.05), alignment: Center, top: Storey(offset: 0.0)),
         62: Wall(storey: 1, wall_type: 2, start: (x: 18.2, y: -39.6), end: (x: 21.8, y: -39.6), alignment: Exterior, top: Storey(offset: 0.0)),
         63: Opening(host: 62, offset: 1.17, width: 1.26, height: 1.385, sill_height: 0.885),
+        64: Wall(storey: 1, wall_type: 5, start: (x: 28.2, y: -39.4), end: (x: 31.8, y: -39.4), alignment: Center, top: Storey(offset: 0.0)),
+        65: Wall(storey: 1, wall_type: 7, start: (x: 28.8, y: -39.4), end: (x: 31.2, y: -39.4), alignment: Center, top: Storey(offset: 0.0), sagitta: -1.2),
+        66: Wall(storey: 1, wall_type: 5, start: (x: 38.4, y: -40.6), end: (x: 41.6, y: -40.6), alignment: Center, top: Storey(offset: 0.0), sagitta: 1.0),
+        67: Wall(storey: 1, wall_type: 7, start: (x: 40.0, y: -39.6), end: (x: 40.0, y: -41.4), alignment: Center, top: Storey(offset: 0.0)),
+        68: Wall(storey: 1, wall_type: 2, start: (x: 48.4, y: -41.4), end: (x: 48.4, y: -39.4), alignment: Exterior, top: Storey(offset: 0.0)),
+        69: Wall(storey: 1, wall_type: 2, start: (x: 48.4, y: -39.4), end: (x: 51.4, y: -41.4), alignment: Exterior, top: Storey(offset: 0.0), sagitta: 0.6),
+        70: Opening(host: 69, offset: 1.2, width: 1.01, height: 1.385, sill_height: 0.885),
     },
 )

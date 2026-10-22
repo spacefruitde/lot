@@ -56,6 +56,9 @@ struct LotApp: App {
                 Divider()
                 Button("Auswählen") { model.run("SelectTool") }
                 Button("Wand zeichnen") { model.run("WallTool") }
+                Button("Bogenwand zeichnen") { model.run("ArcWallTool") }
+                Button("Achse zeichnen") { model.run("GridTool") }
+                Button("Stütze setzen") { model.run("ColumnTool") }
                 Divider()
                 Button("Alles auswählen") { model.run("SelectAll") }
                     .keyboardShortcut("a")

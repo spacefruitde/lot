@@ -61,6 +61,7 @@ impl Element {
     pub fn param(&self, param: Param) -> Option<f64> {
         match (self, param) {
             (Element::Wall(w), Param::WallLength) => Some(w.length()),
+            (Element::Wall(w), Param::WallSagitta) => Some(w.sagitta),
             (Element::Wall(w), Param::WallHeight) => match w.top {
                 Top::Height(h) => Some(h),
                 Top::Storey { .. } => None,
@@ -96,6 +97,7 @@ impl Element {
         }
         match (self, param) {
             (Element::Wall(w), Param::WallLength) => w.set_length(value),
+            (Element::Wall(w), Param::WallSagitta) => w.sagitta = value,
             (Element::Wall(w), Param::WallHeight) => w.top = Top::Height(value),
             (Element::Wall(w), Param::WallTopOffset) => w.top = Top::Storey { offset: value },
             (Element::Wall(w), Param::BaseOffset) => w.base_offset = value,
@@ -230,23 +232,148 @@ pub struct Wall {
     #[serde(default)]
     pub base_offset: f64,
     pub top: Top,
+    /// Stich (Pfeilhöhe) einer gebogenen Wand: Abstand der Bogenmitte von der
+    /// Sehne zwischen `start` und `end`, positiv nach links. 0 bei geraden Wänden.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sagitta: f64,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+/// Kreisbogen der Bezugslinie einer gebogenen Wand.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CircularArc {
+    pub center: Point2,
+    pub radius: f64,
+    /// Winkel des Anfangspunkts im Bogenmaß.
+    pub start_angle: f64,
+    /// Überstrichener Winkel, positiv gegen den Uhrzeigersinn.
+    pub sweep: f64,
+}
+
+impl CircularArc {
+    pub fn length(&self) -> f64 {
+        self.radius * self.sweep.abs()
+    }
+
+    /// Vorzeichen der Querlage: +1, wenn links der Zeichenrichtung außen liegt
+    /// (Bogen im Uhrzeigersinn), sonst -1.
+    fn outward_sign(&self) -> f64 {
+        if self.sweep < 0.0 { 1.0 } else { -1.0 }
+    }
+
+    /// Radius einer Linie im Abstand `across` von der Bezugslinie (links positiv).
+    pub fn radius_at(&self, across: f64) -> f64 {
+        self.radius + self.outward_sign() * across
+    }
+
+    fn angle_at(&self, along: f64) -> f64 {
+        self.start_angle + self.sweep * along / self.length()
+    }
+
+    /// Punkt im Abstand `along` vom Anfang, gemessen auf dem Bogen, und
+    /// `across` quer dazu (links der Laufrichtung positiv).
+    pub fn point_at(&self, along: f64, across: f64) -> Point2 {
+        let angle = self.angle_at(along);
+        let r = self.radius_at(across);
+        Point2::new(self.center.x + r * angle.cos(), self.center.y + r * angle.sin())
+    }
+
+    /// Umkehrung von [`CircularArc::point_at`]. Die Unstetigkeit liegt gegenüber der Bogenmitte.
+    pub fn locate(&self, p: Point2) -> (f64, f64) {
+        use std::f64::consts::{PI, TAU};
+        let angle = (p.y - self.center.y).atan2(p.x - self.center.x);
+        let half = self.sweep.abs() / 2.0;
+        let phi = (self.sweep.signum() * (angle - self.start_angle) - half + PI).rem_euclid(TAU) - PI + half;
+        (phi * self.radius, self.outward_sign() * (p.distance(self.center) - self.radius))
+    }
+
+    /// Laufrichtung im Abstand `along` vom Anfang.
+    pub fn tangent_at(&self, along: f64) -> (f64, f64) {
+        let angle = self.angle_at(along);
+        let sign = self.sweep.signum();
+        (-sign * angle.sin(), sign * angle.cos())
+    }
 }
 
 impl Wall {
+    /// Länge entlang der Bezugslinie, bei gebogenen Wänden die Bogenlänge.
     pub fn length(&self) -> f64 {
+        self.arc().map_or_else(|| self.chord(), |a| a.length())
+    }
+
+    /// Abstand zwischen Anfang und Ende.
+    pub fn chord(&self) -> f64 {
         self.start.distance(self.end)
     }
 
-    /// Einheitsvektor in Zeichenrichtung.
+    pub fn is_curved(&self) -> bool {
+        self.arc().is_some()
+    }
+
+    /// Bogen der Bezugslinie; `None` bei geraden Wänden.
+    pub fn arc(&self) -> Option<CircularArc> {
+        let c = self.chord();
+        if self.sagitta.abs() < 1e-6 || c < 1e-9 {
+            return None;
+        }
+        let s = self.sagitta;
+        let radius = (c * c / 4.0 + s * s) / (2.0 * s.abs());
+        let (dx, dy) = self.direction();
+        let (nx, ny) = (-dy, dx);
+        let mid = ((self.start.x + self.end.x) / 2.0, (self.start.y + self.end.y) / 2.0);
+        let k = s - s.signum() * radius;
+        let center = Point2::new(mid.0 + nx * k, mid.1 + ny * k);
+        let start_angle = (self.start.y - center.y).atan2(self.start.x - center.x);
+        let sweep = -s.signum() * 4.0 * (2.0 * s.abs() / c).atan();
+        Some(CircularArc { center, radius, start_angle, sweep })
+    }
+
+    /// Einheitsvektor in Zeichenrichtung, bei gebogenen Wänden entlang der Sehne.
     pub fn direction(&self) -> (f64, f64) {
-        let len = self.length();
+        let len = self.chord();
         if len > 0.0 { ((self.end.x - self.start.x) / len, (self.end.y - self.start.y) / len) } else { (1.0, 0.0) }
     }
 
-    /// Ändert die Länge, der Anfangspunkt bleibt fest.
+    /// Punkt im Abstand `along` vom Anfang, gemessen entlang der Bezugslinie,
+    /// und `across` quer dazu (links positiv).
+    pub fn point_at(&self, along: f64, across: f64) -> Point2 {
+        match self.arc() {
+            Some(a) => a.point_at(along, across),
+            None => {
+                let (dx, dy) = self.direction();
+                Point2::new(self.start.x + dx * along - dy * across, self.start.y + dy * along + dx * across)
+            }
+        }
+    }
+
+    /// Lage eines Punkts zur Bezugslinie: (entlang ab Anfang, quer, links positiv).
+    /// Umkehrung von [`Wall::point_at`].
+    pub fn locate(&self, p: Point2) -> (f64, f64) {
+        match self.arc() {
+            Some(a) => a.locate(p),
+            None => {
+                let (dx, dy) = self.direction();
+                let (px, py) = (p.x - self.start.x, p.y - self.start.y);
+                (px * dx + py * dy, -px * dy + py * dx)
+            }
+        }
+    }
+
+    /// Richtung der Bezugslinie im Abstand `along` vom Anfang.
+    pub fn tangent_at(&self, along: f64) -> (f64, f64) {
+        self.arc().map_or_else(|| self.direction(), |a| a.tangent_at(along))
+    }
+
+    /// Ändert die Länge, der Anfangspunkt bleibt fest. Ein Bogen behält seinen
+    /// Öffnungswinkel, Sehne und Stich wachsen mit.
     fn set_length(&mut self, length: f64) {
-        let (dx, dy) = self.direction();
-        self.end = Point2::new(self.start.x + dx * length, self.start.y + dy * length);
+        let k = length / self.length().max(1e-12);
+        self.end =
+            Point2::new(self.start.x + (self.end.x - self.start.x) * k, self.start.y + (self.end.y - self.start.y) * k);
+        self.sagitta *= k;
     }
 
     /// Lage der Schichten quer zur Bezugslinie, als (links, rechts) je Schicht,
@@ -313,6 +440,8 @@ pub enum ColumnProfile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Param {
     WallLength,
+    /// Stich einer gebogenen Wand, 0 macht sie gerade.
+    WallSagitta,
     /// Feste Höhe; nur bei Wänden mit `Top::Height`.
     WallHeight,
     /// Versatz der Oberkante; nur bei Wänden, die am Geschoss hängen.
@@ -328,4 +457,68 @@ pub enum Param {
     /// Breite einer Rechteckstütze oder Durchmesser einer Rundstütze.
     ColumnWidth,
     ColumnDepth,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn arc_wall(sagitta: f64) -> Wall {
+        Wall {
+            storey: ElementId(1),
+            wall_type: ElementId(2),
+            start: Point2::new(0.0, 0.0),
+            end: Point2::new(4.0, 0.0),
+            alignment: WallAlignment::Center,
+            base_offset: 0.0,
+            top: Top::Height(2.5),
+            sagitta,
+        }
+    }
+
+    fn close(a: Point2, b: Point2) -> bool {
+        a.distance(b) < 1e-9
+    }
+
+    #[test]
+    fn semicircle_bulges_to_the_left() {
+        let w = arc_wall(2.0);
+        let a = w.arc().unwrap();
+        assert!(close(a.center, Point2::new(2.0, 0.0)));
+        assert!((a.radius - 2.0).abs() < 1e-12);
+        assert!((w.length() - std::f64::consts::PI * 2.0).abs() < 1e-9);
+        // Bogenmitte liegt 2 m links der Sehne.
+        assert!(close(w.point_at(w.length() / 2.0, 0.0), Point2::new(2.0, 2.0)));
+        assert!(close(w.point_at(w.length(), 0.0), w.end));
+        // Links ist außen: 0,1 m links der Bogenmitte liegt weiter oben.
+        assert!(close(w.point_at(w.length() / 2.0, 0.1), Point2::new(2.0, 2.1)));
+        // Am Anfang zeigt die Tangente nach oben.
+        let (tx, ty) = w.tangent_at(0.0);
+        assert!(tx.abs() < 1e-9 && (ty - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn locate_inverts_point_at() {
+        for sagitta in [0.0, 0.5, -0.8, 2.0] {
+            let w = arc_wall(sagitta);
+            for (along, across) in [(0.0, 0.0), (1.3, 0.12), (w.length(), -0.2), (-0.4, 0.05), (w.length() + 0.3, 0.0)]
+            {
+                let (s, t) = w.locate(w.point_at(along, across));
+                assert!(
+                    (s - along).abs() < 1e-9 && (t - across).abs() < 1e-9,
+                    "{sagitta}: {along}, {across} -> {s}, {t}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn set_length_keeps_the_angle() {
+        let mut w = arc_wall(1.0);
+        let sweep = w.arc().unwrap().sweep;
+        w.set_length(w.length() * 1.5);
+        assert!((w.arc().unwrap().sweep - sweep).abs() < 1e-12);
+        assert!((w.sagitta - 1.5).abs() < 1e-12);
+        assert!(close(w.start, Point2::new(0.0, 0.0)));
+    }
 }

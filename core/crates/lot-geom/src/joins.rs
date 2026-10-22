@@ -22,10 +22,16 @@
 //! Außenfläche der niedrigeren durch, und die niedrigere stößt stumpf an.
 //! 5. **Stützen** haben Vorrang vor allen Wandschichten. **Öffnungen** in
 //!    Schnitthöhe werden ausgeschnitten.
+//!
+//! Gebogene Wände werden in kurze gerade Stücke (Facetten) zerlegt, die
+//! untereinander auf Gehrung stoßen (PLAN.md, Abschnitt 2: „intern
+//! facettiert“). Für die Anschlüsse an andere Wände sind die Facetten
+//! gewöhnliche Wände; die Schichtflächen entstehen in einem Stück über alle
+//! Facettenecken, damit an den Stößen keine Fugen bleiben.
 
 use std::collections::BTreeMap;
 
-use lot_model::{ColumnProfile, Element, ElementId, LayerFunction, Project, Wall, WallType};
+use lot_model::{CircularArc, ColumnProfile, Element, ElementId, LayerFunction, Point2, Project, Wall, WallType};
 
 use crate::poly::{Area, strip};
 
@@ -38,6 +44,10 @@ const PARALLEL_SIN: f64 = 0.0872; // sin 5°
 /// Gehrungsgrenze: Spitzen, die weiter als dieses Vielfache der Wanddicke
 /// über den Knoten hinausragen, werden gekappt.
 const MITER_LIMIT: f64 = 2.0;
+/// Größter Abstand einer Facette vom Bogen, gemessen an der äußeren Wandfläche, in Metern.
+const FACET_TOLERANCE: f64 = 0.002;
+/// Höchstzahl der Facetten je Wand.
+const MAX_FACETS: usize = 64;
 
 /// Fläche einer Schicht (oder einer Stütze) im Grundriss.
 #[derive(Debug, Clone, PartialEq)]
@@ -61,6 +71,36 @@ pub struct Band {
     /// Abstand der linken und rechten Schichtgrenze von der Bezugslinie (links positiv).
     pub left: f64,
     pub right: f64,
+    /// Bogen der Bezugslinie bei gebogenen Wänden; dann gelten `origin` und
+    /// `direction` nur für die Sehne.
+    pub arc: Option<CircularArc>,
+}
+
+impl Band {
+    /// Punkt im Abstand `along` entlang der Bezugslinie und `across` quer dazu.
+    pub fn point(&self, along: f64, across: f64) -> [f64; 2] {
+        match self.arc {
+            Some(a) => {
+                let p = a.point_at(along, across);
+                [p.x, p.y]
+            }
+            None => {
+                let (d, o) = (self.direction, self.origin);
+                [o[0] + d[0] * along - d[1] * across, o[1] + d[1] * along + d[0] * across]
+            }
+        }
+    }
+
+    /// Lage eines Punkts: (entlang, quer).
+    pub fn locate(&self, p: [f64; 2]) -> (f64, f64) {
+        match self.arc {
+            Some(a) => a.locate(Point2::new(p[0], p[1])),
+            None => {
+                let (d, q) = (self.direction, [p[0] - self.origin[0], p[1] - self.origin[1]]);
+                (q[0] * d[0] + q[1] * d[1], -q[0] * d[1] + q[1] * d[0])
+            }
+        }
+    }
 }
 
 impl LayerRegion {
@@ -75,34 +115,46 @@ pub fn layer_regions(project: &Project, storey: ElementId, z: f64) -> Vec<LayerR
         .walls_on(storey)
         .filter_map(|(id, w)| {
             let (z0, z1) = project.wall_extent(w)?;
-            WallInfo::new(id, w, project.wall_type(w.wall_type)?, z1, z0 <= z && z < z1)
+            Some(WallInfo::facets(id, w, project.wall_type(w.wall_type)?, z1, z0 <= z && z < z1))
         })
+        .flatten()
         .collect();
 
     let nodes = find_nodes(&walls);
     let mut regions = Vec::new();
     let mut natural: BTreeMap<ElementId, Area> = BTreeMap::new();
-    for (i, w) in walls.iter().enumerate() {
+    let mut next = 0;
+    while next < walls.len() {
+        // Die Facetten einer Wand liegen hintereinander.
+        let count = walls[next..].iter().take_while(|f| f.id == walls[next].id).count();
+        let group = next..next + count;
+        next += count;
+        let w = &walls[group.start];
         if !w.present {
             continue;
         }
-        let start = end_edge(&walls, &nodes, i, End::Start);
-        let end = end_edge(&walls, &nodes, i, End::End);
-        let mut ring = start;
-        ring.extend(end.into_iter().rev());
-        let mut area = Area::from_ring(&ring);
-        for clip in miter_clips(&walls, &nodes, i) {
-            area = area.difference(&clip);
+        let mut area = Area::from_ring(&outline(&walls, &nodes, group.clone()));
+        for k in group.clone() {
+            for clip in miter_clips(&walls, &nodes, k) {
+                area = area.difference(&clip);
+            }
         }
         for (k, (left, right)) in w.offsets.iter().enumerate() {
             let layer = &w.wall_type.layers[k];
-            let band = strip(w.a, w.dir, (-REACH, w.len + REACH), (*left, *right));
+            let band = layer_band(&walls, group.clone(), (*left, *right));
+            let (dx, dy) = w.wall.direction();
             regions.push(LayerRegion {
                 element: w.id,
                 layer: k,
                 material: layer.material.clone(),
                 function: Some(layer.function),
-                band: Some(Band { origin: w.a, direction: w.dir, left: *left, right: *right }),
+                band: Some(Band {
+                    origin: [w.wall.start.x, w.wall.start.y],
+                    direction: [dx, dy],
+                    left: *left,
+                    right: *right,
+                    arc: w.wall.arc(),
+                }),
                 area: area.intersection(&band),
             });
         }
@@ -111,7 +163,12 @@ pub fn layer_regions(project: &Project, storey: ElementId, z: f64) -> Vec<LayerR
 
     apply_extensions(&walls, &nodes, &natural, &mut regions);
     resolve_overlaps(&walls, &mut regions);
-    let walls: Vec<&WallInfo> = walls.iter().filter(|w| w.present).collect();
+    let mut present: Vec<(ElementId, &Wall, f64, f64)> = Vec::new();
+    for w in walls.iter().filter(|w| w.present) {
+        if !present.iter().any(|p| p.0 == w.id) {
+            present.push((w.id, w.wall, w.left_face, w.right_face));
+        }
+    }
 
     // Stützen haben Vorrang vor allen Wandschichten.
     for (id, column) in project.columns_on(storey) {
@@ -134,12 +191,12 @@ pub fn layer_regions(project: &Project, storey: ElementId, z: f64) -> Vec<LayerR
     }
 
     // Öffnungen in Schnitthöhe.
-    for w in walls {
-        let Some((bottom, _)) = project.wall_extent(w.wall) else { continue };
-        for (_, o) in project.openings_in(w.id) {
+    for (id, wall, left_face, right_face) in present {
+        let Some((bottom, _)) = project.wall_extent(wall) else { continue };
+        for (_, o) in project.openings_in(id) {
             let (o0, o1) = (bottom + o.sill_height, bottom + o.sill_height + o.height);
             if o0 <= z && z < o1 {
-                let hole = strip(w.a, w.dir, (o.offset, o.offset + o.width), (w.left_face + 0.01, w.right_face - 0.01));
+                let hole = wall_section(wall, (o.offset, o.offset + o.width), (left_face + 0.01, right_face - 0.01));
                 for r in regions.iter_mut() {
                     if r.function.is_some() {
                         r.area = r.area.difference(&hole);
@@ -151,6 +208,69 @@ pub fn layer_regions(project: &Project, storey: ElementId, z: f64) -> Vec<LayerR
 
     regions.retain(|r| !r.area.is_empty());
     regions
+}
+
+/// Fläche einer Wand zwischen `along.0` und `along.1` (entlang der
+/// Bezugslinie) und quer zwischen `across.0` und `across.1`. Bei gebogenen
+/// Wänden radial begrenzt.
+pub fn wall_section(wall: &Wall, along: (f64, f64), across: (f64, f64)) -> Area {
+    let n = match wall.arc() {
+        Some(a) => {
+            let outer = a.radius_at(across.0).abs().max(a.radius_at(across.1).abs());
+            facet_count(a.sweep.abs() * (along.1 - along.0).abs() / a.length(), outer)
+        }
+        None => 1,
+    };
+    let at = |i: usize, t: f64| {
+        let p = wall.point_at(along.0 + (along.1 - along.0) * i as f64 / n as f64, t);
+        [p.x, p.y]
+    };
+    let mut ring: Vec<[f64; 2]> = (0..=n).map(|i| at(i, across.0)).collect();
+    ring.extend((0..=n).rev().map(|i| at(i, across.1)));
+    Area::from_ring(&ring)
+}
+
+/// Zahl der Facetten für einen Bogen mit Winkel `sweep` (Betrag) und äußerem Radius.
+fn facet_count(sweep: f64, outer_radius: f64) -> usize {
+    if outer_radius <= FACET_TOLERANCE {
+        return 1;
+    }
+    let step = 2.0 * (1.0 - FACET_TOLERANCE / outer_radius).acos();
+    ((sweep / step).ceil() as usize).clamp(1, MAX_FACETS)
+}
+
+/// Umriss einer Wand aus ihren Facetten `group`, ohne Gehrungskappung:
+/// Anfangskante, linke Fläche über alle Facettenecken, Endkante, rechte Fläche zurück.
+fn outline(walls: &[WallInfo], nodes: &Nodes, group: std::ops::Range<usize>) -> Vec<[f64; 2]> {
+    let inner: Vec<Vec<[f64; 2]>> = (group.start..group.end - 1).map(|k| end_edge(walls, nodes, k, End::End)).collect();
+    let mut ring = end_edge(walls, nodes, group.start, End::Start);
+    ring.extend(inner.iter().filter_map(|e| e.last().copied()));
+    ring.extend(end_edge(walls, nodes, group.end - 1, End::End).into_iter().rev());
+    ring.extend(inner.iter().rev().filter_map(|e| e.first().copied()));
+    ring
+}
+
+/// Streifen einer Schicht zwischen den Abständen `across` (links, rechts) entlang
+/// aller Facetten einer Wand, an beiden Enden verlängert.
+fn layer_band(walls: &[WallInfo], group: std::ops::Range<usize>, across: (f64, f64)) -> Area {
+    let (first, last) = (&walls[group.start], &walls[group.end - 1]);
+    if group.len() == 1 {
+        return strip(first.a, first.dir, (-REACH, first.len + REACH), across);
+    }
+    // Bei Bögen nur mäßig verlängern, sonst kreuzen sich die Verlängerungen.
+    let ext = 3.0 * first.thickness() + 1.0;
+    let side = |t: f64| {
+        let mut points = vec![first.at(-ext, t)];
+        for k in group.start..group.end - 1 {
+            let (f, g) = (&walls[k], &walls[k + 1]);
+            points.push(intersect_lines(f.at(0.0, t), f.dir, g.at(0.0, t), g.dir).unwrap_or(f.at(f.len, t)));
+        }
+        points.push(last.at(last.len + ext, t));
+        points
+    };
+    let mut ring = side(across.0);
+    ring.extend(side(across.1).into_iter().rev());
+    Area::from_ring(&ring)
 }
 
 /// Querschnitt einer Stütze als Fläche.
@@ -175,11 +295,14 @@ pub fn column_area(column: &lot_model::Column) -> Area {
     Area::from_ring(&ring)
 }
 
-/// Eine Wand mit allem, was die Anschlüsse brauchen.
+/// Eine Wand (oder eine Facette einer gebogenen Wand) mit allem, was die Anschlüsse brauchen.
 struct WallInfo<'a> {
     id: ElementId,
     wall: &'a Wall,
     wall_type: &'a WallType,
+    /// Ob Anfang und Ende dieser Facette auch Anfang und Ende der Wand sind.
+    /// Bei geraden Wänden immer beides.
+    ends: [bool; 2],
     a: [f64; 2],
     b: [f64; 2],
     dir: [f64; 2],
@@ -196,28 +319,58 @@ struct WallInfo<'a> {
 }
 
 impl<'a> WallInfo<'a> {
-    fn new(id: ElementId, wall: &'a Wall, wall_type: &'a WallType, top: f64, present: bool) -> Option<Self> {
-        let len = wall.length();
-        if len < 1e-6 || wall_type.layers.is_empty() {
-            return None;
+    /// Eine gerade Wand als ein Eintrag, eine gebogene als Folge von Facetten.
+    fn facets(id: ElementId, wall: &'a Wall, wall_type: &'a WallType, top: f64, present: bool) -> Vec<Self> {
+        if wall.chord() < 1e-6 || wall_type.layers.is_empty() {
+            return Vec::new();
         }
-        let (dx, dy) = wall.direction();
         let offsets = wall.layer_offsets(wall_type);
-        Some(Self {
-            id,
-            wall,
-            wall_type,
-            a: [wall.start.x, wall.start.y],
-            b: [wall.end.x, wall.end.y],
-            dir: [dx, dy],
-            normal: [-dy, dx],
-            len,
-            left_face: offsets[0].0,
-            right_face: offsets[offsets.len() - 1].1,
-            offsets,
-            top,
-            present,
-        })
+        let (left_face, right_face) = (offsets[0].0, offsets[offsets.len() - 1].1);
+        let n = match wall.arc() {
+            Some(a) => facet_count(a.sweep.abs(), a.radius_at(left_face).max(a.radius_at(right_face))).max(2),
+            None => 1,
+        };
+        let length = wall.length();
+        let points: Vec<[f64; 2]> = (0..=n)
+            .map(|i| match i {
+                0 => [wall.start.x, wall.start.y],
+                i if i == n => [wall.end.x, wall.end.y],
+                i => {
+                    let p = wall.point_at(length * i as f64 / n as f64, 0.0);
+                    [p.x, p.y]
+                }
+            })
+            .collect();
+        points
+            .windows(2)
+            .enumerate()
+            .map(|(i, ab)| {
+                let (a, b) = (ab[0], ab[1]);
+                let len = dist(a, b);
+                let dir = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+                Self {
+                    id,
+                    wall,
+                    wall_type,
+                    ends: [i == 0, i == n - 1],
+                    a,
+                    b,
+                    dir,
+                    normal: [-dir[1], dir[0]],
+                    len,
+                    left_face,
+                    right_face,
+                    offsets: offsets.clone(),
+                    top,
+                    present,
+                }
+            })
+            .collect()
+    }
+
+    /// Ob das Ende dieser Facette ein Ende der Wand ist.
+    fn is_wall_end(&self, end: End) -> bool {
+        self.ends[end as usize]
     }
 
     fn thickness(&self) -> f64 {
@@ -237,6 +390,12 @@ impl<'a> WallInfo<'a> {
             End::Start => self.dir,
             End::End => [-self.dir[0], -self.dir[1]],
         }
+    }
+
+    /// Ob der Punkt auf der ganzen Wand liegt, nicht vor ihrem Anfang oder hinter ihrem Ende.
+    fn inside_wall(&self, p: [f64; 2]) -> bool {
+        let (s, _) = self.wall.locate(Point2::new(p[0], p[1]));
+        s > JOIN_TOLERANCE && s < self.wall.length() - JOIN_TOLERANCE
     }
 
     /// Lage eines Punkts im System der Wand: (längs, quer).
@@ -297,17 +456,27 @@ fn find_nodes(walls: &[WallInfo]) -> Nodes {
     for (i, w) in walls.iter().enumerate() {
         for end in [End::Start, End::End] {
             let p = w.point(end);
-            let through = walls.iter().enumerate().find(|(j, other)| {
-                if *j == i || cross(w.dir, other.dir).abs() < PARALLEL_SIN {
+            if !w.is_wall_end(end) {
+                continue;
+            }
+            let through = walls.iter().enumerate().find(|(_, other)| {
+                if other.id == w.id {
                     return false;
                 }
+                // Bei gebogenen Wänden zählt die Lage auf dem Bogen: Ein Ende genau
+                // zwischen zwei Facetten trifft die Facette, die dort beginnt.
                 let (s, t) = other.local(p);
-                s > JOIN_TOLERANCE
-                    && s < other.len - JOIN_TOLERANCE
+                let on_facet = if other.wall.is_curved() {
+                    s >= 0.0 && s < other.len && other.inside_wall(p)
+                } else {
+                    s > JOIN_TOLERANCE && s < other.len - JOIN_TOLERANCE
+                };
+                on_facet
+                    && cross(w.dir, other.dir).abs() >= PARALLEL_SIN
                     && t <= other.left_face + JOIN_TOLERANCE
                     && t >= other.right_face - JOIN_TOLERANCE
-                    && dist(p, other.a) > JOIN_TOLERANCE
-                    && dist(p, other.b) > JOIN_TOLERANCE
+                    && dist(p, [other.wall.start.x, other.wall.start.y]) > JOIN_TOLERANCE
+                    && dist(p, [other.wall.end.x, other.wall.end.y]) > JOIN_TOLERANCE
             });
             if let Some((j, _)) = through {
                 joints[i][end as usize] = Joint::Tee(j);
@@ -372,6 +541,18 @@ fn end_edge(walls: &[WallInfo], nodes: &Nodes, i: usize, end: End) -> Vec<[f64; 
     };
     let perpendicular = vec![w.at(s_end, w.right_face), w.at(s_end, w.left_face)];
     match nodes.joint(i, end) {
+        Joint::Free if w.wall.is_curved() => {
+            // Freies Ende einer gebogenen Wand: radial, wie der Bogen es vorgibt.
+            let along = if end == End::Start { 0.0 } else { w.wall.length() };
+            let (tx, ty) = w.wall.tangent_at(along);
+            let p = w.point(end);
+            let right = intersect_lines(w.at(0.0, w.right_face), w.dir, p, [-ty, tx]);
+            let left = intersect_lines(w.at(0.0, w.left_face), w.dir, p, [-ty, tx]);
+            match (right, left) {
+                (Some(r), Some(l)) => vec![r, l],
+                _ => perpendicular,
+            }
+        }
         Joint::Free => perpendicular,
         Joint::Over(j) => {
             let o = &walls[*j];
@@ -426,7 +607,9 @@ fn corner(walls: &[WallInfo], a: (usize, End), b: (usize, End), for_a: bool) -> 
     let line_a = wa.at(0.0, la);
     let line_b = wb.at(0.0, rb);
     let projected = if for_a { wa.at(wa.local(pa).0, la) } else { wb.at(wb.local(pa).0, rb) };
-    if a.0 == b.0 || cross(wa.dir, wb.dir).abs() < PARALLEL_SIN {
+    // Facetten derselben Wand stoßen immer auf Gehrung, auch bei kleinem Knick.
+    let facets = wa.id == wb.id;
+    if a.0 == b.0 || (!facets && cross(wa.dir, wb.dir).abs() < PARALLEL_SIN) {
         return projected;
     }
     match intersect_lines(line_a, wa.dir, line_b, wb.dir) {
@@ -497,7 +680,7 @@ fn apply_extensions(
             let p = w.point(end);
             for j in others {
                 let o = &walls[j];
-                if !o.present || cross(w.dir, o.dir).abs() < PARALLEL_SIN {
+                if !o.present || o.id == w.id || cross(w.dir, o.dir).abs() < PARALLEL_SIN {
                     continue;
                 }
                 // Die Fläche der anderen Wand, die dieser Wand zugewandt ist.
@@ -589,9 +772,18 @@ fn resolve_overlaps(walls: &[WallInfo], regions: &mut [LayerRegion]) {
 pub fn node_summary(project: &Project, storey: ElementId) -> Vec<([f64; 2], usize)> {
     let walls: Vec<WallInfo> = project
         .walls_on(storey)
-        .filter_map(|(id, w)| WallInfo::new(id, w, project.wall_type(w.wall_type)?, project.wall_extent(w)?.1, true))
+        .filter_map(|(id, w)| {
+            Some(WallInfo::facets(id, w, project.wall_type(w.wall_type)?, project.wall_extent(w)?.1, true))
+        })
+        .flatten()
         .collect();
-    find_nodes(&walls).nodes.iter().map(|n| (n.point, n.arms.len())).collect()
+    // Knoten zwischen Facetten derselben Wand zählen nicht.
+    find_nodes(&walls)
+        .nodes
+        .iter()
+        .filter(|n| n.arms.iter().any(|a| walls[a.0].id != walls[n.arms[0].0].id))
+        .map(|n| (n.point, n.arms.len()))
+        .collect()
 }
 
 /// Ob das Element eine Wand ist (für Aufrufer, die Regionen nach Art filtern).

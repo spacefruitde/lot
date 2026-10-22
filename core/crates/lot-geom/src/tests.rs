@@ -76,6 +76,7 @@ fn add_wall(
             alignment,
             base_offset: 0.0,
             top: Top::Storey { offset: 0.0 },
+            sagitta: 0.0,
         }),
     );
     id
@@ -90,22 +91,26 @@ fn total_area(regions: &[LayerRegion]) -> f64 {
 }
 
 /// Keine zwei Schichtflächen überlappen sich. Clipper2 rundet neue
-/// Schnittpunkte auf das µm-Raster; an langen schrägen Kanten bleiben deshalb
-/// Splitter unter 2 µm Breite. Alles darüber ist ein Fehler.
+/// Schnittpunkte auf das µm-Raster; an langen schrägen Kanten und spitzen
+/// Winkeln bleiben deshalb Splitter unter 2 µm Breite. Alles darüber ist ein
+/// Fehler. Die Breite eines Rests ist seine mittlere Breite, 2 · Fläche / Umfang.
 fn assert_no_overlaps(regions: &[LayerRegion]) {
     for (i, a) in regions.iter().enumerate() {
         for b in &regions[i + 1..] {
-            let common = a.area.intersection(&b.area);
-            let overlap = common.area();
-            let length = common.bounds().map_or(0.0, |(lo, hi)| (hi[0] - lo[0]).hypot(hi[1] - lo[1]));
-            assert!(
-                overlap < 2e-6 * length + 1e-9,
-                "Überlappung {overlap} m² zwischen {:?}/{} und {:?}/{}",
-                a.element,
-                a.layer,
-                b.element,
-                b.layer
-            );
+            for ring in a.area.intersection(&b.area).rings() {
+                let n = ring.len();
+                let perimeter: f64 =
+                    (0..n).map(|k| (ring[k][0] - ring[(k + 1) % n][0]).hypot(ring[k][1] - ring[(k + 1) % n][1])).sum();
+                let width = 2.0 * signed_area(&ring).abs() / perimeter.max(1e-12);
+                assert!(
+                    width < 2e-6,
+                    "Überlappung {width} m breit zwischen {:?}/{} und {:?}/{}: {ring:?}",
+                    a.element,
+                    a.layer,
+                    b.element,
+                    b.layer
+                );
+            }
         }
     }
 }
@@ -363,4 +368,133 @@ fn taller_wall_runs_through_at_corner() {
     assert!((hi[0] - 3.1025).abs() < 1e-6);
     let (_, hi) = region(&below, low, 1).area.bounds().unwrap();
     assert!(hi[1] <= -0.0875 + 1e-6, "niedrige Wand reicht bis y = {}", hi[1]);
+}
+
+fn bend(p: &mut Project, id: ElementId, sagitta: f64) {
+    if let Some(Element::Wall(w)) = p.elements.get_mut(&id) {
+        w.sagitta = sagitta;
+    }
+}
+
+/// Bogen von (0, 0) nach (4, 0) mit Stich 1 m nach oben: Radius 2,5 m, Mittelpunkt (2; -1,5).
+fn arc_project() -> (Project, ElementId) {
+    let mut p = project();
+    let arc = add_wall(&mut p, INNEN, (0.0, 0.0), (4.0, 0.0), WallAlignment::Center);
+    bend(&mut p, arc, 1.0);
+    (p, arc)
+}
+
+fn arc_length(p: &Project, id: ElementId) -> f64 {
+    p.wall(id).unwrap().length()
+}
+
+#[test]
+fn free_arc_wall_has_exact_area() {
+    let (p, arc) = arc_project();
+    let r = regions(&p);
+    assert_eq!(r.len(), 3, "eine Fläche je Schicht, nicht je Facette");
+    assert_no_overlaps(&r);
+    let expected = arc_length(&p, arc) * 0.205;
+    assert!((total_area(&r) - expected).abs() < 1e-3 * expected, "{} statt {expected}", total_area(&r));
+    // Die äußere Putzschicht liegt außen am Bogen: Ihr höchster Punkt ist die Bogenmitte plus 10,25 cm.
+    let (_, hi) = region(&r, arc, 0).area.bounds().unwrap();
+    assert!((hi[1] - 1.1025).abs() < 1e-4, "y = {}", hi[1]);
+    assert!(region(&r, arc, 0).band.unwrap().arc.is_some());
+}
+
+#[test]
+fn wall_meets_arc_at_a_facet_corner() {
+    // Die Trennwand stößt genau in der Bogenmitte an, dort liegt eine Facettenecke.
+    let (mut p, arc) = arc_project();
+    let tee = add_wall(&mut p, TRENN, (2.0, 1.0), (2.0, -1.0), WallAlignment::Center);
+    let r = regions(&p);
+    assert_no_overlaps(&r);
+    // Der Bogen läuft durch, nur sein Innenputz fehlt dort, wo die Tragschicht
+    // der Trennwand (11,5 cm) hindurchbindet.
+    let arc_area: f64 = r.iter().filter(|x| x.element == arc).map(|x| x.area.area()).sum();
+    let expected = arc_length(&p, arc) * 0.205 - 0.115 * 0.015;
+    assert!((arc_area - expected).abs() < 1e-3 * expected, "{arc_area} statt {expected}");
+    // Die Tragschicht der Trennwand bindet durch den Innenputz bis an die Tragschicht
+    // des Bogens: Radius 2,5 - 0,0875 um (2; -1,5), also y = 0,9125.
+    let (_, hi) = region(&r, tee, 1).area.bounds().unwrap();
+    assert!((hi[1] - 0.9125).abs() < 0.003, "Tragschicht endet bei y = {}", hi[1]);
+}
+
+#[test]
+fn opening_in_arc_is_cut_radially() {
+    let (mut p, arc) = arc_project();
+    let id = p.next_id();
+    p.elements.insert(
+        id,
+        Element::Opening(lot_model::Opening { host: arc, offset: 1.0, width: 1.0, height: 2.0, sill_height: 0.0 }),
+    );
+    let r = regions(&p);
+    let expected = (arc_length(&p, arc) - 1.0) * 0.205;
+    assert!((total_area(&r) - expected).abs() < 1e-3 * expected, "{} statt {expected}", total_area(&r));
+    // Die Laibung zeigt zum Mittelpunkt: Die Ecken an Außen- und Innenfläche
+    // liegen auf einer Geraden durch (2; -1,5).
+    let w = p.wall(arc).unwrap();
+    let outer = w.point_at(1.0, 0.1025);
+    let inner = w.point_at(1.0, -0.1025);
+    let c = w.arc().unwrap().center;
+    let cross = (outer.x - c.x) * (inner.y - c.y) - (outer.y - c.y) * (inner.x - c.x);
+    assert!(cross.abs() < 1e-9);
+    // Die Wandflächen sind Facetten und liegen bis 2 mm innerhalb des Bogens,
+    // die Ecken der Laibung aber genau auf dem Radius.
+    let radial = |q: Point2| {
+        r.iter().flat_map(|x| x.area.rings()).flatten().any(|v| {
+            let near = (v[0] - q.x).hypot(v[1] - q.y) < 0.003;
+            let off = ((v[0] - c.x) * (q.y - c.y) - (v[1] - c.y) * (q.x - c.x)) / q.distance(c);
+            near && off.abs() < 1e-5
+        })
+    };
+    assert!(radial(outer) && radial(inner), "Laibung nicht radial");
+}
+
+#[test]
+fn arc_and_straight_wall_form_a_corner() {
+    let (mut p, arc) = arc_project();
+    let straight = add_wall(&mut p, INNEN, (4.0, 0.0), (4.0, -3.0), WallAlignment::Center);
+    let r = regions(&p);
+    assert_no_overlaps(&r);
+    assert_eq!(joins::node_summary(&p, STOREY), vec![([4.0, 0.0], 2)]);
+    for id in [arc, straight] {
+        assert!(r.iter().any(|x| x.element == id && x.layer == 1 && !x.area.is_empty()));
+    }
+}
+
+#[test]
+fn random_constellations_with_arcs_never_overlap() {
+    let mut seed: u64 = 0xa2c5_0b0e;
+    let mut next = move |n: u64| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed % n
+    };
+    for _ in 0..100 {
+        let mut p = project();
+        let points: Vec<(f64, f64)> = (0..5).map(|_| (next(5) as f64 * 1.5, next(5) as f64 * 1.5)).collect();
+        for _ in 0..4 {
+            let a = points[next(5) as usize];
+            let b = points[next(5) as usize];
+            if a == b {
+                continue;
+            }
+            let wall_type = [WDVS, INNEN, TRENN][next(3) as usize];
+            let alignment = [WallAlignment::Center, WallAlignment::Exterior, WallAlignment::Interior][next(3) as usize];
+            let id = add_wall(&mut p, wall_type, a, b, alignment);
+            bend(&mut p, id, [0.0, 0.0, 0.4, -0.4, 0.7][next(5) as usize]);
+        }
+        let r = regions(&p);
+        if std::env::var("LOT_DEBUG").is_ok() {
+            for (id, w) in p.walls() {
+                eprintln!(
+                    "{id:?}: {:?} {:?} -> {:?} {:?} Stich {}",
+                    w.wall_type, w.start, w.end, w.alignment, w.sagitta
+                );
+            }
+        }
+        assert_no_overlaps(&r);
+    }
 }

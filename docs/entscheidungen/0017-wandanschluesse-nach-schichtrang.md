@@ -29,4 +29,4 @@ Abgesichert durch Tests je Fall und einen Zufallstest mit 200 Wandkonstellatione
 ## Folgen
 
 - Fachliche Feinheiten (Putz an Wandenden, Trockenbau an Putz, spitze Winkel) prüft Ben am Katalog. Regeln lassen sich über den Rang und Sonderfälle nachschärfen, ohne das Verfahren zu ändern.
-- Gebogene Wände fehlen noch; der Katalogfall „gebogene Wand an gerader Wand“ folgt mit ihnen.
+- Gebogene Wände laufen über Facetten durch dasselbe Verfahren (ADR 0020).

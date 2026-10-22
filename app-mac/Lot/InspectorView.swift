@@ -77,6 +77,7 @@ extension ParamKind {
     var label: String {
         switch self {
         case .wallLength: "Länge"
+        case .wallSagitta: "Stich (Bogen)"
         case .wallHeight: "Höhe"
         case .wallTopOffset: "Oberkante über Geschoss"
         case .baseOffset: "Unterkante über OKFF"

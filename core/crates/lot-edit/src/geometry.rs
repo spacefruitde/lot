@@ -28,10 +28,9 @@ fn set_end(wall: &mut Wall, end: End, p: Point2) {
 }
 
 /// Lage eines Punkts im System der Wand: (längs ab Anfang, quer, links positiv).
+/// Bei gebogenen Wänden entlang des Bogens.
 pub fn local(wall: &Wall, p: Point2) -> (f64, f64) {
-    let (dx, dy) = wall.direction();
-    let (px, py) = (p.x - wall.start.x, p.y - wall.start.y);
-    (px * dx + py * dy, -px * dy + py * dx)
+    wall.locate(p)
 }
 
 /// Linke und rechte Wandfläche als Abstand von der Bezugslinie.
@@ -45,12 +44,18 @@ pub fn faces(project: &Project, wall: &Wall) -> (f64, f64) {
     }
 }
 
-/// Umriss einer Wand ohne Anschlüsse, als Rechteck in Metern.
+/// Umriss einer Wand ohne Anschlüsse in Metern: ein Rechteck, bei
+/// gebogenen Wänden ein Ringstück.
 pub fn footprint(project: &Project, wall: &Wall) -> Vec<[f64; 2]> {
     let (left, right) = faces(project, wall);
-    let (dx, dy) = wall.direction();
-    let at = |p: Point2, t: f64| [p.x - dy * t, p.y + dx * t];
-    vec![at(wall.start, right), at(wall.end, right), at(wall.end, left), at(wall.start, left)]
+    let n = if wall.is_curved() { 32 } else { 1 };
+    let at = |i: usize, t: f64| {
+        let p = wall.point_at(wall.length() * i as f64 / n as f64, t);
+        [p.x, p.y]
+    };
+    let mut ring: Vec<[f64; 2]> = (0..=n).map(|i| at(i, right)).collect();
+    ring.extend((0..=n).rev().map(|i| at(i, left)));
+    ring
 }
 
 /// Abstand des Punkts von der Fläche der Wand (0 innerhalb), in Metern.
@@ -111,16 +116,8 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
         Element::Wall(w) => Some(footprint(project, w)),
         Element::Column(c) => Some(column_outline(c)),
         Element::GridLine(g) => {
-            let w = Wall {
-                storey: id,
-                wall_type: id,
-                start: g.start,
-                end: g.end,
-                alignment: lot_model::WallAlignment::Center,
-                base_offset: 0.0,
-                top: lot_model::Top::Height(1.0),
-            };
-            let (dx, dy) = w.direction();
+            let len = g.start.distance(g.end).max(1e-12);
+            let (dx, dy) = ((g.end.x - g.start.x) / len, (g.end.y - g.start.y) / len);
             let at = |p: Point2, t: f64| [p.x - dy * t, p.y + dx * t];
             Some(vec![at(g.start, -0.05), at(g.end, -0.05), at(g.end, 0.05), at(g.start, 0.05)])
         }
@@ -281,6 +278,10 @@ fn follow_tee(project: &Project, w: &Wall, e: Point2, m: &Wall, delta: (f64, f64
         && t >= right - JOIN_TOLERANCE;
     if !inside {
         return None;
+    }
+    if m.is_curved() {
+        // An einer gebogenen Wand wandert das Ende einfach mit.
+        return Some(Point2::new(e.x + delta.0, e.y + delta.1));
     }
     let (mx, my) = m.direction();
     let line_point = Point2::new(m.start.x + delta.0 - my * t, m.start.y + delta.1 + mx * t);

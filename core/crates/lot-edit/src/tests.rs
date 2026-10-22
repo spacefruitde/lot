@@ -252,3 +252,81 @@ fn column_tool_places_and_moves_column() {
     assert!(ed.key(&mut doc, Key::Delete).model_changed);
     assert_eq!(doc.project().columns_on(ed.storey).count(), 0);
 }
+
+#[test]
+fn arc_wall_by_three_clicks() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::ArcWallTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    click(&mut doc, &mut ed, 4.0, 0.0);
+    assert!(walls(&doc).is_empty(), "nach zwei Klicks fehlt noch der Stich");
+    // Der Zeiger 0,8 m über der Sehne: Stich 0,80 m nach links.
+    click(&mut doc, &mut ed, 1.0, 0.803);
+    let w = &walls(&doc)[0];
+    assert!((w.sagitta - 0.8).abs() < 1e-9);
+    assert_eq!(w.end, Point2::new(4.0, 0.0));
+    // Die nächste Bogenwand beginnt am Ende der ersten.
+    click(&mut doc, &mut ed, 4.0, -4.0);
+    click(&mut doc, &mut ed, 6.0, -2.0);
+    assert_eq!(walls(&doc)[1].start, Point2::new(4.0, 0.0));
+}
+
+#[test]
+fn typed_sagitta_takes_the_pointer_side() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::ArcWallTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    click(&mut doc, &mut ed, 4.0, 0.0);
+    ed.pointer_moved(doc.project(), input(2.0, -0.3));
+    for c in "1,2".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    ed.key(&mut doc, Key::Enter);
+    assert!((walls(&doc)[0].sagitta + 1.2).abs() < 1e-9);
+}
+
+#[test]
+fn sagitta_is_at_most_a_semicircle() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::ArcWallTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    click(&mut doc, &mut ed, 2.0, 0.0);
+    click(&mut doc, &mut ed, 1.0, 5.0);
+    assert!((walls(&doc)[0].sagitta - 1.0).abs() < 1e-9);
+}
+
+#[test]
+fn flip_keeps_the_arc_in_place() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::ArcWallTool);
+    for (x, y) in [(0.0, 0.0), (4.0, 0.0), (2.0, 1.0)] {
+        click(&mut doc, &mut ed, x, y);
+    }
+    ed.key(&mut doc, Key::Escape);
+    let before = walls(&doc)[0].clone();
+    ed.run(&mut doc, &Command::SelectAll);
+    ed.run(&mut doc, &Command::FlipWalls);
+    let after = &walls(&doc)[0];
+    let mid = |w: &lot_model::Wall| w.point_at(w.length() / 2.0, 0.0);
+    assert!(mid(&before).distance(mid(after)) < 1e-9);
+    assert_eq!(after.start, before.end);
+}
+
+#[test]
+fn snaps_onto_the_arc() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::ArcWallTool);
+    for (x, y) in [(0.0, 0.0), (4.0, 0.0), (2.0, 1.0)] {
+        click(&mut doc, &mut ed, x, y);
+    }
+    ed.key(&mut doc, Key::Escape);
+    ed.key(&mut doc, Key::Escape);
+    // Neben der Bogenmitte rastet der Zeiger auf dem Bogen ein, nicht auf der Sehne.
+    let s = snap::snap(doc.project(), ed.storey, Point2::new(2.0, 1.08), 0.15, None, false, &[]);
+    assert_eq!(s.kind, SnapKind::OnWall);
+    assert!(s.point.distance(Point2::new(2.0, 1.0)) < 1e-6, "{:?}", s.point);
+    // Mit Richtung: senkrecht von unten auf den Bogen.
+    let s = snap::snap(doc.project(), ed.storey, Point2::new(1.0, 0.8), 0.15, Some(Point2::new(1.0, -2.0)), false, &[]);
+    let w = &walls(&doc)[0];
+    assert!(w.locate(s.point).1.abs() < 1e-6 && (s.point.x - 1.0).abs() < 1e-6, "{:?}", s.point);
+}

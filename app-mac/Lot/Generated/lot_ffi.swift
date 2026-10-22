@@ -1718,6 +1718,7 @@ public func FfiConverterTypeLotError_lower(_ value: LotError) -> RustBuffer {
 public enum ParamKind: Equatable, Hashable {
     
     case wallLength
+    case wallSagitta
     case wallHeight
     case wallTopOffset
     case baseOffset
@@ -1752,27 +1753,29 @@ public struct FfiConverterTypeParamKind: FfiConverterRustBuffer {
         
         case 1: return .wallLength
         
-        case 2: return .wallHeight
+        case 2: return .wallSagitta
         
-        case 3: return .wallTopOffset
+        case 3: return .wallHeight
         
-        case 4: return .baseOffset
+        case 4: return .wallTopOffset
         
-        case 5: return .openingOffset
+        case 5: return .baseOffset
         
-        case 6: return .openingWidth
+        case 6: return .openingOffset
         
-        case 7: return .openingHeight
+        case 7: return .openingWidth
         
-        case 8: return .openingSillHeight
+        case 8: return .openingHeight
         
-        case 9: return .storeyElevation
+        case 9: return .openingSillHeight
         
-        case 10: return .storeyHeight
+        case 10: return .storeyElevation
         
-        case 11: return .columnWidth
+        case 11: return .storeyHeight
         
-        case 12: return .columnDepth
+        case 12: return .columnWidth
+        
+        case 13: return .columnDepth
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1786,48 +1789,52 @@ public struct FfiConverterTypeParamKind: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case .wallHeight:
+        case .wallSagitta:
             writeInt(&buf, Int32(2))
         
         
-        case .wallTopOffset:
+        case .wallHeight:
             writeInt(&buf, Int32(3))
         
         
-        case .baseOffset:
+        case .wallTopOffset:
             writeInt(&buf, Int32(4))
         
         
-        case .openingOffset:
+        case .baseOffset:
             writeInt(&buf, Int32(5))
         
         
-        case .openingWidth:
+        case .openingOffset:
             writeInt(&buf, Int32(6))
         
         
-        case .openingHeight:
+        case .openingWidth:
             writeInt(&buf, Int32(7))
         
         
-        case .openingSillHeight:
+        case .openingHeight:
             writeInt(&buf, Int32(8))
         
         
-        case .storeyElevation:
+        case .openingSillHeight:
             writeInt(&buf, Int32(9))
         
         
-        case .storeyHeight:
+        case .storeyElevation:
             writeInt(&buf, Int32(10))
         
         
-        case .columnWidth:
+        case .storeyHeight:
             writeInt(&buf, Int32(11))
         
         
-        case .columnDepth:
+        case .columnWidth:
             writeInt(&buf, Int32(12))
+        
+        
+        case .columnDepth:
+            writeInt(&buf, Int32(13))
         
         }
     }

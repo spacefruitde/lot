@@ -23,3 +23,4 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0017](0017-wandanschluesse-nach-schichtrang.md) | Wandanschlüsse nach Schichtrang | umgesetzt, Ben prüft |
 | [0018](0018-buerostandard-als-daten.md) | Bürostandard als Daten | umgesetzt, Vorschlag |
 | [0019](0019-bearbeiten-im-kern.md) | Werkzeuge, Fangen und Befehle im Kern | umgesetzt |
+| [0020](0020-gebogene-waende.md) | Gebogene Wände | umgesetzt, Ben prüft |
