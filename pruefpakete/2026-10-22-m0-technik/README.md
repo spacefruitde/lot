@@ -49,7 +49,7 @@ Ben: „ich folge deinen beiden empfehlungen“
 - Ergänzt: Zoomen zum Zeiger statt zur Bildmitte, und 120 Hz bleiben nach einer Geste eine Sekunde lang erhalten.
 - Speichern und Öffnen: über dieselbe Schnittstelle getestet, die die App aufruft. Den Sichern-Dialog selbst durfte ich nicht bedienen, er läuft in einem eigenen Systemprozess (Frage 8).
 - Nicht prüfen konnte ich die Trackpad-Gesten selbst (Fragen 4 bis 6).
-- Unter Linux habe ich nicht gebaut. Alle Bibliotheken im Kern sind reines Rust oder C (SQLite), Probleme erwarte ich keine. Die erste Cloud-Session zeigt es.
+- Linux: Die neue CI auf GitHub baut und testet den Kern bei jedem Push unter Linux und macOS und baut die Mac-App. Der erste Lauf war in allen drei Teilen grün.
 
 ## Messwerte
 
