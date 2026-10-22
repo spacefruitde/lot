@@ -15,6 +15,11 @@
 //!    Innenwand durch den Innenputz bis an die Tragschicht der Außenwand.
 //! 4. **Überschneidungen** (Kreuzungen, Restflächen) gewinnt die Schicht mit
 //!    höherem Rang, bei Gleichstand die dickere Wand.
+//!
+//! Die Knoten werden aus allen Wänden des Geschosses bestimmt, unabhängig von
+//! der Höhe. So bleibt ein Anschluss von unten bis oben gleich. Treffen sich
+//! zwei Wände verschiedener Höhe in einer Ecke, läuft die höhere bis an die
+//! Außenfläche der niedrigeren durch, und die niedrigere stößt stumpf an.
 //! 5. **Stützen** haben Vorrang vor allen Wandschichten. **Öffnungen** in
 //!    Schnitthöhe werden ausgeschnitten.
 
@@ -68,14 +73,19 @@ impl LayerRegion {
 pub fn layer_regions(project: &Project, storey: ElementId, z: f64) -> Vec<LayerRegion> {
     let walls: Vec<WallInfo> = project
         .walls_on(storey)
-        .filter(|(_, w)| project.wall_extent(w).is_some_and(|(z0, z1)| z0 <= z && z < z1))
-        .filter_map(|(id, w)| WallInfo::new(id, w, project.wall_type(w.wall_type)?))
+        .filter_map(|(id, w)| {
+            let (z0, z1) = project.wall_extent(w)?;
+            WallInfo::new(id, w, project.wall_type(w.wall_type)?, z1, z0 <= z && z < z1)
+        })
         .collect();
 
     let nodes = find_nodes(&walls);
     let mut regions = Vec::new();
     let mut natural: BTreeMap<ElementId, Area> = BTreeMap::new();
     for (i, w) in walls.iter().enumerate() {
+        if !w.present {
+            continue;
+        }
         let start = end_edge(&walls, &nodes, i, End::Start);
         let end = end_edge(&walls, &nodes, i, End::End);
         let mut ring = start;
@@ -101,6 +111,7 @@ pub fn layer_regions(project: &Project, storey: ElementId, z: f64) -> Vec<LayerR
 
     apply_extensions(&walls, &nodes, &natural, &mut regions);
     resolve_overlaps(&walls, &mut regions);
+    let walls: Vec<&WallInfo> = walls.iter().filter(|w| w.present).collect();
 
     // Stützen haben Vorrang vor allen Wandschichten.
     for (id, column) in project.columns_on(storey) {
@@ -123,7 +134,7 @@ pub fn layer_regions(project: &Project, storey: ElementId, z: f64) -> Vec<LayerR
     }
 
     // Öffnungen in Schnitthöhe.
-    for w in &walls {
+    for w in walls {
         let Some((bottom, _)) = project.wall_extent(w.wall) else { continue };
         for (_, o) in project.openings_in(w.id) {
             let (o0, o1) = (bottom + o.sill_height, bottom + o.sill_height + o.height);
@@ -178,10 +189,14 @@ struct WallInfo<'a> {
     offsets: Vec<(f64, f64)>,
     left_face: f64,
     right_face: f64,
+    /// Oberkante über ±0,00.
+    top: f64,
+    /// Ob die Wand in der betrachteten Höhe vorhanden ist.
+    present: bool,
 }
 
 impl<'a> WallInfo<'a> {
-    fn new(id: ElementId, wall: &'a Wall, wall_type: &'a WallType) -> Option<Self> {
+    fn new(id: ElementId, wall: &'a Wall, wall_type: &'a WallType, top: f64, present: bool) -> Option<Self> {
         let len = wall.length();
         if len < 1e-6 || wall_type.layers.is_empty() {
             return None;
@@ -200,6 +215,8 @@ impl<'a> WallInfo<'a> {
             left_face: offsets[0].0,
             right_face: offsets[offsets.len() - 1].1,
             offsets,
+            top,
+            present,
         })
     }
 
@@ -251,6 +268,9 @@ enum Joint {
     Tee(usize),
     /// Gehört zu einem Knoten mit anderen Wandenden.
     Node(usize),
+    /// Ecke mit einer niedrigeren Wand (Index): Diese Wand läuft bis an deren
+    /// abgewandte Fläche durch, die niedrigere stößt stumpf an.
+    Over(usize),
 }
 
 /// Ein Knoten aus zusammenfallenden Wandenden.
@@ -319,6 +339,18 @@ fn find_nodes(walls: &[WallInfo]) -> Nodes {
             joints[i][end as usize] = Joint::Node(k);
         }
     }
+    // Ecken aus zwei Wänden verschiedener Höhe: die höhere läuft durch.
+    for node in &nodes {
+        if let [(i, ei), (j, ej)] = node.arms[..]
+            && (walls[i].top - walls[j].top).abs() > 0.01
+            && cross(walls[i].dir, walls[j].dir).abs() >= PARALLEL_SIN
+        {
+            let ((hi, he), (lo, le)) =
+                if walls[i].top > walls[j].top { ((i, ei), (j, ej)) } else { ((j, ej), (i, ei)) };
+            joints[hi][he as usize] = Joint::Over(lo);
+            joints[lo][le as usize] = Joint::Tee(hi);
+        }
+    }
     Nodes { joints, nodes }
 }
 
@@ -341,6 +373,18 @@ fn end_edge(walls: &[WallInfo], nodes: &Nodes, i: usize, end: End) -> Vec<[f64; 
     let perpendicular = vec![w.at(s_end, w.right_face), w.at(s_end, w.left_face)];
     match nodes.joint(i, end) {
         Joint::Free => perpendicular,
+        Joint::Over(j) => {
+            let o = &walls[*j];
+            // Bis an die Fläche der niedrigeren Wand, die von dieser Wand abgewandt ist.
+            let face = if dot(w.outward(end), o.normal) > 0.0 { o.right_face } else { o.left_face };
+            let line_p = o.at(0.0, face);
+            let right = intersect_lines(w.at(0.0, w.right_face), w.dir, line_p, o.dir);
+            let left = intersect_lines(w.at(0.0, w.left_face), w.dir, line_p, o.dir);
+            match (right, left) {
+                (Some(r), Some(l)) => vec![r, l],
+                _ => perpendicular,
+            }
+        }
         Joint::Tee(j) => {
             let t = &walls[*j];
             // Die stoßende Wand liegt auf der Seite, in die sie vom Knoten aus weist.
@@ -442,15 +486,18 @@ fn apply_extensions(
     let mut extensions = Vec::new();
     for (i, w) in walls.iter().enumerate() {
         for end in [End::Start, End::End] {
+            if !w.present {
+                continue;
+            }
             let others: Vec<usize> = match nodes.joint(i, end) {
-                Joint::Free => continue,
+                Joint::Free | Joint::Over(_) => continue,
                 Joint::Tee(j) => vec![*j],
                 Joint::Node(k) => nodes.nodes[*k].arms.iter().map(|a| a.0).filter(|j| *j != i).collect(),
             };
             let p = w.point(end);
             for j in others {
                 let o = &walls[j];
-                if cross(w.dir, o.dir).abs() < PARALLEL_SIN {
+                if !o.present || cross(w.dir, o.dir).abs() < PARALLEL_SIN {
                     continue;
                 }
                 // Die Fläche der anderen Wand, die dieser Wand zugewandt ist.
@@ -540,8 +587,10 @@ fn resolve_overlaps(walls: &[WallInfo], regions: &mut [LayerRegion]) {
 
 /// Alle Wandknoten eines Geschosses, für Tests und Prüfpakete: (Punkt, Anzahl Arme).
 pub fn node_summary(project: &Project, storey: ElementId) -> Vec<([f64; 2], usize)> {
-    let walls: Vec<WallInfo> =
-        project.walls_on(storey).filter_map(|(id, w)| WallInfo::new(id, w, project.wall_type(w.wall_type)?)).collect();
+    let walls: Vec<WallInfo> = project
+        .walls_on(storey)
+        .filter_map(|(id, w)| WallInfo::new(id, w, project.wall_type(w.wall_type)?, project.wall_extent(w)?.1, true))
+        .collect();
     find_nodes(&walls).nodes.iter().map(|n| (n.point, n.arms.len())).collect()
 }
 

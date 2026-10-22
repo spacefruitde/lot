@@ -884,6 +884,8 @@ dependencies = [
  "lot-plan",
  "lot-render",
  "png",
+ "ron",
+ "serde",
 ]
 
 [[package]]

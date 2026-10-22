@@ -7,6 +7,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use lot_cli::{Output, outputs, page_names, sheets};
 use lot_model::Document;
 
 #[derive(Parser)]
@@ -18,7 +19,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Rechnet ein Testprojekt und schreibt Pläne (PDF, SVG, PNG), ein 3D-Bild und die Projektdatei.
+    /// Rechnet ein Testprojekt und schreibt seine Ausgaben (siehe ausgaben.ron):
+    /// Pläne als PDF, SVG und PNG, 3D-Bilder und die Projektdatei.
     Render {
         /// Ordner des Testprojekts mit `projekt.ron`
         project: PathBuf,
@@ -28,7 +30,7 @@ enum Command {
         /// Auflösung der PNG-Pläne in Pixel je Zoll
         #[arg(long, default_value_t = 200.0)]
         dpi: f64,
-        /// Kein 3D-Bild rechnen (etwa auf Rechnern ohne Grafikkarte)
+        /// Keine 3D-Bilder rechnen (etwa auf Rechnern ohne Grafikkarte)
         #[arg(long)]
         no_3d: bool,
     },
@@ -45,25 +47,30 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
     let project = lot_io::testproject::load(project_dir)
         .with_context(|| format!("Testprojekt {} nicht lesbar", project_dir.display()))?;
     std::fs::create_dir_all(out).with_context(|| format!("Ordner {} nicht anlegbar", out.display()))?;
-
     let source = project_label(project_dir);
-    let sheet = lot_plan::m0::sheet(&project, &source);
-    let base = out.join("m0-pruefblatt");
-    write(&base.with_extension("pdf"), &lot_io::pdf::to_pdf(&sheet)?)?;
-    write(&base.with_extension("svg"), lot_io::svg::to_svg(&sheet).as_bytes())?;
-    write(&base.with_extension("png"), &lot_io::png::to_png(&sheet, dpi)?)?;
+
+    for output in outputs(project_dir)? {
+        if let Output::View3d { name } = &output {
+            if with_3d {
+                match render_3d(&project) {
+                    Ok(png) => write(&out.join(format!("{name}.png")), &png)?,
+                    Err(e) => eprintln!("Hinweis: kein 3D-Bild ({e})"),
+                }
+            }
+            continue;
+        }
+        let pages = sheets(&project, &output, &source);
+        write(&out.join(format!("{}.pdf", output.name())), &lot_io::pdf::to_pdf_pages(&pages)?)?;
+        for (sheet, page) in pages.iter().zip(page_names(output.name(), pages.len())) {
+            write(&out.join(format!("{page}.svg")), lot_io::svg::to_svg(sheet).as_bytes())?;
+            write(&out.join(format!("{page}.png")), &lot_io::png::to_png(sheet, dpi)?)?;
+        }
+    }
 
     let doc = Document::new(project.clone());
     let lot_file = out.join("projekt.lot");
     lot_io::project_file::save(&doc, &lot_file)?;
     println!("geschrieben: {}", lot_file.display());
-
-    if with_3d {
-        match render_3d(&project) {
-            Ok(png) => write(&out.join("3d.png"), &png)?,
-            Err(e) => eprintln!("Hinweis: kein 3D-Bild ({e})"),
-        }
-    }
     println!("fertig in {:.0} ms", start.elapsed().as_secs_f64() * 1000.0);
     Ok(())
 }

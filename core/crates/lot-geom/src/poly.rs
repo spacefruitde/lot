@@ -71,8 +71,18 @@ impl Area {
     }
 
     /// Ringe in Metern. Außenringe gegen, Löcher im Uhrzeigersinn.
+    ///
+    /// Punkte, die weniger als 2 µm neben der Verbindung ihrer Nachbarn
+    /// liegen, fallen weg. So verschwinden haarfeine Schlitze, die beim
+    /// Runden auf das µm-Raster entlang schräger Kanten entstehen und sonst
+    /// als Spitzen in der Linie erscheinen.
     pub fn rings(&self) -> Vec<Ring> {
-        self.0.iter().filter(|p| p.len() >= 3).map(|p| p.iter().map(from_point).collect()).collect()
+        self.0
+            .iter()
+            .map(|p| clipper2_rust::simplify_path(p, 2.0, true))
+            .filter(|p| p.len() >= 3 && clipper2_rust::area(p).abs() > 1.0)
+            .map(|p| p.iter().map(from_point).collect())
+            .collect()
     }
 
     /// Achsparalleler Hüllquader (min, max).

@@ -327,3 +327,24 @@ fn walls_of_different_height_meet_in_3d() {
     assert!((height(a) - 2.75).abs() < 1e-9);
     assert!((height(b) - 1.0).abs() < 1e-9);
 }
+
+#[test]
+fn taller_wall_runs_through_at_corner() {
+    let mut p = project();
+    let tall = add_wall(&mut p, INNEN, (0.0, 0.0), (3.0, 0.0), WallAlignment::Center);
+    let low = add_wall(&mut p, INNEN, (3.0, 0.0), (3.0, -3.0), WallAlignment::Center);
+    if let Some(Element::Wall(w)) = p.elements.get_mut(&low) {
+        w.top = Top::Height(1.0);
+    }
+    // Über der Brüstung: Die hohe Wand reicht bis an die Außenfläche der niedrigen (x = 3,1025).
+    let above = layer_regions(&p, STOREY, 2.0);
+    let (_, hi) = region(&above, tall, 1).area.bounds().unwrap();
+    assert!((hi[0] - 3.1025).abs() < 1e-6, "Tragschicht endet bei x = {}", hi[0]);
+    // Darunter genauso; die niedrige Wand stößt stumpf an.
+    let below = layer_regions(&p, STOREY, 0.5);
+    assert_no_overlaps(&below);
+    let (_, hi) = region(&below, tall, 1).area.bounds().unwrap();
+    assert!((hi[0] - 3.1025).abs() < 1e-6);
+    let (_, hi) = region(&below, low, 1).area.bounds().unwrap();
+    assert!(hi[1] <= -0.0875 + 1e-6, "niedrige Wand reicht bis y = {}", hi[1]);
+}
