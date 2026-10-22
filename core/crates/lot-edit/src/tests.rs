@@ -216,3 +216,39 @@ fn add_storey_goes_on_top() {
     assert_eq!(storeys[1].1.elevation, 2.75);
     assert_eq!(ed.storey, storeys[1].0);
 }
+
+#[test]
+fn grid_tool_labels_numbers_and_letters() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::GridTool);
+    click(&mut doc, &mut ed, 0.0, -1.0);
+    click(&mut doc, &mut ed, 0.0, 6.0);
+    click(&mut doc, &mut ed, 5.0, -1.0);
+    click(&mut doc, &mut ed, 5.0, 6.0);
+    click(&mut doc, &mut ed, -1.0, 0.0);
+    click(&mut doc, &mut ed, 6.0, 0.0);
+    let mut labels: Vec<String> = doc.project().grid_lines().map(|(_, g)| g.label.clone()).collect();
+    labels.sort();
+    assert_eq!(labels, vec!["1", "2", "A"]);
+}
+
+#[test]
+fn column_tool_places_and_moves_column() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::ColumnTool);
+    click(&mut doc, &mut ed, 2.0, 2.0);
+    let (id, c) = doc.project().columns_on(ed.storey).next().map(|(id, c)| (id, c.clone())).unwrap();
+    assert_eq!(c.position, Point2::new(2.0, 2.0));
+    ed.key(&mut doc, Key::Escape);
+    assert_eq!(ed.tool, Tool::Select);
+    // Stütze greifen und verschieben.
+    ed.pointer_down(&mut doc, input(2.1, 2.0), 1);
+    assert_eq!(ed.selection, vec![id]);
+    ed.pointer_dragged(doc.project(), input(3.1, 2.0));
+    ed.pointer_up(&mut doc);
+    let moved = doc.project().columns_on(ed.storey).next().unwrap().1.position;
+    assert_eq!(moved, Point2::new(3.0, 2.0));
+    // Löschen.
+    assert!(ed.key(&mut doc, Key::Delete).model_changed);
+    assert_eq!(doc.project().columns_on(ed.storey).count(), 0);
+}

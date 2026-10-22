@@ -1472,7 +1472,10 @@ public func FfiConverterTypeParamValue_lower(_ value: ParamValue) -> RustBuffer 
  */
 public struct ViewState: Equatable, Hashable {
     public var view: ViewKind
-    public var wallTool: Bool
+    /**
+     * Aktives Werkzeug: „select“, „wall“, „grid“ oder „column“.
+     */
+    public var tool: String
     public var storey: String
     public var scale: Double
     public var wallType: String
@@ -1481,9 +1484,12 @@ public struct ViewState: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(view: ViewKind, wallTool: Bool, storey: String, scale: Double, wallType: String, selection: [UInt64], hint: String) {
+    public init(view: ViewKind, 
+        /**
+         * Aktives Werkzeug: „select“, „wall“, „grid“ oder „column“.
+         */tool: String, storey: String, scale: Double, wallType: String, selection: [UInt64], hint: String) {
         self.view = view
-        self.wallTool = wallTool
+        self.tool = tool
         self.storey = storey
         self.scale = scale
         self.wallType = wallType
@@ -1508,7 +1514,7 @@ public struct FfiConverterTypeViewState: FfiConverterRustBuffer {
         return
             try ViewState(
                 view: FfiConverterTypeViewKind.read(from: &buf), 
-                wallTool: FfiConverterBool.read(from: &buf), 
+                tool: FfiConverterString.read(from: &buf), 
                 storey: FfiConverterString.read(from: &buf), 
                 scale: FfiConverterDouble.read(from: &buf), 
                 wallType: FfiConverterString.read(from: &buf), 
@@ -1519,7 +1525,7 @@ public struct FfiConverterTypeViewState: FfiConverterRustBuffer {
 
     public static func write(_ value: ViewState, into buf: inout [UInt8]) {
         FfiConverterTypeViewKind.write(value.view, into: &buf)
-        FfiConverterBool.write(value.wallTool, into: &buf)
+        FfiConverterString.write(value.tool, into: &buf)
         FfiConverterString.write(value.storey, into: &buf)
         FfiConverterDouble.write(value.scale, into: &buf)
         FfiConverterString.write(value.wallType, into: &buf)

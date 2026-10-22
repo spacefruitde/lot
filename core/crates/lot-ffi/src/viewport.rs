@@ -69,7 +69,8 @@ pub enum KeyInput {
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct ViewState {
     pub view: ViewKind,
-    pub wall_tool: bool,
+    /// Aktives Werkzeug: „select“, „wall“, „grid“ oder „column“.
+    pub tool: String,
     pub storey: String,
     pub scale: f64,
     pub wall_type: String,
@@ -308,7 +309,7 @@ impl Viewport {
             ViewMode::Plan => ViewKind::Plan,
             ViewMode::Model => ViewKind::Model,
         };
-        let (storey, wall_type, selection, hint, wall_tool) = match (&s.editor, &s.document) {
+        let (storey, wall_type, selection, hint, tool) = match (&s.editor, &s.document) {
             (Some(e), Some(doc)) => {
                 let doc = doc.lock();
                 let p = doc.project();
@@ -317,12 +318,18 @@ impl Viewport {
                     e.wall_type.and_then(|t| p.wall_type(t)).map(|t| t.name.clone()).unwrap_or_default(),
                     e.selection.iter().map(|id| id.0).collect(),
                     e.hint(),
-                    e.tool == Tool::Wall,
+                    match e.tool {
+                        Tool::Select => "select",
+                        Tool::Wall => "wall",
+                        Tool::Grid => "grid",
+                        Tool::Column => "column",
+                    }
+                    .to_string(),
                 )
             }
-            _ => (String::new(), String::new(), Vec::new(), String::new(), false),
+            _ => (String::new(), String::new(), Vec::new(), String::new(), "select".to_string()),
         };
-        ViewState { view, wall_tool, storey, scale: s.plan_scale, wall_type, selection, hint }
+        ViewState { view, tool, storey, scale: s.plan_scale, wall_type, selection, hint }
     }
 
     /// Zeichnet ein Bild. `false`, wenn das Fenster gerade verdeckt ist; dann erneut versuchen.

@@ -28,7 +28,7 @@ struct InspectorView: View {
             }
             Section("Bedienung") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("W: Wand zeichnen, V: Auswählen, ⌘K: Befehle")
+                    Text("W: Wand, A: Achse, S: Stütze, V: Auswählen, ⌘K: Befehle")
                     Text("Zeichnen: klicken, Länge tippen und ⏎, ⇧ rechtwinklig")
                     Text("Grundriss: zwei Finger verschieben, spreizen zoomt")
                     Text("3D: zwei Finger drehen, mit ⇧ verschieben")

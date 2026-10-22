@@ -10,9 +10,12 @@ pub mod geometry;
 pub mod snap;
 
 pub use command::{Command, CommandInfo};
-use geometry::{End, as_elements, end_point, footprint, moved_endpoint, moved_walls, wall_at};
+use geometry::{
+    End, as_elements, column_outline, element_at, end_point, footprint, moved_elements, moved_endpoint, outline,
+};
 use lot_model::{
-    Document, Element, ElementId, ModelError, Operation, Point2, Project, Storey, Top, Wall, WallAlignment,
+    Column, ColumnProfile, Document, Element, ElementId, GridLine, ModelError, Operation, Point2, Project, Storey, Top,
+    Wall, WallAlignment,
 };
 pub use snap::{Snap, SnapKind};
 
@@ -65,12 +68,24 @@ impl Response {
 pub enum Tool {
     Select,
     Wall,
+    /// Achse: zwei Klicks
+    Grid,
+    /// Stütze: ein Klick
+    Column,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 enum Drag {
-    Walls { start: Point2, current: Point2 },
-    Endpoint { wall: ElementId, end: End, current: Point2 },
+    /// Die ganze Auswahl verschieben.
+    Selection {
+        start: Point2,
+        current: Point2,
+    },
+    Endpoint {
+        wall: ElementId,
+        end: End,
+        current: Point2,
+    },
 }
 
 /// Was der Renderer über dem Plan zeigt, in Modellkoordinaten.
@@ -78,7 +93,7 @@ enum Drag {
 pub struct Overlay {
     /// Umriss der Wand, die gerade gezeichnet wird.
     pub preview: Option<Vec<[f64; 2]>>,
-    /// Umrisse der gewählten Wände.
+    /// Umrisse der gewählten Elemente.
     pub selected: Vec<Vec<[f64; 2]>>,
     /// Griffe an den Enden gewählter Wände.
     pub handles: Vec<Point2>,
@@ -119,7 +134,7 @@ impl Editor {
     /// Passt den Zustand an ein geändertes Modell an (Undo, Laden): Verschwundene
     /// Elemente fallen aus der Auswahl, ein fehlendes Geschoss wird ersetzt.
     pub fn sync(&mut self, project: &Project) {
-        self.selection.retain(|id| project.wall(*id).is_some());
+        self.selection.retain(|id| project.elements.contains_key(id));
         if project.storey(self.storey).is_none() {
             *self = Self { tool: self.tool, ..Self::new(project) };
         }
@@ -130,7 +145,7 @@ impl Editor {
 
     pub fn pointer_moved(&mut self, project: &Project, input: Input) -> Response {
         match self.tool {
-            Tool::Wall => {
+            Tool::Wall | Tool::Grid | Tool::Column => {
                 self.pointer = Some(snap::snap(
                     project,
                     self.storey,
@@ -148,6 +163,46 @@ impl Editor {
 
     pub fn pointer_down(&mut self, doc: &mut Document, input: Input, clicks: u32) -> Response {
         match self.tool {
+            Tool::Column => {
+                let p = snap::snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
+                let column = Column {
+                    storey: self.storey,
+                    position: p,
+                    profile: ColumnProfile::Rectangle { width: 0.3, depth: 0.3 },
+                    rotation: 0.0,
+                    material: "stahlbeton".into(),
+                    base_offset: 0.0,
+                    top: Top::Storey { offset: 0.0 },
+                };
+                Response::from_result(doc.insert(Element::Column(column)).map(|_| ()))
+            }
+            Tool::Grid => {
+                let p = snap::snap(
+                    doc.project(),
+                    self.storey,
+                    input.point,
+                    input.tolerance,
+                    self.chain_start,
+                    input.shift,
+                    &[],
+                )
+                .point;
+                self.pointer = None;
+                match self.chain_start {
+                    None => {
+                        self.chain_start = Some(p);
+                        Response::redraw()
+                    }
+                    Some(start) if start.distance(p) >= 0.01 => {
+                        self.end_chain();
+                        let label = next_grid_label(doc.project(), start, p);
+                        Response::from_result(
+                            doc.insert(Element::GridLine(GridLine { label, start, end: p })).map(|_| ()),
+                        )
+                    }
+                    Some(_) => Response::redraw(),
+                }
+            }
             Tool::Wall => {
                 if clicks >= 2 {
                     self.end_chain();
@@ -184,7 +239,7 @@ impl Editor {
                         }
                     }
                 }
-                match wall_at(project, self.storey, input.point, input.tolerance) {
+                match element_at(project, self.storey, input.point, input.tolerance) {
                     Some(id) => {
                         if input.shift {
                             if let Some(pos) = self.selection.iter().position(|s| *s == id) {
@@ -205,7 +260,7 @@ impl Editor {
                             &self.selection,
                         )
                         .point;
-                        self.drag = Some(Drag::Walls { start, current: start });
+                        self.drag = Some(Drag::Selection { start, current: start });
                     }
                     None => {
                         if !input.shift {
@@ -220,7 +275,7 @@ impl Editor {
 
     pub fn pointer_dragged(&mut self, project: &Project, input: Input) -> Response {
         match &mut self.drag {
-            Some(Drag::Walls { current, .. }) => {
+            Some(Drag::Selection { current, .. }) => {
                 *current =
                     snap::snap(project, self.storey, input.point, input.tolerance, None, false, &self.selection).point;
                 Response::redraw()
@@ -239,34 +294,34 @@ impl Editor {
     pub fn pointer_up(&mut self, doc: &mut Document) -> Response {
         let Some(drag) = self.drag.take() else { return Response::default() };
         let (label, changes) = match drag {
-            Drag::Walls { start, current } => {
+            Drag::Selection { start, current } => {
                 let delta = (current.x - start.x, current.y - start.y);
                 if delta.0.hypot(delta.1) < 1e-9 {
                     return Response::redraw();
                 }
-                ("Wände verschieben", moved_walls(doc.project(), &self.selection, delta))
+                ("Verschieben", moved_elements(doc.project(), &self.selection, delta))
             }
             Drag::Endpoint { wall, end, current } => {
                 if doc.project().wall(wall).is_none_or(|w| end_point(w, end).distance(current) < 1e-9) {
                     return Response::redraw();
                 }
-                ("Wandende verschieben", moved_endpoint(doc.project(), wall, end, current))
+                ("Wandende verschieben", as_elements(moved_endpoint(doc.project(), wall, end, current)))
             }
         };
-        Response::from_result(replace_all(doc, label, as_elements(changes)))
+        Response::from_result(replace_all(doc, label, changes))
     }
 
     /// Stand des Modells während einer Ziehbewegung, für die Vorschau.
     pub fn preview(&self, project: &Project) -> Option<Project> {
         let changes = match self.drag.as_ref()? {
-            Drag::Walls { start, current } => {
-                moved_walls(project, &self.selection, (current.x - start.x, current.y - start.y))
+            Drag::Selection { start, current } => {
+                moved_elements(project, &self.selection, (current.x - start.x, current.y - start.y))
             }
-            Drag::Endpoint { wall, end, current } => moved_endpoint(project, *wall, *end, *current),
+            Drag::Endpoint { wall, end, current } => as_elements(moved_endpoint(project, *wall, *end, *current)),
         };
         let mut p = project.clone();
-        for (id, w) in changes {
-            p.elements.insert(id, Element::Wall(w));
+        for (id, e) in changes {
+            p.elements.insert(id, e);
         }
         Some(p)
     }
@@ -277,7 +332,7 @@ impl Editor {
                 if self.drag.take().is_some() {
                 } else if self.chain_start.is_some() {
                     self.end_chain();
-                } else if self.tool == Tool::Wall {
+                } else if self.tool != Tool::Select {
                     self.tool = Tool::Select;
                 } else {
                     self.selection.clear();
@@ -322,11 +377,9 @@ impl Editor {
                 self.end_chain();
                 Response::redraw()
             }
-            Command::WallTool => {
-                self.tool = Tool::Wall;
-                self.selection.clear();
-                Response::redraw()
-            }
+            Command::WallTool => self.set_tool(Tool::Wall),
+            Command::GridTool => self.set_tool(Tool::Grid),
+            Command::ColumnTool => self.set_tool(Tool::Column),
             Command::SetWallType(id) => {
                 let id = ElementId(*id);
                 if doc.project().wall_type(id).is_none() {
@@ -366,7 +419,12 @@ impl Editor {
             Command::FlipWalls => self.flip_selection(doc),
             Command::SelectAll => {
                 self.tool = Tool::Select;
-                self.selection = doc.project().walls_on(self.storey).map(|(id, _)| id).collect();
+                let p = doc.project();
+                self.selection = p
+                    .walls_on(self.storey)
+                    .map(|(id, _)| id)
+                    .chain(p.columns_on(self.storey).map(|(id, _)| id))
+                    .collect();
                 Response::redraw()
             }
             Command::Undo => match doc.undo() {
@@ -391,7 +449,9 @@ impl Editor {
         let mut list = vec![
             CommandInfo::new(Command::SelectTool, "Auswählen", "V", "Werkzeug"),
             CommandInfo::new(Command::WallTool, "Wand zeichnen", "W", "Werkzeug"),
-            CommandInfo::new(Command::SelectAll, "Alle Wände im Geschoss wählen", "⌘A", "Auswahl"),
+            CommandInfo::new(Command::GridTool, "Achse zeichnen", "A", "Werkzeug"),
+            CommandInfo::new(Command::ColumnTool, "Stütze setzen", "S", "Werkzeug"),
+            CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
             CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "F", "Auswahl"),
             CommandInfo::new(Command::Undo, "Widerrufen", "⌘Z", "Bearbeiten"),
@@ -423,9 +483,39 @@ impl Editor {
         let shown = self.preview(project);
         let project_now = shown.as_ref().unwrap_or(project);
         for id in &self.selection {
+            if let Some(o) = outline(project_now, *id) {
+                overlay.selected.push(o);
+            }
             if let Some(w) = project_now.wall(*id) {
-                overlay.selected.push(footprint(project_now, w));
                 overlay.handles.extend([w.start, w.end]);
+            }
+        }
+        if self.tool == Tool::Column
+            && let Some(p) = self.pointer
+        {
+            overlay.snap = Some(p);
+            overlay.preview = Some(column_outline(&Column {
+                storey: self.storey,
+                position: p.point,
+                profile: ColumnProfile::Rectangle { width: 0.3, depth: 0.3 },
+                rotation: 0.0,
+                material: String::new(),
+                base_offset: 0.0,
+                top: Top::Storey { offset: 0.0 },
+            }));
+        }
+        if self.tool == Tool::Grid {
+            overlay.snap = self.pointer;
+            if let (Some(start), Some(p)) = (self.chain_start, self.pointer) {
+                let (dx, dy) = (p.point.x - start.x, p.point.y - start.y);
+                let len = dx.hypot(dy).max(1e-9);
+                let (nx, ny) = (-dy / len * 0.03, dx / len * 0.03);
+                overlay.preview = Some(vec![
+                    [start.x - nx, start.y - ny],
+                    [p.point.x - nx, p.point.y - ny],
+                    [p.point.x + nx, p.point.y + ny],
+                    [start.x + nx, start.y + ny],
+                ]);
             }
         }
         if self.tool == Tool::Wall {
@@ -452,14 +542,24 @@ impl Editor {
             (Tool::Wall, Some(_), _) => {
                 "Endpunkt klicken oder Länge tippen. ⇧: nur rechte Winkel. Doppelklick oder Esc: fertig.".into()
             }
-            (Tool::Select, _, Some(_)) => "Loslassen setzt die Wand ab. Esc bricht ab.".into(),
+            (Tool::Grid, None, _) => "Achse: Anfangspunkt klicken. Esc: zurück zum Auswählen.".into(),
+            (Tool::Grid, Some(_), _) => "Achse: Endpunkt klicken. ⇧: nur rechte Winkel.".into(),
+            (Tool::Column, _, _) => "Stütze 30/30: Mittelpunkt klicken. Esc: zurück zum Auswählen.".into(),
+            (Tool::Select, _, Some(_)) => "Loslassen setzt ab. Esc bricht ab.".into(),
             (Tool::Select, _, None) if self.selection.is_empty() => {
-                "Wand anklicken zum Wählen. W: Wand zeichnen. ⌘K: Befehle.".into()
+                "Anklicken wählt. W: Wand, A: Achse, S: Stütze. ⌘K: Befehle.".into()
             }
             (Tool::Select, _, None) => {
                 "Ziehen verschiebt, Enden ziehen ändert die Länge. ⌫ löscht. F dreht um. ⌘K: Befehle.".into()
             }
         }
+    }
+
+    fn set_tool(&mut self, tool: Tool) -> Response {
+        self.tool = tool;
+        self.selection.clear();
+        self.end_chain();
+        Response::redraw()
     }
 
     fn end_chain(&mut self) {
@@ -568,6 +668,18 @@ fn replace_all(doc: &mut Document, label: &str, changes: Vec<(ElementId, Element
         return Ok(());
     }
     doc.apply(Operation::Group { label: label.into(), ops })
+}
+
+/// Nächste freie Achsbezeichnung: senkrechte Achsen mit Zahlen (1, 2, ...),
+/// waagerechte mit Buchstaben (A, B, ...).
+fn next_grid_label(project: &Project, a: Point2, b: Point2) -> String {
+    let used: Vec<String> = project.grid_lines().map(|(_, g)| g.label.clone()).collect();
+    let vertical = (b.y - a.y).abs() > (b.x - a.x).abs();
+    if vertical {
+        (1..).map(|n: u32| n.to_string()).find(|l| !used.contains(l)).unwrap_or_default()
+    } else {
+        ('A'..='Z').map(String::from).find(|l| !used.contains(l)).unwrap_or_else(|| "?".into())
+    }
 }
 
 /// Getippte Länge in Metern, Komma oder Punkt als Dezimalzeichen.

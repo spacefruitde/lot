@@ -69,3 +69,12 @@ copy_if_changed() {
 }
 copy_if_changed "$GEN_DIR/lot_ffi.swift" "$APP_DIR/Lot/Generated/lot_ffi.swift"
 copy_if_changed "$GEN_DIR/lot_ffiFFI.h" "$APP_DIR/Bridging/lot_ffiFFI.h"
+
+# Planschrift als eigene Datei ins App-Bundle (LGPL, zur Laufzeit geladen, ADR 0011).
+# Die App setzt LOT_PLAN_FONT auf diese Datei; so liest sie nichts aus dem Repository.
+if [ -n "${TARGET_BUILD_DIR:-}" ] && [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ]; then
+    RESOURCES="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+    mkdir -p "$RESOURCES"
+    cp "$CORE_DIR/assets/fonts/osifont-lgpl3fe.ttf" "$CORE_DIR/assets/fonts/README.md" "$RESOURCES/"
+    mv "$RESOURCES/README.md" "$RESOURCES/osifont-LIZENZ.md"
+fi

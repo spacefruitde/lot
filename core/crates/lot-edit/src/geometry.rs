@@ -74,6 +74,112 @@ pub fn distance_to_wall(project: &Project, wall: &Wall, p: Point2) -> f64 {
     ds.hypot(dt)
 }
 
+/// Das Element unter dem Punkt: Stützen vor Wänden vor Achsen, jeweils das nächste.
+pub fn element_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    let column = project
+        .columns_on(storey)
+        .map(|(id, c)| (id, column_distance(c, p)))
+        .filter(|(_, d)| *d <= tolerance)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id);
+    column.or_else(|| wall_at(project, storey, p, tolerance)).or_else(|| {
+        project
+            .grid_lines()
+            .map(|(id, g)| (id, segment_distance(g.start, g.end, p)))
+            .filter(|(_, d)| *d <= tolerance)
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(id, _)| id)
+    })
+}
+
+/// Abstand vom Querschnitt einer Stütze (0 innerhalb).
+fn column_distance(c: &lot_model::Column, p: Point2) -> f64 {
+    let (sin, cos) = (-c.rotation.to_radians()).sin_cos();
+    let (dx, dy) = (p.x - c.position.x, p.y - c.position.y);
+    let (x, y) = (dx * cos - dy * sin, dx * sin + dy * cos);
+    match c.profile {
+        lot_model::ColumnProfile::Rectangle { width, depth } => {
+            ((x.abs() - width / 2.0).max(0.0)).hypot((y.abs() - depth / 2.0).max(0.0))
+        }
+        lot_model::ColumnProfile::Circle { diameter } => (x.hypot(y) - diameter / 2.0).max(0.0),
+    }
+}
+
+/// Umriss eines Elements für die Auswahl, in Metern.
+pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
+    match project.elements.get(&id)? {
+        Element::Wall(w) => Some(footprint(project, w)),
+        Element::Column(c) => Some(column_outline(c)),
+        Element::GridLine(g) => {
+            let w = Wall {
+                storey: id,
+                wall_type: id,
+                start: g.start,
+                end: g.end,
+                alignment: lot_model::WallAlignment::Center,
+                base_offset: 0.0,
+                top: lot_model::Top::Height(1.0),
+            };
+            let (dx, dy) = w.direction();
+            let at = |p: Point2, t: f64| [p.x - dy * t, p.y + dx * t];
+            Some(vec![at(g.start, -0.05), at(g.end, -0.05), at(g.end, 0.05), at(g.start, 0.05)])
+        }
+        _ => None,
+    }
+}
+
+/// Umriss einer Stütze.
+pub fn column_outline(c: &lot_model::Column) -> Vec<[f64; 2]> {
+    let (sin, cos) = c.rotation.to_radians().sin_cos();
+    match c.profile {
+        lot_model::ColumnProfile::Rectangle { width, depth } => [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+            .iter()
+            .map(|(sx, sy)| {
+                let (x, y) = (sx * width / 2.0, sy * depth / 2.0);
+                [c.position.x + x * cos - y * sin, c.position.y + x * sin + y * cos]
+            })
+            .collect(),
+        lot_model::ColumnProfile::Circle { diameter } => (0..32)
+            .map(|i| {
+                let a = i as f64 / 32.0 * std::f64::consts::TAU;
+                [c.position.x + diameter / 2.0 * a.cos(), c.position.y + diameter / 2.0 * a.sin()]
+            })
+            .collect(),
+    }
+}
+
+fn segment_distance(a: Point2, b: Point2, p: Point2) -> f64 {
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    let len2 = dx * dx + dy * dy;
+    let t = if len2 > 0.0 { (((p.x - a.x) * dx + (p.y - a.y) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    p.distance(Point2::new(a.x + dx * t, a.y + dy * t))
+}
+
+/// Neue Stände aller Elemente, wenn die Auswahl um `delta` verschoben wird:
+/// Wände mit ihren Anschlüssen, Stützen und Achsen.
+pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -> Vec<(ElementId, Element)> {
+    let walls: Vec<ElementId> = ids.iter().copied().filter(|id| project.wall(*id).is_some()).collect();
+    let mut changes = as_elements(moved_walls(project, &walls, delta));
+    let shift = |p: Point2| Point2::new(p.x + delta.0, p.y + delta.1);
+    for id in ids {
+        match project.elements.get(id) {
+            Some(Element::Column(c)) => {
+                let mut n = c.clone();
+                n.position = shift(c.position);
+                changes.push((*id, Element::Column(n)));
+            }
+            Some(Element::GridLine(g)) => {
+                let mut n = g.clone();
+                n.start = shift(g.start);
+                n.end = shift(g.end);
+                changes.push((*id, Element::GridLine(n)));
+            }
+            _ => {}
+        }
+    }
+    changes
+}
+
 /// Die Wand unter dem Punkt (innerhalb `tolerance`), die nächste zuerst.
 pub fn wall_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
     project

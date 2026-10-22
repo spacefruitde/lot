@@ -54,16 +54,10 @@ struct ContentView: View {
             .help("Ansicht wechseln (⌘1, ⌘2)")
         }
         ToolbarItemGroup {
-            Button { model.run("SelectTool") } label: {
-                Label("Auswählen", systemImage: "cursorarrow")
-            }
-            .help("Auswählen (V)")
-            .disabled(!model.isPlan)
-            Button { model.run("WallTool") } label: {
-                Label("Wand", systemImage: model.viewState?.wallTool == true ? "square.split.diagonal.2x2.fill" : "square.split.diagonal.2x2")
-            }
-            .help("Wand zeichnen (W)")
-            .disabled(!model.isPlan)
+            toolButton("Auswählen", systemImage: "cursorarrow", tool: "select", command: "SelectTool", key: "V")
+            toolButton("Wand", systemImage: "square.split.diagonal.2x2", tool: "wall", command: "WallTool", key: "W")
+            toolButton("Achse", systemImage: "line.diagonal", tool: "grid", command: "GridTool", key: "A")
+            toolButton("Stütze", systemImage: "square.fill", tool: "column", command: "ColumnTool", key: "S")
             commandMenu("Wandaufbau", systemImage: "square.stack.3d.up", group: "Wandaufbau")
             commandMenu("Geschoss", systemImage: "building.2", group: "Geschoss")
         }
@@ -79,6 +73,17 @@ struct ContentView: View {
         }
     }
 
+    private func toolButton(_ title: String, systemImage: String, tool: String, command: String, key: String) -> some View {
+        let active = model.viewState?.tool == tool
+        return Button { model.run(command) } label: {
+            Label(title, systemImage: systemImage)
+        }
+        .foregroundStyle(active ? Color.accentColor : Color.primary)
+        .help("\(title) (\(key))")
+        .accessibilityLabel(title)
+        .disabled(!model.isPlan)
+    }
+
     private func commandMenu(_ title: String, systemImage: String, group: String) -> some View {
         Menu {
             ForEach(model.commands.filter { $0.group == group || ($0.group == "Ansicht" && group == "Geschoss" && $0.id.hasPrefix("scale:")) }, id: \.id) { item in
@@ -88,6 +93,7 @@ struct ContentView: View {
             Label(title, systemImage: systemImage)
         }
         .help(title)
+        .accessibilityLabel(title)
     }
 }
 

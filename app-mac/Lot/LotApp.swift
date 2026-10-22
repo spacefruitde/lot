@@ -2,7 +2,15 @@ import SwiftUI
 
 @main
 struct LotApp: App {
-    @State private var model = AppModel()
+    @State private var model: AppModel
+
+    init() {
+        // Planschrift aus dem App-Bundle, bevor der Kern sie zum ersten Mal braucht.
+        if let font = Bundle.main.path(forResource: "osifont-lgpl3fe", ofType: "ttf") {
+            setenv("LOT_PLAN_FONT", font, 1)
+        }
+        _model = State(initialValue: AppModel())
+    }
 
     var body: some Scene {
         Window("Lot", id: "main") {

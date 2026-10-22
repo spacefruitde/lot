@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 pub enum Command {
     SelectTool,
     WallTool,
+    GridTool,
+    ColumnTool,
     SetWallType(u64),
     SetAlignment(WallAlignment),
     SetStorey(u64),
