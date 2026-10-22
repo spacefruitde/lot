@@ -1,0 +1,15 @@
+[package]
+name = "lot-plan"
+description = "Planobjekte: Linien, Flächen, Texte auf dem Blatt"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+lot-geom = { version = "0.1.0", path = "../lot-geom" }
+lot-model = { version = "0.1.0", path = "../lot-model" }
+
+[lints]
+workspace = true

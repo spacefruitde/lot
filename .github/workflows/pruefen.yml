@@ -1,0 +1,43 @@
+# Prüft bei jedem Push den Kern unter Linux und macOS und baut die Mac-App.
+# Der Kern muss unter Linux bauen und testen (CLAUDE.md, Regel 5).
+name: Prüfen
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  kern:
+    name: Kern (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+      # Installiert die Version aus core/rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - run: cargo fmt --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo run -p lot-cli -- render ../testprojekte/m0-wand --out ../out/m0-wand --no-3d
+
+  app:
+    name: Mac-App
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install
+        working-directory: core
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - run: xcodebuild -project Lot.xcodeproj -scheme Lot -configuration Debug -derivedDataPath build/DerivedData build
+        working-directory: app-mac

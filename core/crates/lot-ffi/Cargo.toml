@@ -1,0 +1,27 @@
+[package]
+name = "lot-ffi"
+description = "Schnittstelle für Swift (UniFFI)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+# staticlib für die App, cdylib für uniffi-bindgen (liest die Schnittstelle aus der Bibliothek)
+crate-type = ["lib", "staticlib", "cdylib"]
+name = "lot_ffi"
+
+[dependencies]
+lot-geom = { version = "0.1.0", path = "../lot-geom" }
+lot-io = { version = "0.1.0", path = "../lot-io" }
+lot-model = { version = "0.1.0", path = "../lot-model" }
+lot-render = { version = "0.1.0", path = "../lot-render" }
+thiserror = "2.0.21"
+uniffi = "0.32"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"

@@ -1,0 +1,3 @@
+# Formatierung für cargo fmt. Etwas breiter als Standard, passend zu den langen deutschen Bezeichnungen in Meldungen.
+max_width = 120
+use_small_heuristics = "Max"

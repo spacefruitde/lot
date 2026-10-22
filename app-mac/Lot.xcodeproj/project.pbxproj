@@ -1,0 +1,309 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXFileReference section */
+		4C4F54000000000000000001 /* Lot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4C4F54000000000000000010 /* Lot-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Lot-Bridging-Header.h"; sourceTree = "<group>"; };
+		4C4F54000000000000000011 /* lot_ffiFFI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lot_ffiFFI.h; sourceTree = "<group>"; };
+		4C4F54000000000000000012 /* build-core.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "build-core.sh"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		4C4F54000000000000000002 /* Lot */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Lot;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4C4F54000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4C4F54000000000000000004 = {
+			isa = PBXGroup;
+			children = (
+				4C4F54000000000000000002 /* Lot */,
+				4C4F54000000000000000013 /* Bridging */,
+				4C4F54000000000000000014 /* scripts */,
+				4C4F54000000000000000005 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4C4F54000000000000000005 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4C4F54000000000000000001 /* Lot.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4C4F54000000000000000013 /* Bridging */ = {
+			isa = PBXGroup;
+			children = (
+				4C4F54000000000000000010 /* Lot-Bridging-Header.h */,
+				4C4F54000000000000000011 /* lot_ffiFFI.h */,
+			);
+			path = Bridging;
+			sourceTree = "<group>";
+		};
+		4C4F54000000000000000014 /* scripts */ = {
+			isa = PBXGroup;
+			children = (
+				4C4F54000000000000000012 /* build-core.sh */,
+			);
+			path = scripts;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4C4F54000000000000000006 /* Lot */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4C4F54000000000000000007 /* Build configuration list for PBXNativeTarget "Lot" */;
+			buildPhases = (
+				4C4F54000000000000000008 /* Rust-Kern bauen */,
+				4C4F54000000000000000009 /* Sources */,
+				4C4F54000000000000000003 /* Frameworks */,
+				4C4F5400000000000000000A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				4C4F54000000000000000002 /* Lot */,
+			);
+			name = Lot;
+			packageProductDependencies = (
+			);
+			productName = Lot;
+			productReference = 4C4F54000000000000000001 /* Lot.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4C4F5400000000000000000B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					4C4F54000000000000000006 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+				};
+			};
+			buildConfigurationList = 4C4F5400000000000000000C /* Build configuration list for PBXProject "Lot" */;
+			developmentRegion = de;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				de,
+				Base,
+			);
+			mainGroup = 4C4F54000000000000000004;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 4C4F54000000000000000005 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4C4F54000000000000000006 /* Lot */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		4C4F5400000000000000000A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		4C4F54000000000000000008 /* Rust-Kern bauen */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Rust-Kern bauen";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/build-core.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4C4F54000000000000000009 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		4C4F5400000000000000000D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		4C4F5400000000000000000E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		4C4F5400000000000000000F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Lot;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LOT_CARGO_PROFILE = debug;
+				MARKETING_VERSION = 0.1;
+				OTHER_LDFLAGS = (
+					"$(SRCROOT)/../core/target/apple/$(LOT_CARGO_PROFILE)/liblot_ffi.a",
+					"-framework",
+					Metal,
+					"-framework",
+					QuartzCore,
+					"-framework",
+					CoreGraphics,
+					"-liconv",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.spacefruit.lot;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Bridging/Lot-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		4C4F54000000000000000015 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Lot;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LOT_CARGO_PROFILE = release;
+				MARKETING_VERSION = 0.1;
+				OTHER_LDFLAGS = (
+					"$(SRCROOT)/../core/target/apple/$(LOT_CARGO_PROFILE)/liblot_ffi.a",
+					"-framework",
+					Metal,
+					"-framework",
+					QuartzCore,
+					"-framework",
+					CoreGraphics,
+					"-liconv",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.spacefruit.lot;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Bridging/Lot-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4C4F54000000000000000007 /* Build configuration list for PBXNativeTarget "Lot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4C4F5400000000000000000F /* Debug */,
+				4C4F54000000000000000015 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4C4F5400000000000000000C /* Build configuration list for PBXProject "Lot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4C4F5400000000000000000D /* Debug */,
+				4C4F5400000000000000000E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4C4F5400000000000000000B /* Project object */;
+}

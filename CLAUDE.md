@@ -35,11 +35,22 @@ Diese Datei gibt Claude Code die Grundregeln für die Arbeit in diesem Repositor
 
 ## Befehle
 
-Wird in Meilenstein M0 angelegt und danach immer aktuell gehalten.
+Angelegt in M0, immer aktuell halten. Rust über rustup, die Version steht in `core/rust-toolchain.toml` (ADR 0001).
 
 - Kern testen: `cd core && cargo test --workspace`
-- Testprojekt rechnen und Pläne ausgeben: `cargo run -p lot-cli -- render ../testprojekte/<name> --out ../out/<name>`
-- Mac-App: `app-mac/Lot.xcodeproj` in Xcode öffnen (genauer Build-Befehl folgt in M0)
+- Kern auf Warnungen prüfen: `cd core && cargo clippy --workspace --all-targets -- -D warnings`
+- Formatieren: `cd core && cargo fmt` (Einstellungen in `core/rustfmt.toml`)
+- CI: `.github/workflows/pruefen.yml` prüft bei jedem Push Formatierung, clippy und Tests unter Linux und macOS und baut die Mac-App
+- Kern unter Linux lokal prüfen, ohne Ordnerfreigabe für Docker: `tar --exclude core/target -cf - core testprojekte | docker run -i --rm rust:1.99 bash -c 'mkdir /lot && tar -C /lot -xf - && cd /lot/core && cargo test --workspace'`
+- Testprojekt rechnen und Pläne ausgeben: `cd core && cargo run -p lot-cli -- render ../testprojekte/<name> --out ../out/<name>`
+  - schreibt `m0-pruefblatt.pdf/.svg/.png`, `3d.png` und `projekt.lot`
+  - `--no-3d` auf Rechnern ohne Grafikkarte (etwa Cloud-Sessions)
+  - die Planschrift liegt in `core/assets/fonts/`, ein anderer Ort geht über `LOT_PLAN_FONT`
+- Swift-Anbindung neu erzeugen: `app-mac/scripts/build-core.sh` (läuft auch automatisch als erste Build-Phase in Xcode)
+- Mac-App bauen: `cd app-mac && xcodebuild -project Lot.xcodeproj -scheme Lot -configuration Debug -derivedDataPath build/DerivedData build`
+- Mac-App für Apple Silicon und Intel (ab macOS 14): dasselbe mit `-configuration Release -destination 'generic/platform=macOS'`
+- Mac-App starten: `open app-mac/build/DerivedData/Build/Products/Debug/Lot.app`, oder in Xcode `app-mac/Lot.xcodeproj` öffnen und ⌘R
+- Golden-Tests: `core/crates/lot-cli/tests/golden.rs` vergleicht jede Referenz in `testprojekte/*/referenz/` zeichengenau mit dem neu gerechneten SVG. Referenzen nur nach Bens Freigabe anlegen oder ändern (Regel 3).
 
 ## Aufbau
 

@@ -1,0 +1,16 @@
+[package]
+name = "lot-geom"
+description = "Geometrie: Volumen, Booleans, Schnitte"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+lot-model = { version = "0.1.0", path = "../lot-model" }
+manifold-rust = "=0.18.0"
+thiserror = "2.0.21"
+
+[lints]
+workspace = true
