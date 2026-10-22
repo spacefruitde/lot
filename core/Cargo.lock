@@ -889,6 +889,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lot-edit"
+version = "0.1.0"
+dependencies = [
+ "lot-model",
+ "ron",
+ "serde",
+]
+
+[[package]]
 name = "lot-ffi"
 version = "0.1.0"
 dependencies = [

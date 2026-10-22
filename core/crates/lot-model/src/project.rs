@@ -107,6 +107,67 @@ impl Project {
         self.vertical_extent(wall.storey, wall.base_offset, wall.top)
     }
 
+    /// Neues, leeres Projekt mit einem Erdgeschoss und üblichen Wandaufbauten.
+    /// Die Aufbauten sind ein Vorschlag; der Bürostandard ersetzt sie später (2.08).
+    pub fn template(name: impl Into<String>) -> Self {
+        use LayerFunction::*;
+        let layer = |material: &str, thickness: f64, function: LayerFunction| Layer {
+            material: material.into(),
+            thickness,
+            function,
+        };
+        let mut p = Project::new(name);
+        p.elements.insert(ElementId(1), Element::Storey(Storey { name: "EG".into(), elevation: 0.0, height: 2.75 }));
+        let types = [
+            (
+                "Außenwand WDVS 36",
+                vec![
+                    layer("putz", 0.01, Finish),
+                    layer("daemmung_hart", 0.16, Insulation),
+                    layer("kalksandstein", 0.175, Structure),
+                    layer("putz", 0.015, Finish),
+                ],
+            ),
+            (
+                "Innenwand tragend KS 17,5",
+                vec![
+                    layer("putz", 0.015, Finish),
+                    layer("kalksandstein", 0.175, Structure),
+                    layer("putz", 0.015, Finish),
+                ],
+            ),
+            (
+                "Innenwand nichttragend KS 11,5",
+                vec![
+                    layer("putz", 0.015, Finish),
+                    layer("kalksandstein", 0.115, Structure),
+                    layer("putz", 0.015, Finish),
+                ],
+            ),
+            (
+                "Trockenbauwand 10",
+                vec![
+                    layer("gipskarton", 0.0125, Finish),
+                    layer("daemmung", 0.075, Service),
+                    layer("gipskarton", 0.0125, Finish),
+                ],
+            ),
+            ("Stahlbetonwand 25", vec![layer("stahlbeton", 0.25, Structure)]),
+        ];
+        for (i, (name, layers)) in types.into_iter().enumerate() {
+            p.elements.insert(ElementId(10 + i as u64), Element::WallType(WallType { name: name.into(), layers }));
+        }
+        p
+    }
+
+    /// Alle Wandaufbauten, nach Kennung.
+    pub fn wall_types(&self) -> impl Iterator<Item = (ElementId, &WallType)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::WallType(t) => Some((*id, t)),
+            _ => None,
+        })
+    }
+
     /// Beispielprojekt für M0: eine 5 m lange Wand mit einem Fenster.
     /// Entspricht `testprojekte/m0-wand/projekt.ron`.
     pub fn sample() -> Self {
