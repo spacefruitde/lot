@@ -32,36 +32,51 @@ impl LotError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Enum)]
 pub enum ParamKind {
     WallLength,
-    WallThickness,
     WallHeight,
+    WallTopOffset,
+    BaseOffset,
     OpeningOffset,
     OpeningWidth,
     OpeningHeight,
     OpeningSillHeight,
+    StoreyElevation,
+    StoreyHeight,
+    ColumnWidth,
+    ColumnDepth,
 }
 
 impl From<ParamKind> for Param {
     fn from(k: ParamKind) -> Self {
         match k {
             ParamKind::WallLength => Param::WallLength,
-            ParamKind::WallThickness => Param::WallThickness,
             ParamKind::WallHeight => Param::WallHeight,
+            ParamKind::WallTopOffset => Param::WallTopOffset,
+            ParamKind::BaseOffset => Param::BaseOffset,
             ParamKind::OpeningOffset => Param::OpeningOffset,
             ParamKind::OpeningWidth => Param::OpeningWidth,
             ParamKind::OpeningHeight => Param::OpeningHeight,
             ParamKind::OpeningSillHeight => Param::OpeningSillHeight,
+            ParamKind::StoreyElevation => Param::StoreyElevation,
+            ParamKind::StoreyHeight => Param::StoreyHeight,
+            ParamKind::ColumnWidth => Param::ColumnWidth,
+            ParamKind::ColumnDepth => Param::ColumnDepth,
         }
     }
 }
 
-const ALL_PARAMS: [ParamKind; 7] = [
+const ALL_PARAMS: [ParamKind; 12] = [
     ParamKind::WallLength,
-    ParamKind::WallThickness,
     ParamKind::WallHeight,
+    ParamKind::WallTopOffset,
+    ParamKind::BaseOffset,
     ParamKind::OpeningOffset,
     ParamKind::OpeningWidth,
     ParamKind::OpeningHeight,
     ParamKind::OpeningSillHeight,
+    ParamKind::StoreyElevation,
+    ParamKind::StoreyHeight,
+    ParamKind::ColumnWidth,
+    ParamKind::ColumnDepth,
 ];
 
 /// Ein Parameterwert eines Elements, in Metern.
@@ -179,7 +194,8 @@ impl Viewport {
     pub fn show(&self, document: Arc<LotDocument>) -> Result<f64, LotError> {
         let start = Instant::now();
         let geometry = lot_geom::build(document.lock().project()).map_err(LotError::from_display)?;
-        self.lock().set_geometry(&geometry);
+        let standard = lot_plan::standard::OfficeStandard::default_standard();
+        self.lock().set_geometry(&geometry, &|m| standard.material(m).color);
         Ok(start.elapsed().as_secs_f64() * 1000.0)
     }
 
@@ -223,14 +239,15 @@ mod tests {
     #[test]
     fn sample_has_all_parameters() {
         let doc = LotDocument::new_sample();
-        assert_eq!(doc.parameters().len(), ALL_PARAMS.len());
+        // Geschoss: Höhe und Lage; Wand: Länge, Höhe, Versatz; Öffnung: vier Maße.
+        assert_eq!(doc.parameters().len(), 2 + 3 + 4);
         assert_eq!(value(&doc, ParamKind::OpeningWidth), 1.5);
     }
 
     #[test]
     fn change_undo_redo() {
         let doc = LotDocument::new_sample();
-        doc.set_param(2, ParamKind::OpeningWidth, 2.0).unwrap();
+        doc.set_param(4, ParamKind::OpeningWidth, 2.0).unwrap();
         assert!(doc.can_undo());
         assert!(doc.undo().unwrap());
         assert_eq!(value(&doc, ParamKind::OpeningWidth), 1.5);
@@ -241,7 +258,7 @@ mod tests {
     #[test]
     fn invalid_value_gives_german_message() {
         let doc = LotDocument::new_sample();
-        let LotError::Failed(message) = doc.set_param(2, ParamKind::OpeningWidth, 21.5).unwrap_err();
+        let LotError::Failed(message) = doc.set_param(4, ParamKind::OpeningWidth, 21.5).unwrap_err();
         assert!(message.contains("ragt seitlich aus der Wand"), "{message}");
         assert_eq!(value(&doc, ParamKind::OpeningWidth), 1.5);
     }
@@ -251,7 +268,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("wand.lot").to_string_lossy().into_owned();
         let doc = LotDocument::new_sample();
-        doc.set_param(1, ParamKind::WallHeight, 2.75).unwrap();
+        doc.set_param(3, ParamKind::WallHeight, 2.75).unwrap();
         doc.save(path.clone()).unwrap();
         let opened = LotDocument::open(path).unwrap();
         assert_eq!(value(&opened, ParamKind::WallHeight), 2.75);

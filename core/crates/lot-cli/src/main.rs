@@ -73,7 +73,8 @@ fn render_3d(project: &lot_model::Project) -> Result<Vec<u8>> {
     let (width, height) = (1600, 1000);
     let geometry = lot_geom::build(project)?;
     let mut renderer = lot_render::Renderer::headless(width, height)?;
-    renderer.set_geometry(&geometry);
+    let standard = lot_plan::standard::OfficeStandard::default_standard();
+    renderer.set_geometry(&geometry, &|m| standard.material(m).color);
     renderer.zoom_to_fit();
     let pixels = renderer.render_image()?;
     let mut png_data = Vec::new();

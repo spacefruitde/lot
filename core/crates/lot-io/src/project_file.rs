@@ -1,6 +1,6 @@
 //! Projektdatei `.lot`: eine SQLite-Datenbank mit Elementen und Operationsprotokoll.
 //!
-//! Aufbau (Formatversion 1):
+//! Aufbau (Formatversion 2, seit M1 mit Geschossen und Wandaufbauten):
 //!
 //! - `meta(key, value)`: Projektname und Programmversion
 //! - `elements(id, kind, data)`: ein Element je Zeile, Parameter als JSON
@@ -18,7 +18,10 @@ use crate::IoError;
 
 /// „LOT1“ als 32-Bit-Zahl, kennzeichnet Lot-Dateien.
 const APPLICATION_ID: i64 = 0x4C4F_5431;
-const FORMAT_VERSION: i64 = 1;
+const FORMAT_VERSION: i64 = 2;
+/// Älteste Formatversion, die Lot noch lesen kann. Format 1 (M0) kannte
+/// weder Geschosse noch Wandaufbauten und wird nicht übernommen.
+const OLDEST_READABLE: i64 = 2;
 
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -80,6 +83,9 @@ pub fn load(path: &Path) -> Result<Document, IoError> {
     if version > FORMAT_VERSION {
         return Err(IoError::UnsupportedVersion { found: version, supported: FORMAT_VERSION });
     }
+    if version < OLDEST_READABLE {
+        return Err(IoError::OutdatedVersion { found: version });
+    }
 
     let name: String =
         conn.query_row("SELECT value FROM meta WHERE key = 'name'", [], |r| r.get(0)).optional()?.unwrap_or_default();
@@ -115,8 +121,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("wand.lot");
         let mut doc = Document::new(Project::sample());
-        doc.set_param(ElementId(2), Param::OpeningWidth, 2.0).unwrap();
-        doc.set_param(ElementId(1), Param::WallHeight, 2.75).unwrap();
+        doc.set_param(ElementId(4), Param::OpeningWidth, 2.0).unwrap();
+        doc.set_param(ElementId(3), Param::WallHeight, 2.75).unwrap();
         doc.undo().unwrap();
         save(&doc, &path).unwrap();
 
@@ -131,10 +137,19 @@ mod tests {
         let path = dir.path().join("wand.lot");
         let mut doc = Document::new(Project::sample());
         save(&doc, &path).unwrap();
-        doc.set_param(ElementId(2), Param::OpeningWidth, 1.0).unwrap();
+        doc.set_param(ElementId(4), Param::OpeningWidth, 1.0).unwrap();
         save(&doc, &path).unwrap();
         assert_eq!(load(&path).unwrap().project(), doc.project());
         assert!(!path.with_extension("lot-tmp").exists());
+    }
+
+    #[test]
+    fn m0_file_is_rejected_with_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("m0.lot");
+        save(&Document::new(Project::sample()), &path).unwrap();
+        Connection::open(&path).unwrap().pragma_update(None, "user_version", 1).unwrap();
+        assert!(matches!(load(&path), Err(IoError::OutdatedVersion { found: 1 })));
     }
 
     #[test]

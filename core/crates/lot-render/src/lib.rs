@@ -29,9 +29,8 @@ pub enum RenderError {
 
 const SAMPLES: u32 = 4;
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-/// Hintergrund, Bauteile und Kanten in sRGB.
+/// Hintergrund und Kanten in sRGB.
 const BACKGROUND: [f64; 3] = [0.94, 0.94, 0.93];
-const BASE: [f32; 3] = [0.93, 0.92, 0.89];
 const EDGE: [f32; 3] = [0.22, 0.22, 0.24];
 
 #[repr(C)]
@@ -39,7 +38,6 @@ const EDGE: [f32; 3] = [0.22, 0.22, 0.24];
 struct Globals {
     view_proj: [[f32; 4]; 4],
     light: [f32; 4],
-    base: [f32; 4],
     edge: [f32; 4],
 }
 
@@ -48,6 +46,8 @@ struct Globals {
 struct MeshVertex {
     position: [f32; 3],
     normal: [f32; 3],
+    /// Farbe des Materials, linear.
+    color: [f32; 3],
 }
 
 enum Target {
@@ -175,7 +175,7 @@ impl Renderer {
             immediate_size: 0,
         });
 
-        let mesh_attributes = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
+        let mesh_attributes = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x3];
         let edge_attributes = wgpu::vertex_attr_array![0 => Float32x3];
         let pipeline = |label: &str,
                         vs: &str,
@@ -288,14 +288,18 @@ impl Renderer {
         (self.msaa, self.depth) = attachments(&self.device, self.format, self.size);
     }
 
-    /// Lädt die Geometrie aller Elemente auf die Grafikkarte.
-    pub fn set_geometry(&mut self, geometry: &ModelGeometry) {
+    /// Lädt die Geometrie aller Elemente auf die Grafikkarte. `color` liefert
+    /// zu jedem Materialschlüssel die Farbe in sRGB.
+    pub fn set_geometry(&mut self, geometry: &ModelGeometry, color: &dyn Fn(&str) -> [u8; 3]) {
         let mut vertices = Vec::new();
         let mut edges: Vec<[f32; 3]> = Vec::new();
         for element in &geometry.elements {
-            vertices.extend(
-                element.mesh.flat_vertices().into_iter().map(|v| MeshVertex { position: v.position, normal: v.normal }),
-            );
+            let [r, g, b, _] = srgb_to_linear(color(&element.material).map(|c| c as f32 / 255.0));
+            vertices.extend(element.mesh.flat_vertices().into_iter().map(|v| MeshVertex {
+                position: v.position,
+                normal: v.normal,
+                color: [r, g, b],
+            }));
             for [a, b] in element.mesh.feature_edges(20.0) {
                 edges.push(a);
                 edges.push(b);
@@ -313,7 +317,7 @@ impl Renderer {
             })
         };
         // Leere Puffer sind nicht erlaubt, deshalb mindestens ein Eckpunkt.
-        let mesh = buffer("flächen", if vertices.is_empty() { &[0; 24] } else { bytemuck::cast_slice(&vertices) });
+        let mesh = buffer("flächen", if vertices.is_empty() { &[0; 36] } else { bytemuck::cast_slice(&vertices) });
         let edge_buffer = buffer("kanten", if edges.is_empty() { &[0; 12] } else { bytemuck::cast_slice(&edges) });
         self.buffers = Some(Buffers {
             mesh,
@@ -413,7 +417,6 @@ impl Renderer {
         let globals = Globals {
             view_proj: self.camera.view_proj().to_cols_array_2d(),
             light: [light.x, light.y, light.z, 0.0],
-            base: srgb_to_linear(BASE),
             edge: srgb_to_linear(EDGE),
         };
         self.queue.write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
@@ -527,7 +530,7 @@ mod tests {
             Err(e) => panic!("{e}"),
         };
         let geometry = lot_geom::build(&lot_model::Project::sample()).unwrap();
-        renderer.set_geometry(&geometry);
+        renderer.set_geometry(&geometry, &|_| [235, 233, 226]);
         renderer.zoom_to_fit();
         let pixels = renderer.render_image().unwrap();
         assert_eq!(pixels.len(), 320 * 200 * 4);

@@ -1,0 +1,127 @@
+//! Flächen im Grundriss mit Booleans über Clipper2 (ADR 0005).
+//!
+//! Gerechnet wird mit Ganzzahlen auf einem Raster von 1 µm. Nach außen gehen
+//! Ringe in Metern: Außenringe gegen den Uhrzeigersinn, Löcher im Uhrzeigersinn.
+
+use clipper2_rust::{FillRule, Path64, Paths64, Point64};
+
+/// Ganzzahlige Einheiten je Meter (1 µm).
+const SCALE: f64 = 1e6;
+
+/// Ring in Metern, ohne Wiederholung des ersten Punkts.
+pub type Ring = Vec<[f64; 2]>;
+
+/// Fläche aus beliebig vielen Ringen (Regel gerade/ungerade nach Bereinigung).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Area(Paths64);
+
+fn to_point(p: [f64; 2]) -> Point64 {
+    Point64::new((p[0] * SCALE).round() as i64, (p[1] * SCALE).round() as i64)
+}
+
+fn from_point(p: &Point64) -> [f64; 2] {
+    [p.x as f64 / SCALE, p.y as f64 / SCALE]
+}
+
+impl Area {
+    pub fn empty() -> Self {
+        Self(Vec::new())
+    }
+
+    /// Fläche aus einem einfachen Ring (Richtung egal).
+    pub fn from_ring(ring: &[[f64; 2]]) -> Self {
+        if ring.len() < 3 {
+            return Self::empty();
+        }
+        let path: Path64 = ring.iter().map(|p| to_point(*p)).collect();
+        Self(clipper2_rust::union_subjects_64(&vec![path], FillRule::NonZero))
+    }
+
+    /// Fläche aus Ringen mit Löchern (Regel gerade/ungerade).
+    pub fn from_rings(rings: &[Ring]) -> Self {
+        let paths: Paths64 =
+            rings.iter().filter(|r| r.len() >= 3).map(|r| r.iter().map(|p| to_point(*p)).collect()).collect();
+        Self(clipper2_rust::union_subjects_64(&paths, FillRule::EvenOdd))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.area() < 1e-10
+    }
+
+    /// Flächeninhalt in m².
+    pub fn area(&self) -> f64 {
+        self.0.iter().map(clipper2_rust::area).sum::<f64>() / (SCALE * SCALE)
+    }
+
+    pub fn union(&self, other: &Area) -> Area {
+        Area(clipper2_rust::union_64(&self.0, &other.0, FillRule::NonZero))
+    }
+
+    pub fn intersection(&self, other: &Area) -> Area {
+        Area(clipper2_rust::intersect_64(&self.0, &other.0, FillRule::NonZero))
+    }
+
+    pub fn difference(&self, other: &Area) -> Area {
+        Area(clipper2_rust::difference_64(&self.0, &other.0, FillRule::NonZero))
+    }
+
+    pub fn union_all<'a>(areas: impl IntoIterator<Item = &'a Area>) -> Area {
+        let paths: Paths64 = areas.into_iter().flat_map(|a| a.0.iter().cloned()).collect();
+        Area(clipper2_rust::union_subjects_64(&paths, FillRule::NonZero))
+    }
+
+    /// Ringe in Metern. Außenringe gegen, Löcher im Uhrzeigersinn.
+    pub fn rings(&self) -> Vec<Ring> {
+        self.0.iter().filter(|p| p.len() >= 3).map(|p| p.iter().map(from_point).collect()).collect()
+    }
+
+    /// Achsparalleler Hüllquader (min, max).
+    pub fn bounds(&self) -> Option<([f64; 2], [f64; 2])> {
+        let mut points = self.0.iter().flatten().map(from_point);
+        let first = points.next()?;
+        Some(points.fold((first, first), |(lo, hi), p| {
+            ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])])
+        }))
+    }
+}
+
+/// Streifen entlang einer Geraden durch `origin` in Richtung `dir` (Einheitsvektor):
+/// längs von `along.0` bis `along.1`, quer (positiv nach links) von `across.0` bis `across.1`.
+pub fn strip(origin: [f64; 2], dir: [f64; 2], along: (f64, f64), across: (f64, f64)) -> Area {
+    let normal = [-dir[1], dir[0]];
+    let at = |s: f64, t: f64| [origin[0] + dir[0] * s + normal[0] * t, origin[1] + dir[1] * s + normal[1] * t];
+    Area::from_ring(&[at(along.0, across.0), at(along.1, across.0), at(along.1, across.1), at(along.0, across.1)])
+}
+
+/// Halbebene links der gerichteten Geraden von `a` nach `b`, begrenzt auf ein
+/// Quadrat mit halber Kantenlänge `reach` um `a`.
+pub fn left_half_plane(a: [f64; 2], b: [f64; 2], reach: f64) -> Area {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let len = dx.hypot(dy);
+    if len < 1e-12 {
+        return Area::empty();
+    }
+    strip(a, [dx / len, dy / len], (-reach, reach), (0.0, reach))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_area_and_booleans() {
+        let a = strip([0.0, 0.0], [1.0, 0.0], (0.0, 5.0), (0.15, -0.15));
+        assert!((a.area() - 1.5).abs() < 1e-9);
+        let b = strip([2.0, -1.0], [0.0, 1.0], (0.0, 2.0), (0.5, -0.5));
+        assert!((a.intersection(&b).area() - 0.3).abs() < 1e-9);
+        assert!((a.union(&b).area() - (1.5 + 2.0 - 0.3)).abs() < 1e-9);
+        assert!((a.difference(&b).area() - 1.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn half_plane_cuts_square() {
+        let sq = Area::from_ring(&[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+        let left = left_half_plane([0.0, 0.0], [1.0, 1.0], 10.0);
+        assert!((sq.intersection(&left).area() - 0.5).abs() < 1e-9);
+    }
+}

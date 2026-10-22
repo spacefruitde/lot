@@ -16,6 +16,7 @@ name = "lot_ffi"
 lot-geom = { version = "0.1.0", path = "../lot-geom" }
 lot-io = { version = "0.1.0", path = "../lot-io" }
 lot-model = { version = "0.1.0", path = "../lot-model" }
+lot-plan = { version = "0.1.0", path = "../lot-plan" }
 lot-render = { version = "0.1.0", path = "../lot-render" }
 thiserror = "2.0.21"
 uniffi = "0.32"

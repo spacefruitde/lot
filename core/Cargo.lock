@@ -893,6 +893,7 @@ dependencies = [
  "lot-geom",
  "lot-io",
  "lot-model",
+ "lot-plan",
  "lot-render",
  "tempfile",
  "thiserror",
@@ -903,6 +904,7 @@ dependencies = [
 name = "lot-geom"
 version = "0.1.0"
 dependencies = [
+ "clipper2-rust",
  "lot-model",
  "manifold-rust",
  "thiserror",
@@ -938,6 +940,8 @@ version = "0.1.0"
 dependencies = [
  "lot-geom",
  "lot-model",
+ "ron",
+ "serde",
 ]
 
 [[package]]
