@@ -36,6 +36,12 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Höhenkote | `LevelMark` | | |
 | Maßkette | `DimensionChain` | | |
 | Stiftset | `PenSet` | | Linienbreiten je Maßstab |
+| Stift | `Pen` | | eine Linienbreite in mm auf dem Papier |
+| Linienart | `LineStyle` | | durchgezogen, gestrichelt |
+| Planobjekt | `PlanObject` | | Linie, Fläche oder Text auf dem Blatt; daraus entstehen Bildschirm, PDF, SVG, DXF |
+| Operation | `Operation` | | eine Änderung am Modell, umkehrbar; Grundlage für Undo |
+| Projekt, geöffnet | `Document` | | Projekt mit Operationsprotokoll und Undo/Redo |
+| Abstand der Öffnung vom Wandanfang | `Opening::offset` | | entlang der Wandachse bis zur Kante der Öffnung |
 | Schraffur | `Hatch` | | |
 | Planblatt | `Sheet` | | |
 | Plankopf | `TitleBlock` | | |
