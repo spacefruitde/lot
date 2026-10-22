@@ -50,6 +50,7 @@ Angelegt in M0, immer aktuell halten. Rust über rustup, die Version steht in `c
 - Mac-App bauen: `cd app-mac && xcodebuild -project Lot.xcodeproj -scheme Lot -configuration Debug -derivedDataPath build/DerivedData build`
 - Mac-App für Apple Silicon und Intel (ab macOS 14): dasselbe mit `-configuration Release -destination 'generic/platform=macOS'`
 - Mac-App starten: `open app-mac/build/DerivedData/Build/Products/Debug/Lot.app`, oder in Xcode `app-mac/Lot.xcodeproj` öffnen und ⌘R. Testprojekte öffnet die App über Ablage, Testprojekt öffnen (⇧⌘O).
+- Zeitmessung gegen das Ziel aus PLAN.md (Wandänderung unter 50 ms): `cd core && cargo test -p lot-cli --test messung -- --ignored --nocapture`
 - Golden-Tests: `core/crates/lot-cli/tests/golden.rs` vergleicht jede Referenz in `testprojekte/*/referenz/` zeichengenau mit dem neu gerechneten SVG. Referenzen nur nach Bens Freigabe anlegen oder ändern (Regel 3).
 
 ## Aufbau

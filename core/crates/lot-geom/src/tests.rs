@@ -329,6 +329,22 @@ fn walls_of_different_height_meet_in_3d() {
 }
 
 #[test]
+fn equal_bands_become_one_box() {
+    // Die niedrige Wand teilt das Geschoss bei 1,00 m. Die freie hohe Wand ist
+    // in beiden Abschnitten gleich und wird deshalb ein einziger Quader je Schicht.
+    let mut p = project();
+    let tall = add_wall(&mut p, INNEN, (0.0, 0.0), (3.0, 0.0), WallAlignment::Center);
+    let low = add_wall(&mut p, INNEN, (0.0, 2.0), (3.0, 2.0), WallAlignment::Center);
+    if let Some(Element::Wall(w)) = p.elements.get_mut(&low) {
+        w.top = Top::Height(1.0);
+    }
+    let g = build(&p).unwrap();
+    for e in g.elements.iter().filter(|e| e.id == tall) {
+        assert_eq!((e.mesh.positions.len(), e.mesh.triangles.len()), (8, 12), "Schicht {}", e.layer);
+    }
+}
+
+#[test]
 fn taller_wall_runs_through_at_corner() {
     let mut p = project();
     let tall = add_wall(&mut p, INNEN, (0.0, 0.0), (3.0, 0.0), WallAlignment::Center);

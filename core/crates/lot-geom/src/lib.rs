@@ -62,44 +62,65 @@ impl ModelGeometry {
 /// Jedes Geschoss wird an allen Höhen geteilt, an denen sich etwas ändert
 /// (Unter- und Oberkanten, Brüstungen, Stürze). In jedem Abschnitt gelten
 /// dieselben Anschlüsse wie im Grundriss; die Schichtflächen werden über den
-/// Abschnitt hochgezogen und je Schicht vereinigt.
+/// Abschnitt hochgezogen und je Schicht vereinigt. Übereinanderliegende
+/// Abschnitte mit gleicher Fläche werden vorher zu einem zusammengefasst,
+/// so bleibt die teure Vereinigung den Wänden mit Öffnungen vorbehalten.
 pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
-    let mut solids: BTreeMap<(ElementId, usize), (String, Vec<Manifold>)> = BTreeMap::new();
+    let mut bands = Vec::new();
     for (storey, _) in project.storeys() {
         let heights = heights(project, storey);
-        for pair in heights.windows(2) {
-            let (z0, z1) = (pair[0], pair[1]);
-            if z1 - z0 < 1e-6 {
-                continue;
-            }
-            for region in layer_regions(project, storey, (z0 + z1) / 2.0) {
-                let polygons: Vec<Vec<Vec2>> = region
-                    .area
-                    .rings()
-                    .into_iter()
-                    .map(|r| r.into_iter().map(|p| Vec2::new(p[0], p[1])).collect())
-                    .collect();
-                let solid = Manifold::extrude(&polygons, z1 - z0, 0, 0.0, Vec2::new(1.0, 1.0))
-                    .translate(Vec3::new(0.0, 0.0, z0));
-                if !solid.is_empty() {
-                    solids
-                        .entry((region.element, region.layer))
-                        .or_insert_with(|| (region.material, Vec::new()))
-                        .1
-                        .push(solid);
-                }
+        bands.extend(heights.windows(2).filter(|p| p[1] - p[0] >= 1e-6).map(|p| (storey, p[0], p[1])));
+    }
+    // Die Abschnitte sind unabhängig voneinander und werden parallel gerechnet.
+    let regions = parallel_map(&bands, |&(storey, z0, z1)| layer_regions(project, storey, (z0 + z1) / 2.0));
+    let mut stacks: BTreeMap<(ElementId, usize), (String, Vec<Slab>)> = BTreeMap::new();
+    for (&(_, z0, z1), band) in bands.iter().zip(regions) {
+        for region in band {
+            let parts =
+                &mut stacks.entry((region.element, region.layer)).or_insert_with(|| (region.material, Vec::new())).1;
+            match parts.last_mut() {
+                Some(last) if (last.1 - z0).abs() < 1e-9 && last.2.same_shape(&region.area) => last.1 = z1,
+                _ => parts.push((z0, z1, region.area)),
             }
         }
     }
-    let elements = solids
-        .into_iter()
-        .map(|((id, layer), (material, parts))| {
-            let solid = Manifold::batch_boolean(&parts, OpType::Add);
-            ElementGeometry { id, layer, material, mesh: to_trimesh(&solid) }
-        })
-        .filter(|e| !e.mesh.is_empty())
-        .collect();
-    Ok(ModelGeometry { elements })
+    let stacks: Vec<_> = stacks.into_iter().collect();
+    let elements = parallel_map(&stacks, |((id, layer), (material, parts))| {
+        let mut solids: Vec<Manifold> =
+            parts.iter().map(|(z0, z1, area)| extrude(area, *z0, *z1)).filter(|s| !s.is_empty()).collect();
+        let solid = if solids.len() == 1 {
+            solids.pop().unwrap_or_default()
+        } else {
+            Manifold::batch_boolean(&solids, OpType::Add)
+        };
+        ElementGeometry { id: *id, layer: *layer, material: material.clone(), mesh: to_trimesh(&solid) }
+    });
+    Ok(ModelGeometry { elements: elements.into_iter().filter(|e| !e.mesh.is_empty()).collect() })
+}
+
+/// `f` auf alle Einträge angewandt, verteilt auf die Prozessorkerne. Die
+/// Reihenfolge des Ergebnisses entspricht der Eingabe.
+fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(8);
+    if threads <= 1 || items.len() < 2 {
+        return items.iter().map(&f).collect();
+    }
+    let chunk = items.len().div_ceil(threads);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> =
+            items.chunks(chunk).map(|part| scope.spawn(|| part.iter().map(&f).collect::<Vec<R>>())).collect();
+        handles.into_iter().flat_map(|h| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e))).collect()
+    })
+}
+
+/// Fläche einer Schicht, hochgezogen von unten bis oben.
+type Slab = (f64, f64, Area);
+
+/// Fläche von `z0` bis `z1` hochgezogen.
+fn extrude(area: &Area, z0: f64, z1: f64) -> Manifold {
+    let polygons: Vec<Vec<Vec2>> =
+        area.rings().into_iter().map(|r| r.into_iter().map(|p| Vec2::new(p[0], p[1])).collect()).collect();
+    Manifold::extrude(&polygons, z1 - z0, 0, 0.0, Vec2::new(1.0, 1.0)).translate(Vec3::new(0.0, 0.0, z0))
 }
 
 /// Alle Höhen eines Geschosses, an denen sich Bauteile ändern, aufsteigend.

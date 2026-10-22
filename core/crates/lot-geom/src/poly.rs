@@ -85,6 +85,12 @@ impl Area {
             .collect()
     }
 
+    /// Gleiche Form, auch wenn Ringe in anderer Reihenfolge oder mit anderem
+    /// Anfangspunkt vorliegen.
+    pub fn same_shape(&self, other: &Area) -> bool {
+        self == other || canonical(&self.0) == canonical(&other.0)
+    }
+
     /// Achsparalleler Hüllquader (min, max).
     pub fn bounds(&self) -> Option<([f64; 2], [f64; 2])> {
         let mut points = self.0.iter().flatten().map(from_point);
@@ -93,6 +99,22 @@ impl Area {
             ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])])
         }))
     }
+}
+
+/// Ringe mit dem kleinsten Punkt vorn, sortiert.
+fn canonical(paths: &Paths64) -> Vec<Vec<(i64, i64)>> {
+    let mut rings: Vec<Vec<(i64, i64)>> = paths
+        .iter()
+        .map(|p| {
+            let mut r: Vec<(i64, i64)> = p.iter().map(|q| (q.x, q.y)).collect();
+            if let Some(i) = r.iter().enumerate().min_by_key(|(_, q)| **q).map(|(i, _)| i) {
+                r.rotate_left(i);
+            }
+            r
+        })
+        .collect();
+    rings.sort();
+    rings
 }
 
 /// Streifen entlang einer Geraden durch `origin` in Richtung `dir` (Einheitsvektor):

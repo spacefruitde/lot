@@ -67,9 +67,10 @@ Antwort jeweils Ja oder Nein und ein Satz. Wo ein Vorschlag steht, reicht „Vor
 |---|---|---|
 | Grundriss EG neu rechnen nach einer Änderung (Anschlüsse, Schraffuren, Dreiecke) | 4 bis 5 ms | unter 50 ms |
 | Nur die Schichtflächen der Anschlüsse, EG | 1 ms | |
-| 3D des ganzen EFH | 91 ms, nur wenn die 3D-Ansicht offen ist | unter 50 ms |
+| 3D des ganzen EFH | 17 ms (vorher 91 ms) | |
+| Wandlänge ändern, danach Grundriss und 3D neu | 21 ms | unter 50 ms |
 
-Das 3D-Modell rechnet die App erst beim Wechsel in die 3D-Ansicht, darum stört der Wert beim Zeichnen nicht. Schneller wird es in M3, wenn nur geänderte Wände neu gerechnet werden.
+Für das 3D fasse ich gleiche Höhenabschnitte einer Wand zusammen und rechne auf allen Prozessorkernen. Die App rechnet 3D ohnehin nur, wenn die 3D-Ansicht offen ist. Messen: `cd core && cargo test -p lot-cli --test messung -- --ignored --nocapture`.
 
 ## Bekannte Lücken
 
