@@ -6,4 +6,5 @@
     FloorPlan(name: "kg-100", storey: 1, scale: 100.0),
     FloorPlan(name: "dg-100", storey: 3, scale: 100.0),
     View3d(name: "efh-3d"),
+    PlanView(name: "eg-planansicht", storey: 2, scale: 100.0),
 ]

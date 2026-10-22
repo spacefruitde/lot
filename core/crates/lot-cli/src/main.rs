@@ -59,6 +59,15 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
             }
             continue;
         }
+        if let Output::PlanView { name, storey, scale } = &output {
+            if with_3d {
+                match render_plan_view(&project, lot_model::ElementId(*storey), *scale) {
+                    Ok(png) => write(&out.join(format!("{name}.png")), &png)?,
+                    Err(e) => eprintln!("Hinweis: keine Planansicht ({e})"),
+                }
+            }
+            continue;
+        }
         let pages = sheets(&project, &output, &source);
         write(&out.join(format!("{}.pdf", output.name())), &lot_io::pdf::to_pdf_pages(&pages)?)?;
         for (sheet, page) in pages.iter().zip(page_names(output.name(), pages.len())) {
@@ -83,7 +92,24 @@ fn render_3d(project: &lot_model::Project) -> Result<Vec<u8>> {
     let standard = lot_plan::standard::OfficeStandard::default_standard();
     renderer.set_geometry(&geometry, &|m| standard.material(m).color);
     renderer.zoom_to_fit();
-    let pixels = renderer.render_image()?;
+    encode_png(renderer.render_image()?, width, height)
+}
+
+/// Planansicht wie in der App, als PNG.
+fn render_plan_view(project: &lot_model::Project, storey: lot_model::ElementId, scale: f64) -> Result<Vec<u8>> {
+    let (width, height) = (1600, 1000);
+    let mut renderer = lot_render::Renderer::headless(width, height)?;
+    let standard = lot_plan::standard::OfficeStandard::default_standard();
+    let view =
+        lot_plan::floor_plan::FloorPlanView { storey, cut_height: lot_plan::floor_plan::DEFAULT_CUT_HEIGHT, scale };
+    let viewport = lot_plan::Viewport { scale, origin: lot_plan::PaperPoint::new(0.0, 0.0) };
+    renderer.set_plan(lot_plan::floor_plan::floor_plan(project, view, standard, viewport));
+    renderer.set_mode(lot_render::ViewMode::Plan);
+    renderer.plan_zoom_to_fit();
+    encode_png(renderer.render_image()?, width, height)
+}
+
+fn encode_png(pixels: Vec<u8>, width: u32, height: u32) -> Result<Vec<u8>> {
     let mut png_data = Vec::new();
     {
         let mut encoder = png::Encoder::new(&mut png_data, width, height);

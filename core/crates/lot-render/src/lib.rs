@@ -1,4 +1,4 @@
-//! Renderer der 3D-Ansicht auf Basis von wgpu.
+//! Renderer auf Basis von wgpu: 3D-Ansicht und Planansicht.
 //!
 //! Läuft auf dem Mac über Metal und zeichnet in den CAMetalLayer eines NSView
 //! der App ([`Renderer::for_appkit_view`]). Ohne Fenster zeichnet er in eine
@@ -7,6 +7,7 @@
 //! Code hier baut auch unter Linux.
 
 mod camera;
+mod plan2d;
 
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -15,7 +16,16 @@ use bytemuck::{Pod, Zeroable};
 pub use camera::OrbitCamera;
 use glam::Vec3;
 use lot_geom::ModelGeometry;
+use lot_plan::PlanObject;
+pub use plan2d::{OverlayItem, PlanCamera};
 use wgpu::util::DeviceExt;
+
+/// Was der Renderer zeigt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewMode {
+    Model,
+    Plan,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum RenderError {
@@ -62,6 +72,26 @@ struct Buffers {
     edge_count: u32,
 }
 
+/// Dreiecke der Planansicht auf der Grafikkarte.
+struct PlanBuffers {
+    vertices: wgpu::Buffer,
+    indices: wgpu::Buffer,
+    count: u32,
+}
+
+/// Alles für die Planansicht.
+struct PlanState {
+    pipeline: wgpu::RenderPipeline,
+    globals: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+    objects: Vec<PlanObject>,
+    bounds: Option<([f64; 2], [f64; 2])>,
+    /// Zerlegte Planobjekte und der Zoom, für den sie zerlegt wurden.
+    mesh: Option<(PlanBuffers, f64)>,
+    overlay: Vec<OverlayItem>,
+    camera: PlanCamera,
+}
+
 pub struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -79,6 +109,8 @@ pub struct Renderer {
     bounds: Option<(Vec3, Vec3)>,
     triangles: u32,
     camera: OrbitCamera,
+    mode: ViewMode,
+    plan: PlanState,
 }
 
 impl Renderer {
@@ -237,6 +269,7 @@ impl Renderer {
             Default::default(),
         );
 
+        let plan = plan_state(&device, format);
         let (msaa, depth) = attachments(&device, format, size);
         let camera = OrbitCamera { view_size: (size.0 as f32 / scale, size.1 as f32 / scale), ..Default::default() };
         Self {
@@ -256,7 +289,82 @@ impl Renderer {
             bounds: None,
             triangles: 0,
             camera,
+            mode: ViewMode::Model,
+            plan,
         }
+    }
+
+    pub fn mode(&self) -> ViewMode {
+        self.mode
+    }
+
+    pub fn set_mode(&mut self, mode: ViewMode) {
+        self.mode = mode;
+    }
+
+    /// Planobjekte für die Planansicht, in Blattmillimetern.
+    pub fn set_plan(&mut self, objects: Vec<PlanObject>) {
+        self.plan.bounds = plan_bounds(&objects);
+        self.plan.objects = objects;
+        self.plan.mesh = None;
+    }
+
+    /// Hinweise über dem Plan (Auswahl, Vorschau, Fangpunkt).
+    pub fn set_overlay(&mut self, items: Vec<OverlayItem>) {
+        self.plan.overlay = items;
+    }
+
+    pub fn plan_camera(&self) -> PlanCamera {
+        self.plan.camera
+    }
+
+    pub fn set_plan_camera(&mut self, camera: PlanCamera) {
+        self.plan.camera = camera;
+    }
+
+    /// Pixel je Punkt (Retina: 2).
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    /// Verschiebt die Planansicht um eine Fingerbewegung in Punkten.
+    pub fn plan_pan(&mut self, dx: f32, dy: f32) {
+        let mm_per_pt = self.scale as f64 / self.plan.camera.px_per_mm;
+        self.plan.camera.center[0] -= dx as f64 * mm_per_pt;
+        self.plan.camera.center[1] += dy as f64 * mm_per_pt;
+    }
+
+    /// Zoomt die Planansicht zum Zeiger (Lage in Punkten von der Mitte, y nach oben).
+    pub fn plan_zoom(&mut self, factor: f32, x: f32, y: f32) {
+        if !(factor.is_finite() && factor > 0.0) {
+            return;
+        }
+        let before = self.plan_point(x, y);
+        let zoom = (self.plan.camera.px_per_mm * factor as f64).clamp(0.05, 400.0);
+        self.plan.camera.px_per_mm = zoom;
+        let after = self.plan_point(x, y);
+        self.plan.camera.center[0] += before[0] - after[0];
+        self.plan.camera.center[1] += before[1] - after[1];
+    }
+
+    /// Blattmillimeter unter einem Zeiger (Lage in Punkten von der Mitte, y nach oben).
+    pub fn plan_point(&self, x: f32, y: f32) -> [f64; 2] {
+        let mm_per_pt = self.scale as f64 / self.plan.camera.px_per_mm;
+        [self.plan.camera.center[0] + x as f64 * mm_per_pt, self.plan.camera.center[1] + y as f64 * mm_per_pt]
+    }
+
+    /// Blattmillimeter je Punkt beim aktuellen Zoom.
+    pub fn plan_mm_per_point(&self) -> f64 {
+        self.scale as f64 / self.plan.camera.px_per_mm
+    }
+
+    /// Stellt die Planansicht auf den ganzen Plan ein.
+    pub fn plan_zoom_to_fit(&mut self) {
+        let Some((lo, hi)) = self.plan.bounds else { return };
+        let (w, h) = ((hi[0] - lo[0]).max(1.0), (hi[1] - lo[1]).max(1.0));
+        let (vw, vh) = (self.size.0 as f64, self.size.1 as f64);
+        self.plan.camera.px_per_mm = (vw / w).min(vh / h) * 0.85;
+        self.plan.camera.center = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0];
     }
 
     pub fn camera(&self) -> &OrbitCamera {
@@ -354,7 +462,7 @@ impl Renderer {
             }
         };
         let view = frame.texture.create_view(&Default::default());
-        self.draw(&view);
+        self.draw_mode(&view);
         self.queue.present(frame);
         Ok(true)
     }
@@ -404,8 +512,68 @@ impl Renderer {
     fn draw_offscreen(&mut self) {
         if let Target::Offscreen { texture } = &self.target {
             let view = texture.create_view(&Default::default());
-            self.draw(&view);
+            self.draw_mode(&view);
         }
+    }
+
+    fn draw_mode(&mut self, target: &wgpu::TextureView) {
+        match self.mode {
+            ViewMode::Model => self.draw(target),
+            ViewMode::Plan => self.draw_plan(target),
+        }
+    }
+
+    fn draw_plan(&mut self, target: &wgpu::TextureView) {
+        let zoom = self.plan.camera.px_per_mm;
+        // Neu zerlegen, wenn sich der Zoom spürbar geändert hat: Linien bleiben mindestens 1 Pixel breit.
+        let stale = self.plan.mesh.as_ref().is_none_or(|(_, used)| (zoom / used - 1.0).abs() > 0.05);
+        if stale {
+            let mesh = plan2d::tessellate(&self.plan.objects, (1.0 / zoom) as f32);
+            self.plan.mesh = Some((upload(&self.device, &mesh), zoom));
+        }
+        let overlay = upload(&self.device, &plan2d::tessellate_overlay(&self.plan.overlay, zoom));
+
+        let (w, h) = (self.size.0 as f64, self.size.1 as f64);
+        let [cx, cy] = self.plan.camera.center;
+        let sx = 2.0 * zoom / w;
+        let sy = 2.0 * zoom / h;
+        let transform = [
+            [sx as f32, 0.0, 0.0, 0.0],
+            [0.0, sy as f32, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [(-cx * sx) as f32, (-cy * sy) as f32, 0.0, 1.0],
+        ];
+        self.queue.write_buffer(&self.plan.globals, 0, bytemuck::bytes_of(&transform));
+
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("plan"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.msaa,
+                    depth_slice: None,
+                    resolve_target: Some(target),
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                        store: wgpu::StoreOp::Discard,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_pipeline(&self.plan.pipeline);
+            pass.set_bind_group(0, &self.plan.bind_group, &[]);
+            for buffers in self.plan.mesh.iter().map(|(b, _)| b).chain(std::iter::once(&overlay)) {
+                if buffers.count > 0 {
+                    pass.set_vertex_buffer(0, buffers.vertices.slice(..));
+                    pass.set_index_buffer(buffers.indices.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..buffers.count, 0, 0..1);
+                }
+            }
+        }
+        self.queue.submit([encoder.finish()]);
     }
 
     fn draw(&self, target: &wgpu::TextureView) {
@@ -456,6 +624,116 @@ impl Renderer {
         }
         self.queue.submit([encoder.finish()]);
     }
+}
+
+fn plan_state(device: &wgpu::Device, format: wgpu::TextureFormat) -> PlanState {
+    let shader = device.create_shader_module(wgpu::include_wgsl!("plan.wgsl"));
+    let globals = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("plan"),
+        size: 64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("plan"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("plan"),
+        layout: &layout,
+        entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals.as_entire_binding() }],
+    });
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("plan"),
+        bind_group_layouts: &[Some(&layout)],
+        immediate_size: 0,
+    });
+    let attributes = wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x4];
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("plan"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_plan"),
+            compilation_options: Default::default(),
+            buffers: &[Some(wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<plan2d::PlanVertex>() as u64,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &attributes,
+            })],
+        },
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState { count: SAMPLES, ..Default::default() },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_plan"),
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    });
+    PlanState {
+        pipeline,
+        globals,
+        bind_group,
+        objects: Vec::new(),
+        bounds: None,
+        mesh: None,
+        overlay: Vec::new(),
+        camera: PlanCamera::default(),
+    }
+}
+
+fn upload(device: &wgpu::Device, mesh: &plan2d::PlanMesh) -> PlanBuffers {
+    let vertices: &[u8] = if mesh.vertices.is_empty() {
+        &[0; std::mem::size_of::<plan2d::PlanVertex>()]
+    } else {
+        bytemuck::cast_slice(&mesh.vertices)
+    };
+    let indices: &[u8] = if mesh.indices.is_empty() { &[0; 4] } else { bytemuck::cast_slice(&mesh.indices) };
+    PlanBuffers {
+        vertices: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("plan"),
+            contents: vertices,
+            usage: wgpu::BufferUsages::VERTEX,
+        }),
+        indices: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("plan"),
+            contents: indices,
+            usage: wgpu::BufferUsages::INDEX,
+        }),
+        count: mesh.indices.len() as u32,
+    }
+}
+
+/// Hüllrechteck aller Planobjekte in Blattmillimetern.
+fn plan_bounds(objects: &[PlanObject]) -> Option<([f64; 2], [f64; 2])> {
+    let mut points = objects.iter().flat_map(|o| -> Vec<lot_plan::PaperPoint> {
+        match o {
+            PlanObject::Line(l) => l.points.clone(),
+            PlanObject::Area(a) => a.rings.iter().flatten().copied().collect(),
+            PlanObject::Text(t) => vec![t.position],
+        }
+    });
+    let first = points.next()?;
+    Some(points.fold(([first.x, first.y], [first.x, first.y]), |(lo, hi), p| {
+        ([lo[0].min(p.x), lo[1].min(p.y)], [hi[0].max(p.x), hi[1].max(p.y)])
+    }))
 }
 
 fn open_device(

@@ -5,49 +5,107 @@ struct ContentView: View {
     @State private var showInspector = true
 
     var body: some View {
-        ViewportView(
-            document: model.document,
-            revision: model.revision,
-            fitRequest: model.fitRequest,
-            onStats: { model.stats = $0 }
-        )
-        .overlay(alignment: .bottomLeading) { StatusLine(stats: model.stats) }
-        .inspector(isPresented: $showInspector) {
-            InspectorView()
-                .inspectorColumnWidth(min: 240, ideal: 280)
-        }
-        .toolbar {
-            ToolbarItemGroup {
-                Button { model.undo() } label: { Label("Widerrufen", systemImage: "arrow.uturn.backward") }
-                    .disabled(!model.canUndo)
-                Button { model.redo() } label: { Label("Wiederholen", systemImage: "arrow.uturn.forward") }
-                    .disabled(!model.canRedo)
-                Button { model.zoomToFit() } label: { Label("Alles zeigen", systemImage: "arrow.up.left.and.arrow.down.right") }
-                Button { showInspector.toggle() } label: { Label("Eigenschaften", systemImage: "sidebar.right") }
+        @Bindable var model = model
+        ViewportView(generation: model.documentGeneration, onEvent: { model.handle($0) }, onStats: { model.stats = $0 })
+            .overlay(alignment: .bottom) { StatusLine(hint: model.viewState?.hint ?? "", stats: model.stats) }
+            .overlay(alignment: .top) {
+                if model.showPalette {
+                    CommandPalette(commands: model.commands) { id in
+                        model.showPalette = false
+                        if let id { model.run(id) }
+                    }
+                    .padding(.top, 12)
+                }
             }
+            .inspector(isPresented: $showInspector) {
+                InspectorView()
+                    .inspectorColumnWidth(min: 240, ideal: 280)
+            }
+            .toolbar { toolbar }
+            .navigationTitle(model.title)
+            .navigationSubtitle(subtitle)
+            .alert(
+                "Das ging nicht",
+                isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } }),
+                presenting: model.errorMessage
+            ) { _ in
+                Button("OK") {}
+            } message: { message in
+                Text(message)
+            }
+    }
+
+    private var subtitle: String {
+        guard let s = model.viewState else { return "" }
+        return "\(s.storey) · 1:\(Int(s.scale)) · \(s.wallType)"
+    }
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Picker("Ansicht", selection: Binding(
+                get: { model.viewState?.view ?? .plan },
+                set: { model.setView($0) }
+            )) {
+                Text("Grundriss").tag(ViewKind.plan)
+                Text("3D").tag(ViewKind.model)
+            }
+            .pickerStyle(.segmented)
+            .help("Ansicht wechseln (⌘1, ⌘2)")
         }
-        .navigationTitle(model.title)
-        .alert(
-            "Das ging nicht",
-            isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } }),
-            presenting: model.errorMessage
-        ) { _ in
-            Button("OK") {}
-        } message: { message in
-            Text(message)
+        ToolbarItemGroup {
+            Button { model.run("SelectTool") } label: {
+                Label("Auswählen", systemImage: "cursorarrow")
+            }
+            .help("Auswählen (V)")
+            .disabled(!model.isPlan)
+            Button { model.run("WallTool") } label: {
+                Label("Wand", systemImage: model.viewState?.wallTool == true ? "square.split.diagonal.2x2.fill" : "square.split.diagonal.2x2")
+            }
+            .help("Wand zeichnen (W)")
+            .disabled(!model.isPlan)
+            commandMenu("Wandaufbau", systemImage: "square.stack.3d.up", group: "Wandaufbau")
+            commandMenu("Geschoss", systemImage: "building.2", group: "Geschoss")
         }
+        ToolbarItemGroup {
+            Button { model.undo() } label: { Label("Widerrufen", systemImage: "arrow.uturn.backward") }
+                .disabled(!model.canUndo)
+            Button { model.redo() } label: { Label("Wiederholen", systemImage: "arrow.uturn.forward") }
+                .disabled(!model.canRedo)
+            Button { model.zoomToFit() } label: { Label("Alles zeigen", systemImage: "arrow.up.left.and.arrow.down.right") }
+            Button { model.showPalette.toggle() } label: { Label("Befehle", systemImage: "command") }
+                .help("Befehlspalette (⌘K)")
+            Button { showInspector.toggle() } label: { Label("Eigenschaften", systemImage: "sidebar.right") }
+        }
+    }
+
+    private func commandMenu(_ title: String, systemImage: String, group: String) -> some View {
+        Menu {
+            ForEach(model.commands.filter { $0.group == group || ($0.group == "Ansicht" && group == "Geschoss" && $0.id.hasPrefix("scale:")) }, id: \.id) { item in
+                Button(item.title) { model.run(item.id) }
+            }
+        } label: {
+            Label(title, systemImage: systemImage)
+        }
+        .help(title)
     }
 }
 
 private struct StatusLine: View {
+    let hint: String
     let stats: ViewportStatsDisplay
 
     var body: some View {
-        Text("Bild \(stats.frameMs, format: .number.precision(.fractionLength(1))) ms · Neuberechnung \(stats.rebuildMs, format: .number.precision(.fractionLength(1))) ms · \(stats.triangles) Dreiecke")
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
-            .padding(6)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-            .padding(8)
+        HStack {
+            Text(hint)
+            Spacer()
+            Text("Bild \(stats.frameMs, format: .number.precision(.fractionLength(1))) ms · Neuberechnung \(stats.rebuildMs, format: .number.precision(.fractionLength(1))) ms")
+                .monospacedDigit()
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.regularMaterial)
     }
 }

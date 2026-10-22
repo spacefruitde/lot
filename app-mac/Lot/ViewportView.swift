@@ -2,23 +2,28 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
-/// 3D-Ansicht: ein NSView mit CAMetalLayer, in den der Rust-Kern über wgpu zeichnet.
+/// Planansicht und 3D-Ansicht: ein NSView mit CAMetalLayer, in den der
+/// Rust-Kern über wgpu zeichnet. Maus, Trackpad und Tasten gehen an den Kern.
 struct ViewportView: NSViewRepresentable {
-    let document: LotDocument
-    let revision: Int
-    let fitRequest: Int
+    @Environment(AppModel.self) private var model
+    /// Zählt neue Dokumente.
+    let generation: Int
+    let onEvent: (EventResult) -> Void
     let onStats: (ViewportStatsDisplay) -> Void
 
     func makeNSView(context: Context) -> MetalViewportNSView {
         let view = MetalViewportNSView(frame: .zero)
+        view.model = model
+        view.onEvent = onEvent
         view.onStats = onStats
         return view
     }
 
     func updateNSView(_ view: MetalViewportNSView, context: Context) {
+        view.model = model
+        view.onEvent = onEvent
         view.onStats = onStats
-        view.show(document: document, revision: revision)
-        view.fit(request: fitRequest)
+        view.setNeedsRender()
     }
 
     static func dismantleNSView(_ view: MetalViewportNSView, coordinator: ()) {
@@ -27,17 +32,14 @@ struct ViewportView: NSViewRepresentable {
 }
 
 final class MetalViewportNSView: NSView {
+    weak var model: AppModel?
+    var onEvent: ((EventResult) -> Void)?
     var onStats: ((ViewportStatsDisplay) -> Void)?
 
     private var viewport: Viewport?
     private var displayLink: CADisplayLink?
     private var needsRender = true
-
-    private var document: LotDocument?
-    private var shownDocument: LotDocument?
-    private var shownRevision = -1
-    private var handledFitRequest = 0
-    private var pendingFit = true
+    private var trackingArea: NSTrackingArea?
 
     private var stats = ViewportStatsDisplay()
     private var lastStatsUpdate: CFTimeInterval = 0
@@ -47,6 +49,9 @@ final class MetalViewportNSView: NSView {
     /// die nächste Bewegung nicht erst mit gesenkter Bildrate erscheint.
     private var lastInteraction: CFTimeInterval = 0
     private static let keepAliveAfterInput: CFTimeInterval = 1.0
+
+    /// Ob die linke Maustaste gerade gedrückt ist.
+    private var dragging = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -67,6 +72,10 @@ final class MetalViewportNSView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
+    func setNeedsRender() {
+        needsRender = true
+    }
+
     // MARK: Lebenszyklus
 
     override func viewDidMoveToWindow() {
@@ -83,6 +92,7 @@ final class MetalViewportNSView: NSView {
             link.add(to: .main, forMode: .common)
             displayLink = link
         }
+        window?.makeFirstResponder(self)
     }
 
     override func viewDidChangeBackingProperties() {
@@ -94,6 +104,14 @@ final class MetalViewportNSView: NSView {
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         resizeViewport()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        trackingArea = area
     }
 
     func stop() {
@@ -116,14 +134,16 @@ final class MetalViewportNSView: NSView {
         let (width, height) = pixelSize
         let pointer = UInt64(UInt(bitPattern: Unmanaged.passUnretained(self).toOpaque()))
         do {
-            viewport = try Viewport(nsView: pointer, widthPx: width, heightPx: height, scale: Float(scale))
+            let viewport = try Viewport(nsView: pointer, widthPx: width, heightPx: height, scale: Float(scale))
+            self.viewport = viewport
+            model?.requestRedraw = { [weak self] in self?.setNeedsRender() }
+            model?.attach(viewport)
         } catch {
-            NSLog("Lot: 3D-Ansicht konnte nicht starten: %@", AppModel.message(for: error))
+            NSLog("Lot: Ansicht konnte nicht starten: %@", AppModel.message(for: error))
             return
         }
-        NSLog("Lot: 3D-Ansicht bereit, %d x %d Pixel", width, height)
-        shownRevision = -1
-        if let document { show(document: document, revision: Int.max) }
+        NSLog("Lot: Ansicht bereit, %d x %d Pixel", width, height)
+        needsRender = true
     }
 
     private func resizeViewport() {
@@ -135,39 +155,6 @@ final class MetalViewportNSView: NSView {
         let (width, height) = pixelSize
         viewport?.resize(widthPx: width, heightPx: height, scale: Float(scale))
         needsRender = true
-    }
-
-    // MARK: Modell
-
-    func show(document: LotDocument, revision: Int) {
-        self.document = document
-        guard let viewport else { return }
-        let isNewDocument = shownDocument !== document
-        guard isNewDocument || revision != shownRevision else { return }
-        do {
-            stats.rebuildMs = try viewport.show(document: document)
-            stats.triangles = viewport.triangleCount()
-        } catch {
-            NSLog("Lot: Modell konnte nicht angezeigt werden: %@", AppModel.message(for: error))
-        }
-        shownDocument = document
-        shownRevision = revision
-        if pendingFit {
-            viewport.zoomToFit()
-            pendingFit = false
-        }
-        needsRender = true
-    }
-
-    func fit(request: Int) {
-        guard request != handledFitRequest else { return }
-        handledFitRequest = request
-        if let viewport {
-            viewport.zoomToFit()
-            needsRender = true
-        } else {
-            pendingFit = true
-        }
     }
 
     // MARK: Zeichnen
@@ -186,15 +173,16 @@ final class MetalViewportNSView: NSView {
         guard !needsRender else { return }
         let now = CACurrentMediaTime()
         stats.frameMs = (now - start) * 1000
+        stats.rebuildMs = model?.stats.rebuildMs ?? 0
         if now - lastStatsUpdate > 0.25 {
             lastStatsUpdate = now
             onStats?(stats)
         }
     }
 
-    // MARK: Trackpad und Maus
+    // MARK: Ereignisse
 
-    /// Lage des Zeigers in Punkten vom Mittelpunkt der Ansicht, y nach oben.
+    /// Lage des Zeigers in Punkten von der Mitte der Ansicht, y nach oben.
     private func pointerOffset(_ event: NSEvent) -> (Float, Float) {
         let p = convert(event.locationInWindow, from: nil)
         return (Float(p.x - bounds.midX), Float(p.y - bounds.midY))
@@ -205,13 +193,70 @@ final class MetalViewportNSView: NSView {
         needsRender = true
     }
 
+    private func deliver(_ result: EventResult) {
+        if result.redraw || result.modelChanged {
+            needsRender = true
+        }
+        onEvent?(result)
+    }
+
+    private var isPlan: Bool { model?.viewState?.view != .model }
+
+    override func mouseMoved(with event: NSEvent) {
+        guard let viewport, isPlan else { return }
+        let (x, y) = pointerOffset(event)
+        let result = viewport.pointerMoved(x: x, y: y, shift: event.modifierFlags.contains(.shift))
+        if result.redraw { deliver(result) }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        guard let viewport else { return }
+        dragging = true
+        if isPlan && !event.modifierFlags.contains(.option) {
+            let (x, y) = pointerOffset(event)
+            deliver(viewport.pointerDown(
+                x: x, y: y, clicks: UInt32(event.clickCount), shift: event.modifierFlags.contains(.shift)))
+        }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let viewport else { return }
+        if event.modifierFlags.contains(.option) {
+            viewport.pan(dx: Float(event.deltaX), dy: Float(event.deltaY))
+        } else if isPlan {
+            let (x, y) = pointerOffset(event)
+            deliver(viewport.pointerDragged(x: x, y: y, shift: event.modifierFlags.contains(.shift)))
+        } else {
+            viewport.orbit(dx: Float(event.deltaX), dy: Float(event.deltaY))
+        }
+        didInteract()
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let viewport, dragging else { return }
+        dragging = false
+        if isPlan {
+            deliver(viewport.pointerUp())
+        }
+    }
+
+    override func rightMouseDragged(with event: NSEvent) {
+        viewport?.pan(dx: Float(event.deltaX), dy: Float(event.deltaY))
+        didInteract()
+    }
+
+    override func otherMouseDragged(with event: NSEvent) {
+        rightMouseDragged(with: event)
+    }
+
     override func scrollWheel(with event: NSEvent) {
         guard let viewport else { return }
         let dx = Float(event.scrollingDeltaX)
         let dy = Float(event.scrollingDeltaY)
         if event.hasPreciseScrollingDeltas {
-            // Trackpad oder Magic Mouse: zwei Finger drehen, mit Umschalttaste verschieben.
-            if event.modifierFlags.contains(.shift) {
+            // Trackpad: im Grundriss verschieben, in 3D drehen (mit ⇧ verschieben).
+            if isPlan || event.modifierFlags.contains(.shift) {
                 viewport.pan(dx: dx, dy: dy)
             } else {
                 viewport.orbit(dx: dx, dy: dy)
@@ -230,27 +275,26 @@ final class MetalViewportNSView: NSView {
         didInteract()
     }
 
-    override func mouseDragged(with event: NSEvent) {
-        let dx = Float(event.deltaX)
-        let dy = Float(event.deltaY)
-        if event.modifierFlags.contains(.option) {
-            viewport?.pan(dx: dx, dy: dy)
-        } else {
-            viewport?.orbit(dx: dx, dy: dy)
+    override func keyDown(with event: NSEvent) {
+        guard let viewport else { return super.keyDown(with: event) }
+        let mods = event.modifierFlags.intersection([.command, .control, .option])
+        guard mods.isEmpty else { return super.keyDown(with: event) }
+        switch event.keyCode {
+        case 53: deliver(viewport.key(key: .escape))
+        case 36, 76: deliver(viewport.key(key: .enter))
+        case 51, 117: deliver(viewport.key(key: .delete))
+        default:
+            guard let text = event.charactersIgnoringModifiers?.lowercased(), let c = text.first else {
+                return super.keyDown(with: event)
+            }
+            switch c {
+            case "w": model?.run("WallTool")
+            case "v": model?.run("SelectTool")
+            case "f": model?.run("FlipWalls")
+            case "0"..."9", ",", ".": deliver(viewport.key(key: .character(text: String(c))))
+            default: super.keyDown(with: event)
+            }
+            needsRender = true
         }
-        didInteract()
-    }
-
-    override func rightMouseDragged(with event: NSEvent) {
-        viewport?.pan(dx: Float(event.deltaX), dy: Float(event.deltaY))
-        didInteract()
-    }
-
-    override func otherMouseDragged(with event: NSEvent) {
-        rightMouseDragged(with: event)
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
     }
 }

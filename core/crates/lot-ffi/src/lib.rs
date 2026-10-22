@@ -3,16 +3,18 @@
 //! Die Swift-Seite sieht zwei Objekte:
 //!
 //! - [`LotDocument`]: ein geöffnetes Projekt mit Parametern, Undo/Redo, Speichern und Laden
-//! - [`Viewport`]: die 3D-Ansicht, die über wgpu in einen NSView der App zeichnet
+//! - [`Viewport`]: Planansicht und 3D-Ansicht, die über wgpu in einen NSView
+//!   der App zeichnen, mit Werkzeugen und Befehlen (`viewport.rs`)
 //!
 //! Die Swift-Anbindung entsteht mit `app-mac/scripts/build-core.sh`.
 
+mod viewport;
+
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Instant;
 
 use lot_model::{Document, ElementId, Param, Project};
-use lot_render::Renderer;
+pub use viewport::Viewport;
 
 uniffi::setup_scaffolding!();
 
@@ -93,7 +95,7 @@ pub struct LotDocument {
 }
 
 impl LotDocument {
-    fn lock(&self) -> MutexGuard<'_, Document> {
+    pub(crate) fn lock(&self) -> MutexGuard<'_, Document> {
         // Ein Panic in einem anderen Aufruf soll die App nicht dauerhaft blockieren.
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -105,6 +107,19 @@ impl LotDocument {
     #[uniffi::constructor]
     pub fn new_sample() -> Arc<Self> {
         Arc::new(Self { inner: Mutex::new(Document::new(Project::sample())) })
+    }
+
+    /// Neues, leeres Projekt mit Erdgeschoss und üblichen Wandaufbauten.
+    #[uniffi::constructor]
+    pub fn new_empty() -> Arc<Self> {
+        Arc::new(Self { inner: Mutex::new(Document::new(Project::template("Neues Projekt"))) })
+    }
+
+    /// Testprojekt aus einem Ordner mit `projekt.ron` (zum Ausprobieren, etwa das EFH).
+    #[uniffi::constructor]
+    pub fn open_testproject(path: String) -> Result<Arc<Self>, LotError> {
+        let project = lot_io::testproject::load(Path::new(&path)).map_err(LotError::from_display)?;
+        Ok(Arc::new(Self { inner: Mutex::new(Document::new(project)) }))
     }
 
     #[uniffi::constructor]
@@ -121,11 +136,14 @@ impl LotDocument {
         self.lock().project().name.clone()
     }
 
-    /// Alle änderbaren Parameter aller Elemente, nach Element geordnet.
-    pub fn parameters(&self) -> Vec<ParamValue> {
+    /// Alle änderbaren Parameter der Elemente `ids`, oder aller Elemente, wenn `ids` leer ist.
+    pub fn parameters(&self, ids: Vec<u64>) -> Vec<ParamValue> {
         let doc = self.lock();
         let mut out = Vec::new();
         for (id, element) in &doc.project().elements {
+            if !ids.is_empty() && !ids.contains(&id.0) {
+                continue;
+            }
             for kind in ALL_PARAMS {
                 if let Some(value) = element.param(kind.into()) {
                     out.push(ParamValue { element: id.0, kind, value });
@@ -147,6 +165,23 @@ impl LotDocument {
         self.lock().redo().map_err(LotError::from_display)
     }
 
+    /// Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36“.
+    pub fn element_label(&self, element: u64) -> String {
+        let doc = self.lock();
+        let p = doc.project();
+        match p.elements.get(&ElementId(element)) {
+            Some(lot_model::Element::Wall(w)) => {
+                format!("Wand · {}", p.wall_type(w.wall_type).map_or("?", |t| t.name.as_str()))
+            }
+            Some(lot_model::Element::Opening(_)) => "Öffnung".into(),
+            Some(lot_model::Element::Storey(s)) => format!("Geschoss {}", s.name),
+            Some(lot_model::Element::Column(_)) => "Stütze".into(),
+            Some(lot_model::Element::GridLine(g)) => format!("Achse {}", g.label),
+            Some(lot_model::Element::WallType(t)) => format!("Wandaufbau {}", t.name),
+            None => String::new(),
+        }
+    }
+
     pub fn can_undo(&self) -> bool {
         self.lock().can_undo()
     }
@@ -156,91 +191,20 @@ impl LotDocument {
     }
 }
 
-/// Die 3D-Ansicht.
-#[derive(uniffi::Object)]
-pub struct Viewport {
-    renderer: Mutex<Renderer>,
-}
-
-impl Viewport {
-    fn lock(&self) -> MutexGuard<'_, Renderer> {
-        self.renderer.lock().unwrap_or_else(|e| e.into_inner())
-    }
-}
-
-#[uniffi::export]
-impl Viewport {
-    /// Erzeugt die Ansicht für einen NSView der App.
-    ///
-    /// `ns_view` ist die Adresse eines NSView, dessen Schicht ein CAMetalLayer ist.
-    /// Der View muss leben, solange dieses Objekt lebt, und alle Aufrufe kommen
-    /// vom Main-Thread. Größen in Pixeln, `scale` in Pixeln je Punkt.
-    #[uniffi::constructor]
-    pub fn new(ns_view: u64, width_px: u32, height_px: u32, scale: f32) -> Result<Arc<Self>, LotError> {
-        let view = std::ptr::NonNull::new(ns_view as usize as *mut std::ffi::c_void)
-            .ok_or_else(|| LotError::Failed("Kein View übergeben".into()))?;
-        // SAFETY: Die App übergibt einen gültigen NSView und hält ihn am Leben (siehe oben).
-        let renderer =
-            unsafe { Renderer::for_appkit_view(view, width_px, height_px, scale) }.map_err(LotError::from_display)?;
-        Ok(Arc::new(Self { renderer: Mutex::new(renderer) }))
-    }
-
-    pub fn resize(&self, width_px: u32, height_px: u32, scale: f32) {
-        self.lock().resize(width_px, height_px, scale);
-    }
-
-    /// Rechnet die Geometrie des Dokuments und lädt sie auf die Grafikkarte.
-    /// Gibt die benötigte Zeit in Millisekunden zurück.
-    pub fn show(&self, document: Arc<LotDocument>) -> Result<f64, LotError> {
-        let start = Instant::now();
-        let geometry = lot_geom::build(document.lock().project()).map_err(LotError::from_display)?;
-        let standard = lot_plan::standard::OfficeStandard::default_standard();
-        self.lock().set_geometry(&geometry, &|m| standard.material(m).color);
-        Ok(start.elapsed().as_secs_f64() * 1000.0)
-    }
-
-    pub fn triangle_count(&self) -> u32 {
-        self.lock().triangle_count()
-    }
-
-    /// Drehen um das Ziel. Verschiebung in Punkten, wie sie das Trackpad liefert.
-    pub fn orbit(&self, dx: f32, dy: f32) {
-        self.lock().camera_mut().orbit(dx, dy);
-    }
-
-    pub fn pan(&self, dx: f32, dy: f32) {
-        self.lock().camera_mut().pan(dx, dy);
-    }
-
-    /// Zoomen zum Zeiger. Faktor größer 1 zoomt hinein. `x`, `y`: Lage des
-    /// Zeigers in Punkten vom Mittelpunkt der Ansicht, y nach oben.
-    pub fn zoom(&self, factor: f32, x: f32, y: f32) {
-        self.lock().camera_mut().zoom(factor, x, y);
-    }
-
-    pub fn zoom_to_fit(&self) {
-        self.lock().zoom_to_fit();
-    }
-
-    /// Zeichnet ein Bild. `false`, wenn das Fenster gerade verdeckt ist; dann erneut versuchen.
-    pub fn render(&self) -> Result<bool, LotError> {
-        self.lock().render().map_err(LotError::from_display)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn value(doc: &LotDocument, kind: ParamKind) -> f64 {
-        doc.parameters().into_iter().find(|p| p.kind == kind).unwrap().value
+        doc.parameters(Vec::new()).into_iter().find(|p| p.kind == kind).unwrap().value
     }
 
     #[test]
     fn sample_has_all_parameters() {
         let doc = LotDocument::new_sample();
         // Geschoss: Höhe und Lage; Wand: Länge, Höhe, Versatz; Öffnung: vier Maße.
-        assert_eq!(doc.parameters().len(), 2 + 3 + 4);
+        assert_eq!(doc.parameters(Vec::new()).len(), 2 + 3 + 4);
+        assert_eq!(doc.parameters(vec![4]).len(), 4);
         assert_eq!(value(&doc, ParamKind::OpeningWidth), 1.5);
     }
 

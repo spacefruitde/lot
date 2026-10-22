@@ -27,6 +27,8 @@ pub enum Output {
     Catalog { name: String, storey: u64, scale: f64, title: String, cells: Vec<CatalogCell> },
     /// 3D-Ansicht als Bild, ohne Fenster gerechnet.
     View3d { name: String },
+    /// Planansicht der App als Bild, ohne Fenster gerechnet.
+    PlanView { name: String, storey: u64, scale: f64 },
 }
 
 impl Output {
@@ -35,7 +37,8 @@ impl Output {
             Output::M0Sheet { name }
             | Output::FloorPlan { name, .. }
             | Output::Catalog { name, .. }
-            | Output::View3d { name } => name,
+            | Output::View3d { name }
+            | Output::PlanView { name, .. } => name,
         }
     }
 }
@@ -61,7 +64,7 @@ pub fn sheets(project: &Project, output: &Output, source: &str) -> Vec<Sheet> {
         Output::Catalog { storey, scale, title, cells, .. } => {
             catalog_sheets(project, ElementId(*storey), cells, *scale, standard, title)
         }
-        Output::View3d { .. } => Vec::new(),
+        Output::View3d { .. } | Output::PlanView { .. } => Vec::new(),
     }
 }
 
