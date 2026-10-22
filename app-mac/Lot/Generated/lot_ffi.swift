@@ -833,7 +833,10 @@ public protocol ViewportProtocol: AnyObject, Sendable {
     
     func pan(dx: Float, dy: Float) 
     
-    func render() throws 
+    /**
+     * Zeichnet ein Bild. `false`, wenn das Fenster gerade verdeckt ist; dann erneut versuchen.
+     */
+    func render() throws  -> Bool
     
     func resize(widthPx: UInt32, heightPx: UInt32, scale: Float) 
     
@@ -951,12 +954,16 @@ open func pan(dx: Float, dy: Float)  {try! rustCall() {
 }
 }
     
-open func render()throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
+    /**
+     * Zeichnet ein Bild. `false`, wenn das Fenster gerade verdeckt ist; dann erneut versuchen.
+     */
+open func render()throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_viewport_render(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
-}
+})
 }
     
 open func resize(widthPx: UInt32, heightPx: UInt32, scale: Float)  {try! rustCall() {
@@ -1370,7 +1377,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_viewport_pan() != 13555) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_render() != 25549) {
+    if (uniffi_lot_ffi_checksum_method_viewport_render() != 13907) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_resize() != 1189) {

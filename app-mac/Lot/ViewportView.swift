@@ -167,13 +167,15 @@ final class MetalViewportNSView: NSView {
 
     @objc private func step(_ link: CADisplayLink) {
         guard needsRender, let viewport else { return }
-        needsRender = false
         let start = CACurrentMediaTime()
         do {
-            try viewport.render()
+            // Verdeckt oder auf einem anderen Space entsteht kein Bild; beim nächsten Takt erneut versuchen.
+            needsRender = try !viewport.render()
         } catch {
+            needsRender = false
             NSLog("Lot: Zeichnen fehlgeschlagen: %@", AppModel.message(for: error))
         }
+        guard !needsRender else { return }
         let now = CACurrentMediaTime()
         stats.frameMs = (now - start) * 1000
         if now - lastStatsUpdate > 0.25 {

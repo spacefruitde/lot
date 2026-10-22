@@ -331,7 +331,7 @@ void uniffi_lot_ffi_fn_method_viewport_pan(uint64_t ptr, float dx, float dy, Rus
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_RENDER
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_RENDER
-void uniffi_lot_ffi_fn_method_viewport_render(uint64_t ptr, RustCallStatus *_Nonnull out_status
+int8_t uniffi_lot_ffi_fn_method_viewport_render(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_RESIZE

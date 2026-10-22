@@ -334,29 +334,29 @@ impl Renderer {
         }
     }
 
-    /// Zeichnet ein Bild in die Fläche des Views.
-    pub fn render(&mut self) -> Result<(), RenderError> {
+    /// Zeichnet ein Bild in die Fläche des Views. Gibt `false` zurück, wenn
+    /// kein Bild entstand, etwa weil das Fenster verdeckt ist oder auf einem
+    /// anderen Space liegt. Dann später erneut versuchen.
+    pub fn render(&mut self) -> Result<bool, RenderError> {
         let frame = match &self.target {
-            Target::Surface { surface, .. } => match surface.get_current_texture() {
+            Target::Surface { surface, config } => match surface.get_current_texture() {
                 wgpu::CurrentSurfaceTexture::Success(t) | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
-                wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => return Ok(()),
+                wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => return Ok(false),
                 wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                    if let Target::Surface { surface, config } = &self.target {
-                        surface.configure(&self.device, config);
-                    }
-                    return Ok(());
+                    surface.configure(&self.device, config);
+                    return Ok(false);
                 }
                 other => return Err(RenderError::Surface(format!("{other:?}"))),
             },
             Target::Offscreen { .. } => {
                 self.draw_offscreen();
-                return Ok(());
+                return Ok(true);
             }
         };
         let view = frame.texture.create_view(&Default::default());
         self.draw(&view);
         self.queue.present(frame);
-        Ok(())
+        Ok(true)
     }
 
     /// Zeichnet ein Bild ohne Fenster und gibt es als RGBA-Pixel zurück (Zeilen von oben).

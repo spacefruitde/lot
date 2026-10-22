@@ -206,7 +206,8 @@ impl Viewport {
         self.lock().zoom_to_fit();
     }
 
-    pub fn render(&self) -> Result<(), LotError> {
+    /// Zeichnet ein Bild. `false`, wenn das Fenster gerade verdeckt ist; dann erneut versuchen.
+    pub fn render(&self) -> Result<bool, LotError> {
         self.lock().render().map_err(LotError::from_display)
     }
 }
