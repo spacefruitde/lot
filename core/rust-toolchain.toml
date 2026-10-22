@@ -1,0 +1,5 @@
+# Rust-Version für alle Rechner und Cloud-Sessions (ADR 0001).
+# Die Apple-Ziele für die Mac-App installiert app-mac/scripts/build-core.sh bei Bedarf.
+[toolchain]
+channel = "1.99.1"
+components = ["clippy", "rustfmt"]
