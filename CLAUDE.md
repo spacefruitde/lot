@@ -38,7 +38,10 @@ Diese Datei gibt Claude Code die Grundregeln für die Arbeit in diesem Repositor
 Angelegt in M0, immer aktuell halten. Rust über rustup, die Version steht in `core/rust-toolchain.toml` (ADR 0001).
 
 - Kern testen: `cd core && cargo test --workspace`
-- Kern auf Warnungen prüfen: `cd core && cargo clippy --workspace --all-targets`
+- Kern auf Warnungen prüfen: `cd core && cargo clippy --workspace --all-targets -- -D warnings`
+- Formatieren: `cd core && cargo fmt` (Einstellungen in `core/rustfmt.toml`)
+- CI: `.github/workflows/pruefen.yml` prüft bei jedem Push Formatierung, clippy und Tests unter Linux und macOS und baut die Mac-App
+- Kern unter Linux lokal prüfen, ohne Ordnerfreigabe für Docker: `tar --exclude core/target -cf - core testprojekte | docker run -i --rm rust:1.99 bash -c 'mkdir /lot && tar -C /lot -xf - && cd /lot/core && cargo test --workspace'`
 - Testprojekt rechnen und Pläne ausgeben: `cd core && cargo run -p lot-cli -- render ../testprojekte/<name> --out ../out/<name>`
   - schreibt `m0-pruefblatt.pdf/.svg/.png`, `3d.png` und `projekt.lot`
   - `--no-3d` auf Rechnern ohne Grafikkarte (etwa Cloud-Sessions)

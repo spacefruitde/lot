@@ -18,7 +18,7 @@ In Xcode `app-mac/Lot.xcodeproj` öffnen und ⌘R. Oder im Terminal:
 cd app-mac && xcodebuild -project Lot.xcodeproj -scheme Lot -derivedDataPath build/DerivedData build && open build/DerivedData/Build/Products/Debug/Lot.app
 ```
 
-Bedienung: zwei Finger ziehen dreht, mit ⇧ verschieben, spreizen zoomt. ⌘0 zeigt alles. Rechts stehen die Parameter von Wand und Fenster.
+Bedienung: zwei Finger ziehen dreht, mit ⇧ verschieben, spreizen zoomt zum Zeiger. ⌘0 zeigt alles. Rechts stehen die Parameter von Wand und Fenster. Ein fertiger Stand liegt auch in `~/Applications/Lot.app`.
 
 ## Prüffragen
 
@@ -46,6 +46,8 @@ Ben: „ich folge deinen beiden empfehlungen“
 
 - App: startet, zeichnet die Wand, Breite per Pfeil von 1,50 auf 1,60 m und zweimal Widerrufen zurück auf 1,50 m. Eine ungültige Eingabe zeigt eine Meldung, das Modell bleibt unverändert.
 - Behoben: Startete die App auf einem verdeckten Space, blieb die 3D-Ansicht leer, bis man sie berührte.
+- Ergänzt: Zoomen zum Zeiger statt zur Bildmitte, und 120 Hz bleiben nach einer Geste eine Sekunde lang erhalten.
+- Speichern und Öffnen: über dieselbe Schnittstelle getestet, die die App aufruft. Den Sichern-Dialog selbst durfte ich nicht bedienen, er läuft in einem eigenen Systemprozess (Frage 8).
 - Nicht prüfen konnte ich die Trackpad-Gesten selbst (Fragen 4 bis 6).
 - Unter Linux habe ich nicht gebaut. Alle Bibliotheken im Kern sind reines Rust oder C (SQLite), Probleme erwarte ich keine. Die erste Cloud-Session zeigt es.
 

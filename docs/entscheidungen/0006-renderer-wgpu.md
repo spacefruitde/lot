@@ -24,5 +24,6 @@ Gemessen: Grafik starten 0,2 s, ein Bild 2400 × 1600 Pixel mit Zurücklesen 2,7
 ## Folgen
 
 - Offenes wgpu-Problem #10627: Wer auf einem eigenen Render-Thread zeichnet, bekommt Warnungen des Main-Thread-Checkers. Mit dem Main-Thread-Ansatz tritt das nicht auf.
-- Für 120 Hz auf ProMotion-Displays muss die Anzeige nach dem letzten Input noch etwa eine Sekunde weiterlaufen, sonst senkt macOS die Bildrate. Noch nicht umgesetzt, Ben prüft das Gefühl in M0.
+- Für 120 Hz auf ProMotion-Displays fordert die App 120 Bilder pro Sekunde an und zeichnet nach der letzten Geste noch eine Sekunde lang weiter, sonst senkt macOS die Bildrate. Ben prüft das Gefühl in M0.
+- Liegt das Fenster verdeckt oder auf einem anderen Space, liefert wgpu kein Bild. Die App versucht es dann beim nächsten Takt erneut.
 - wgpu bringt etwa alle drei Monate eine neue Hauptversion. Updates planen wir bewusst ein.
