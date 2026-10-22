@@ -351,7 +351,7 @@ uint32_t uniffi_lot_ffi_fn_method_viewport_triangle_count(uint64_t ptr, RustCall
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ZOOM
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ZOOM
-void uniffi_lot_ffi_fn_method_viewport_zoom(uint64_t ptr, float factor, RustCallStatus *_Nonnull out_status
+void uniffi_lot_ffi_fn_method_viewport_zoom(uint64_t ptr, float factor, float x, float y, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ZOOM_TO_FIT

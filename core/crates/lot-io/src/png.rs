@@ -61,9 +61,7 @@ fn stroke_line(pixmap: &mut Pixmap, line: &Line, px_per_mm: f64, px: &impl Fn(&P
     let Some(path) = builder.finish() else { return };
     let dash = match &line.style {
         LineStyle::Solid => None,
-        LineStyle::Dashed(pattern) => {
-            StrokeDash::new(pattern.iter().map(|v| (v * px_per_mm) as f32).collect(), 0.0)
-        }
+        LineStyle::Dashed(pattern) => StrokeDash::new(pattern.iter().map(|v| (v * px_per_mm) as f32).collect(), 0.0),
     };
     let stroke = stroke(line.pen.width_mm, px_per_mm, dash);
     pixmap.stroke_path(&path, &paint(line.color), &stroke, Transform::identity(), None);

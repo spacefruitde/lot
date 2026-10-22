@@ -71,9 +71,8 @@ pub fn load(path: &Path) -> Result<Document, IoError> {
         )));
     }
     let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    let app_id: i64 = conn
-        .pragma_query_value(None, "application_id", |r| r.get(0))
-        .map_err(|_| IoError::NotALotFile)?;
+    let app_id: i64 =
+        conn.pragma_query_value(None, "application_id", |r| r.get(0)).map_err(|_| IoError::NotALotFile)?;
     if app_id != APPLICATION_ID {
         return Err(IoError::NotALotFile);
     }
@@ -82,10 +81,8 @@ pub fn load(path: &Path) -> Result<Document, IoError> {
         return Err(IoError::UnsupportedVersion { found: version, supported: FORMAT_VERSION });
     }
 
-    let name: String = conn
-        .query_row("SELECT value FROM meta WHERE key = 'name'", [], |r| r.get(0))
-        .optional()?
-        .unwrap_or_default();
+    let name: String =
+        conn.query_row("SELECT value FROM meta WHERE key = 'name'", [], |r| r.get(0)).optional()?.unwrap_or_default();
     let mut project = Project::new(name);
 
     let mut stmt = conn.prepare("SELECT id, data FROM elements ORDER BY id")?;

@@ -42,6 +42,12 @@ final class MetalViewportNSView: NSView {
     private var stats = ViewportStatsDisplay()
     private var lastStatsUpdate: CFTimeInterval = 0
 
+    /// Zeitpunkt der letzten Geste. Kurz danach zeichnet die Ansicht in jedem
+    /// Takt weiter, damit macOS auf ProMotion-Displays bei 120 Hz bleibt und
+    /// die nächste Bewegung nicht erst mit gesenkter Bildrate erscheint.
+    private var lastInteraction: CFTimeInterval = 0
+    private static let keepAliveAfterInput: CFTimeInterval = 1.0
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
@@ -73,6 +79,7 @@ final class MetalViewportNSView: NSView {
         createViewportIfNeeded()
         if displayLink == nil {
             let link = displayLink(target: self, selector: #selector(step(_:)))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
             link.add(to: .main, forMode: .common)
             displayLink = link
         }
@@ -166,7 +173,8 @@ final class MetalViewportNSView: NSView {
     // MARK: Zeichnen
 
     @objc private func step(_ link: CADisplayLink) {
-        guard needsRender, let viewport else { return }
+        let interacting = CACurrentMediaTime() - lastInteraction < Self.keepAliveAfterInput
+        guard needsRender || interacting, let viewport else { return }
         let start = CACurrentMediaTime()
         do {
             // Verdeckt oder auf einem anderen Space entsteht kein Bild; beim nächsten Takt erneut versuchen.
@@ -186,6 +194,17 @@ final class MetalViewportNSView: NSView {
 
     // MARK: Trackpad und Maus
 
+    /// Lage des Zeigers in Punkten vom Mittelpunkt der Ansicht, y nach oben.
+    private func pointerOffset(_ event: NSEvent) -> (Float, Float) {
+        let p = convert(event.locationInWindow, from: nil)
+        return (Float(p.x - bounds.midX), Float(p.y - bounds.midY))
+    }
+
+    private func didInteract() {
+        lastInteraction = CACurrentMediaTime()
+        needsRender = true
+    }
+
     override func scrollWheel(with event: NSEvent) {
         guard let viewport else { return }
         let dx = Float(event.scrollingDeltaX)
@@ -198,15 +217,17 @@ final class MetalViewportNSView: NSView {
                 viewport.orbit(dx: dx, dy: dy)
             }
         } else {
-            // Mausrad: zoomen.
-            viewport.zoom(factor: pow(1.1, dy))
+            // Mausrad: zum Zeiger zoomen.
+            let (x, y) = pointerOffset(event)
+            viewport.zoom(factor: pow(1.1, dy), x: x, y: y)
         }
-        needsRender = true
+        didInteract()
     }
 
     override func magnify(with event: NSEvent) {
-        viewport?.zoom(factor: Float(1 + event.magnification))
-        needsRender = true
+        let (x, y) = pointerOffset(event)
+        viewport?.zoom(factor: Float(1 + event.magnification), x: x, y: y)
+        didInteract()
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -217,12 +238,12 @@ final class MetalViewportNSView: NSView {
         } else {
             viewport?.orbit(dx: dx, dy: dy)
         }
-        needsRender = true
+        didInteract()
     }
 
     override func rightMouseDragged(with event: NSEvent) {
         viewport?.pan(dx: Float(event.deltaX), dy: Float(event.deltaY))
-        needsRender = true
+        didInteract()
     }
 
     override func otherMouseDragged(with event: NSEvent) {

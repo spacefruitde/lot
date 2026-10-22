@@ -33,10 +33,7 @@ pub struct Project {
 
 impl Project {
     pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            elements: BTreeMap::new(),
-        }
+        Self { name: name.into(), elements: BTreeMap::new() }
     }
 
     /// Nächste freie Kennung. Wird aus dem Bestand abgeleitet und nicht gespeichert.
@@ -74,13 +71,7 @@ impl Project {
         );
         p.elements.insert(
             ElementId(2),
-            Element::Opening(Opening {
-                host: ElementId(1),
-                offset: 1.75,
-                width: 1.5,
-                height: 1.3,
-                sill_height: 0.9,
-            }),
+            Element::Opening(Opening { host: ElementId(1), offset: 1.75, width: 1.5, height: 1.3, sill_height: 0.9 }),
         );
         p
     }

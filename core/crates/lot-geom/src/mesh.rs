@@ -33,10 +33,7 @@ impl TriMesh {
         let mut it = self.positions.iter();
         let first = *it.next()?;
         Some(it.fold((first, first), |(lo, hi), p| {
-            (
-                [lo[0].min(p[0]), lo[1].min(p[1]), lo[2].min(p[2])],
-                [hi[0].max(p[0]), hi[1].max(p[1]), hi[2].max(p[2])],
-            )
+            ([lo[0].min(p[0]), lo[1].min(p[1]), lo[2].min(p[2])], [hi[0].max(p[0]), hi[1].max(p[1]), hi[2].max(p[2])])
         }))
     }
 
@@ -70,10 +67,7 @@ impl TriMesh {
             .map(|(k, _)| k)
             .collect();
         edges.sort_unstable();
-        edges
-            .into_iter()
-            .map(|(a, b)| [a, b].map(|i| self.positions[i as usize].map(|v| v as f32)))
-            .collect()
+        edges.into_iter().map(|(a, b)| [a, b].map(|i| self.positions[i as usize].map(|v| v as f32))).collect()
     }
 }
 

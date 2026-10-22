@@ -66,7 +66,11 @@ pub struct Line {
 pub enum Fill {
     Solid(Gray),
     /// Parallele Schraffurlinien. Winkel in Grad gegen die x-Achse, Abstand in mm.
-    Hatch { angle_deg: f64, spacing_mm: f64, pen: Pen },
+    Hatch {
+        angle_deg: f64,
+        spacing_mm: f64,
+        pen: Pen,
+    },
 }
 
 /// Fläche aus einem oder mehreren Ringen. Innere Ringe sind Löcher (Regel gerade/ungerade).
@@ -150,12 +154,7 @@ impl Sheet {
 }
 
 pub fn rect_points(x: f64, y: f64, w: f64, h: f64) -> Vec<PaperPoint> {
-    vec![
-        PaperPoint::new(x, y),
-        PaperPoint::new(x + w, y),
-        PaperPoint::new(x + w, y + h),
-        PaperPoint::new(x, y + h),
-    ]
+    vec![PaperPoint::new(x, y), PaperPoint::new(x + w, y), PaperPoint::new(x + w, y + h), PaperPoint::new(x, y + h)]
 }
 
 /// Abbildung vom Modell (Meter) aufs Blatt (Millimeter) in einem Maßstab 1:n.

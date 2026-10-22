@@ -849,9 +849,10 @@ public protocol ViewportProtocol: AnyObject, Sendable {
     func triangleCount()  -> UInt32
     
     /**
-     * Faktor größer 1 zoomt hinein.
+     * Zoomen zum Zeiger. Faktor größer 1 zoomt hinein. `x`, `y`: Lage des
+     * Zeigers in Punkten vom Mittelpunkt der Ansicht, y nach oben.
      */
-    func zoom(factor: Float) 
+    func zoom(factor: Float, x: Float, y: Float) 
     
     func zoomToFit() 
     
@@ -1001,13 +1002,16 @@ open func triangleCount() -> UInt32  {
 }
     
     /**
-     * Faktor größer 1 zoomt hinein.
+     * Zoomen zum Zeiger. Faktor größer 1 zoomt hinein. `x`, `y`: Lage des
+     * Zeigers in Punkten vom Mittelpunkt der Ansicht, y nach oben.
      */
-open func zoom(factor: Float)  {try! rustCall() {
+open func zoom(factor: Float, x: Float, y: Float)  {try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_viewport_zoom(
             self.uniffiCloneHandle(),
-        FfiConverterFloat.lower(factor),uniffiCallStatus
+        FfiConverterFloat.lower(factor),
+        FfiConverterFloat.lower(x),
+        FfiConverterFloat.lower(y),uniffiCallStatus
     )
 }
 }
@@ -1389,7 +1393,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_viewport_triangle_count() != 37453) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_zoom() != 30903) {
+    if (uniffi_lot_ffi_checksum_method_viewport_zoom() != 18110) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_zoom_to_fit() != 41120) {

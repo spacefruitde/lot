@@ -894,6 +894,7 @@ dependencies = [
  "lot-io",
  "lot-model",
  "lot-render",
+ "tempfile",
  "thiserror",
  "uniffi",
 ]
@@ -946,6 +947,7 @@ dependencies = [
  "bytemuck",
  "glam",
  "lot-geom",
+ "lot-model",
  "pollster",
  "raw-window-handle",
  "thiserror",

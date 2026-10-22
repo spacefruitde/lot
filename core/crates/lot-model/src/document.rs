@@ -33,22 +33,12 @@ pub struct Document {
 
 impl Document {
     pub fn new(project: Project) -> Self {
-        Self {
-            project,
-            log: Vec::new(),
-            undo: Vec::new(),
-            redo: Vec::new(),
-        }
+        Self { project, log: Vec::new(), undo: Vec::new(), redo: Vec::new() }
     }
 
     /// Öffnet ein Projekt mit einem schon vorhandenen Protokoll, etwa aus einer Datei.
     pub fn with_log(project: Project, log: Vec<Operation>) -> Self {
-        Self {
-            project,
-            log,
-            undo: Vec::new(),
-            redo: Vec::new(),
-        }
+        Self { project, log, undo: Vec::new(), redo: Vec::new() }
     }
 
     pub fn project(&self) -> &Project {
@@ -132,9 +122,7 @@ impl Document {
                     return Err(ModelError::UnknownElement(*id));
                 }
                 if next.openings_in(*id).next().is_some() {
-                    return Err(ModelError::Invalid(
-                        "Die Wand enthält noch Öffnungen".into(),
-                    ));
+                    return Err(ModelError::Invalid("Die Wand enthält noch Öffnungen".into()));
                 }
             }
             Operation::SetParam { id, param, old, new } => {
@@ -271,7 +259,13 @@ mod tests {
     fn opening_needs_wall_host() {
         let mut d = doc();
         let err = d
-            .insert(Element::Opening(Opening { host: ElementId(2), offset: 0.0, width: 1.0, height: 1.0, sill_height: 0.0 }))
+            .insert(Element::Opening(Opening {
+                host: ElementId(2),
+                offset: 0.0,
+                width: 1.0,
+                height: 1.0,
+                sill_height: 0.0,
+            }))
             .unwrap_err();
         assert!(matches!(err, ModelError::Invalid(_)));
     }

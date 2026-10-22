@@ -111,13 +111,7 @@ pub fn sheet(project: &Project, source: &str) -> Sheet {
     s.text(160.0, 44.0, "3,5  Wohnen 24,31 m² ÄÖÜ äöü ß", 3.5, Anchor::Left);
     s.text(160.0, 35.0, "5,0  Wohnen 24,31 m²", 5.0, Anchor::Left);
 
-    s.text(
-        282.0,
-        13.0,
-        format!("Erzeugt von lot-cli {} aus {source}", env!("CARGO_PKG_VERSION")),
-        2.0,
-        Anchor::Right,
-    );
+    s.text(282.0, 13.0, format!("Erzeugt von lot-cli {} aus {source}", env!("CARGO_PKG_VERSION")), 2.0, Anchor::Right);
     s
 }
 

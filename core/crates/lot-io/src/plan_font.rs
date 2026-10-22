@@ -24,9 +24,9 @@ pub struct PlanFont {
 /// `core/assets/fonts/` im Repository. Die Mac-App legt die Datei später in
 /// ihr Bundle und setzt den Pfad.
 pub fn font_path() -> PathBuf {
-    std::env::var_os("LOT_PLAN_FONT").map(PathBuf::from).unwrap_or_else(|| {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts").join(FILE_NAME)
-    })
+    std::env::var_os("LOT_PLAN_FONT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts").join(FILE_NAME))
 }
 
 /// Die Planschrift. Wird beim ersten Gebrauch gelesen.
@@ -80,14 +80,8 @@ impl PlanFont {
     /// Breite eines Textes in mm bei gegebener Versalhöhe, ohne Unterschneidung.
     pub fn width(&self, text: &str, cap_height_mm: f64) -> f64 {
         let face = self.face();
-        let units: f64 = text
-            .chars()
-            .map(|c| {
-                face.glyph_index(c)
-                    .and_then(|g| face.glyph_hor_advance(g))
-                    .unwrap_or(0) as f64
-            })
-            .sum();
+        let units: f64 =
+            text.chars().map(|c| face.glyph_index(c).and_then(|g| face.glyph_hor_advance(g)).unwrap_or(0) as f64).sum();
         units / self.units_per_em * self.size_for_cap_height(cap_height_mm)
     }
 

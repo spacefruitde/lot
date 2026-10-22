@@ -64,18 +64,35 @@ impl OrbitCamera {
 
     /// Verschieben. Der Punkt unter dem Finger bleibt in der Zielebene unter dem Finger.
     pub fn pan(&mut self, dx: f32, dy: f32) {
-        let per_point = 2.0 * self.distance * (self.fov_y / 2.0).tan() / self.view_size.1.max(1.0);
-        let forward = (self.target - self.eye()).normalize();
-        let right = forward.cross(Vec3::Z).normalize_or_zero();
-        let up = right.cross(forward);
-        self.target += (-dx * right + dy * up) * per_point;
+        let (right, up) = self.screen_axes();
+        self.target += (-dx * right + dy * up) * self.world_per_point();
     }
 
-    /// Faktor größer 1 zoomt hinein.
-    pub fn zoom(&mut self, factor: f32) {
-        if factor.is_finite() && factor > 0.0 {
-            self.distance = (self.distance / factor).clamp(0.2, 50_000.0);
+    /// Zoomen zum Zeiger. Ein Faktor größer 1 zoomt hinein. `x` und `y` geben
+    /// die Lage des Zeigers in Punkten vom Mittelpunkt der Ansicht an, y nach
+    /// oben. Der Punkt unter dem Zeiger bleibt in der Zielebene unter dem Zeiger.
+    pub fn zoom(&mut self, factor: f32, x: f32, y: f32) {
+        if !(factor.is_finite() && factor > 0.0) {
+            return;
         }
+        let distance = (self.distance / factor).clamp(0.2, 50_000.0);
+        let applied = self.distance / distance;
+        let (right, up) = self.screen_axes();
+        let under_pointer = self.target + (x * right + y * up) * self.world_per_point();
+        self.target = under_pointer + (self.target - under_pointer) / applied;
+        self.distance = distance;
+    }
+
+    /// Rechts und oben auf dem Bildschirm, als Richtungen im Modell.
+    fn screen_axes(&self) -> (Vec3, Vec3) {
+        let forward = (self.target - self.eye()).normalize();
+        let right = forward.cross(Vec3::Z).normalize_or_zero();
+        (right, right.cross(forward))
+    }
+
+    /// Meter je Punkt in der Ebene durch das Ziel.
+    fn world_per_point(&self) -> f32 {
+        2.0 * self.distance * (self.fov_y / 2.0).tan() / self.view_size.1.max(1.0)
     }
 
     /// Stellt die Kamera so ein, dass eine Kugel um `center` mit `radius` ganz sichtbar ist.
@@ -90,6 +107,27 @@ impl OrbitCamera {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zoom_keeps_point_under_pointer() {
+        let mut c = OrbitCamera { view_size: (800.0, 600.0), ..Default::default() };
+        // Punkt 200 Punkte rechts und 100 Punkte über der Mitte, in der Zielebene.
+        let (right, up) = c.screen_axes();
+        let point = c.target + (200.0 * right + 100.0 * up) * c.world_per_point();
+        let before = c.view_proj().project_point3(point);
+        c.zoom(2.0, 200.0, 100.0);
+        let after = c.view_proj().project_point3(point);
+        assert!((before - after).length() < 1e-4, "{before} -> {after}");
+        assert!((c.distance - 5.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn zoom_at_center_keeps_target() {
+        let mut c = OrbitCamera::default();
+        let target = c.target;
+        c.zoom(1.5, 0.0, 0.0);
+        assert!((c.target - target).length() < 1e-6);
+    }
 
     #[test]
     fn pitch_is_clamped() {

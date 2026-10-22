@@ -6,7 +6,6 @@
 
 use std::sync::Arc;
 
-use krilla::{Document, SerializeSettings};
 use krilla::color::luma;
 use krilla::geom::{PathBuilder, Point};
 use krilla::metadata::Metadata;
@@ -15,6 +14,7 @@ use krilla::page::PageSettings;
 use krilla::paint::{Fill, FillRule, LineCap, LineJoin, Stroke, StrokeDash};
 use krilla::surface::Surface;
 use krilla::text::{Font, TextDirection};
+use krilla::{Document, SerializeSettings};
 use lot_plan::{Fill as PlanFill, Gray, Line, LineStyle, PaperPoint, PlanObject, Sheet, hatch_segments};
 
 use crate::IoError;
@@ -33,12 +33,11 @@ fn render(sheet: &Sheet, settings: SerializeSettings) -> Result<Vec<u8>, IoError
 
     let mut document = Document::new_with(settings);
     document.set_metadata(
-        Metadata::new()
-            .title(sheet.title.clone())
-            .creator(concat!("Lot ", env!("CARGO_PKG_VERSION")).to_string()),
+        Metadata::new().title(sheet.title.clone()).creator(concat!("Lot ", env!("CARGO_PKG_VERSION")).to_string()),
     );
     let (w, h) = (sheet.width_mm * PT_PER_MM, sheet.height_mm * PT_PER_MM);
-    let settings = PageSettings::from_wh(w as f32, h as f32).ok_or_else(|| IoError::Pdf("Ungültige Blattgröße".into()))?;
+    let settings =
+        PageSettings::from_wh(w as f32, h as f32).ok_or_else(|| IoError::Pdf("Ungültige Blattgröße".into()))?;
     let mut page = document.start_page_with(settings);
     let mut surface = page.surface();
     let height = sheet.height_mm;
@@ -104,10 +103,9 @@ fn stroke_line(surface: &mut Surface<'_>, line: &Line, pt: &impl Fn(&PaperPoint)
     let Some(path) = builder.finish() else { return };
     let dash = match &line.style {
         LineStyle::Solid => None,
-        LineStyle::Dashed(pattern) => Some(StrokeDash {
-            array: pattern.iter().map(|v| (v * PT_PER_MM) as f32).collect(),
-            offset: 0.0,
-        }),
+        LineStyle::Dashed(pattern) => {
+            Some(StrokeDash { array: pattern.iter().map(|v| (v * PT_PER_MM) as f32).collect(), offset: 0.0 })
+        }
     };
     surface.set_fill(None);
     surface.set_stroke(Some(stroke(line.pen.width_mm, line.color, dash)));

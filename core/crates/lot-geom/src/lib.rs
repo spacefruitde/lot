@@ -37,15 +37,12 @@ pub struct ModelGeometry {
 
 impl ModelGeometry {
     pub fn bounds(&self) -> Option<([f64; 3], [f64; 3])> {
-        self.elements
-            .iter()
-            .filter_map(|e| e.mesh.bounds())
-            .reduce(|(a_lo, a_hi), (b_lo, b_hi)| {
-                (
-                    [a_lo[0].min(b_lo[0]), a_lo[1].min(b_lo[1]), a_lo[2].min(b_lo[2])],
-                    [a_hi[0].max(b_hi[0]), a_hi[1].max(b_hi[1]), a_hi[2].max(b_hi[2])],
-                )
-            })
+        self.elements.iter().filter_map(|e| e.mesh.bounds()).reduce(|(a_lo, a_hi), (b_lo, b_hi)| {
+            (
+                [a_lo[0].min(b_lo[0]), a_lo[1].min(b_lo[1]), a_lo[2].min(b_lo[2])],
+                [a_hi[0].max(b_hi[0]), a_hi[1].max(b_hi[1]), a_hi[2].max(b_hi[2])],
+            )
+        })
     }
 }
 
@@ -116,21 +113,25 @@ fn wall_footprint(w: &Wall) -> [[f64; 2]; 4] {
 /// Volumen einer Wand mit allen ihren Öffnungen.
 fn wall_solid(project: &Project, id: ElementId, wall: &Wall) -> Manifold {
     let length = wall.length();
-    let body = Manifold::cube(Vec3::new(length, wall.thickness, wall.height), false)
-        .translate(Vec3::new(0.0, -wall.thickness / 2.0, 0.0));
+    let body = Manifold::cube(Vec3::new(length, wall.thickness, wall.height), false).translate(Vec3::new(
+        0.0,
+        -wall.thickness / 2.0,
+        0.0,
+    ));
     let openings: Vec<Manifold> = project.openings_in(id).map(|(_, o)| opening_solid(wall, o)).collect();
-    let local = if openings.is_empty() {
-        body
-    } else {
-        body.difference(&Manifold::batch_boolean(&openings, OpType::Add))
-    };
+    let local =
+        if openings.is_empty() { body } else { body.difference(&Manifold::batch_boolean(&openings, OpType::Add)) };
     place(local, wall)
 }
 
 /// Öffnungskörper im lokalen System der Wand (x entlang der Achse).
 fn opening_solid(wall: &Wall, o: &Opening) -> Manifold {
     let depth = wall.thickness + 2.0 * OPENING_OVERSHOOT;
-    Manifold::cube(Vec3::new(o.width, depth, o.height), false).translate(Vec3::new(o.offset, -depth / 2.0, o.sill_height))
+    Manifold::cube(Vec3::new(o.width, depth, o.height), false).translate(Vec3::new(
+        o.offset,
+        -depth / 2.0,
+        o.sill_height,
+    ))
 }
 
 /// Vom lokalen System der Wand in das Projektsystem.
@@ -156,10 +157,7 @@ const PLAN_GRID: f64 = 1e-6;
 /// Clipper2-Raster von etwa 10 nm ein; das Runden macht daraus wieder 1,75
 /// statt 1,7499999.
 fn normalize_ring(ring: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
-    let mut ring: Vec<[f64; 2]> = ring
-        .into_iter()
-        .map(|p| p.map(|v| (v / PLAN_GRID).round() * PLAN_GRID))
-        .collect();
+    let mut ring: Vec<[f64; 2]> = ring.into_iter().map(|p| p.map(|v| (v / PLAN_GRID).round() * PLAN_GRID)).collect();
     ring.dedup();
     if signed_area(&ring) < 0.0 {
         ring.reverse();

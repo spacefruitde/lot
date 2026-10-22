@@ -121,9 +121,7 @@ impl LotDocument {
     }
 
     pub fn set_param(&self, element: u64, kind: ParamKind, value: f64) -> Result<(), LotError> {
-        self.lock()
-            .set_param(ElementId(element), kind.into(), value)
-            .map_err(LotError::from_display)
+        self.lock().set_param(ElementId(element), kind.into(), value).map_err(LotError::from_display)
     }
 
     pub fn undo(&self) -> Result<bool, LotError> {
@@ -167,7 +165,8 @@ impl Viewport {
         let view = std::ptr::NonNull::new(ns_view as usize as *mut std::ffi::c_void)
             .ok_or_else(|| LotError::Failed("Kein View übergeben".into()))?;
         // SAFETY: Die App übergibt einen gültigen NSView und hält ihn am Leben (siehe oben).
-        let renderer = unsafe { Renderer::for_appkit_view(view, width_px, height_px, scale) }.map_err(LotError::from_display)?;
+        let renderer =
+            unsafe { Renderer::for_appkit_view(view, width_px, height_px, scale) }.map_err(LotError::from_display)?;
         Ok(Arc::new(Self { renderer: Mutex::new(renderer) }))
     }
 
@@ -197,9 +196,10 @@ impl Viewport {
         self.lock().camera_mut().pan(dx, dy);
     }
 
-    /// Faktor größer 1 zoomt hinein.
-    pub fn zoom(&self, factor: f32) {
-        self.lock().camera_mut().zoom(factor);
+    /// Zoomen zum Zeiger. Faktor größer 1 zoomt hinein. `x`, `y`: Lage des
+    /// Zeigers in Punkten vom Mittelpunkt der Ansicht, y nach oben.
+    pub fn zoom(&self, factor: f32, x: f32, y: f32) {
+        self.lock().camera_mut().zoom(factor, x, y);
     }
 
     pub fn zoom_to_fit(&self) {
@@ -209,5 +209,57 @@ impl Viewport {
     /// Zeichnet ein Bild. `false`, wenn das Fenster gerade verdeckt ist; dann erneut versuchen.
     pub fn render(&self) -> Result<bool, LotError> {
         self.lock().render().map_err(LotError::from_display)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn value(doc: &LotDocument, kind: ParamKind) -> f64 {
+        doc.parameters().into_iter().find(|p| p.kind == kind).unwrap().value
+    }
+
+    #[test]
+    fn sample_has_all_parameters() {
+        let doc = LotDocument::new_sample();
+        assert_eq!(doc.parameters().len(), ALL_PARAMS.len());
+        assert_eq!(value(&doc, ParamKind::OpeningWidth), 1.5);
+    }
+
+    #[test]
+    fn change_undo_redo() {
+        let doc = LotDocument::new_sample();
+        doc.set_param(2, ParamKind::OpeningWidth, 2.0).unwrap();
+        assert!(doc.can_undo());
+        assert!(doc.undo().unwrap());
+        assert_eq!(value(&doc, ParamKind::OpeningWidth), 1.5);
+        assert!(doc.redo().unwrap());
+        assert_eq!(value(&doc, ParamKind::OpeningWidth), 2.0);
+    }
+
+    #[test]
+    fn invalid_value_gives_german_message() {
+        let doc = LotDocument::new_sample();
+        let LotError::Failed(message) = doc.set_param(2, ParamKind::OpeningWidth, 21.5).unwrap_err();
+        assert!(message.contains("ragt seitlich aus der Wand"), "{message}");
+        assert_eq!(value(&doc, ParamKind::OpeningWidth), 1.5);
+    }
+
+    #[test]
+    fn save_and_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wand.lot").to_string_lossy().into_owned();
+        let doc = LotDocument::new_sample();
+        doc.set_param(1, ParamKind::WallHeight, 2.75).unwrap();
+        doc.save(path.clone()).unwrap();
+        let opened = LotDocument::open(path).unwrap();
+        assert_eq!(value(&opened, ParamKind::WallHeight), 2.75);
+        assert_eq!(opened.name(), "M0 Wand mit Fenster");
+    }
+
+    #[test]
+    fn opening_missing_file_fails_cleanly() {
+        assert!(LotDocument::open("/gibt/es/nicht.lot".into()).is_err());
     }
 }

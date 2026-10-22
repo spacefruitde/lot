@@ -103,8 +103,8 @@ impl Renderer {
             raw_window_handle: raw_window_handle::RawWindowHandle::AppKit(handle),
         };
         // SAFETY: Der Aufrufer garantiert, dass der View gültig ist und den Renderer überlebt.
-        let surface = unsafe { instance.create_surface_unsafe(target) }
-            .map_err(|e| RenderError::Surface(e.to_string()))?;
+        let surface =
+            unsafe { instance.create_surface_unsafe(target) }.map_err(|e| RenderError::Surface(e.to_string()))?;
         let (adapter, device, queue) = open_device(&instance, Some(&surface))?;
         let mut config = surface
             .get_default_config(&adapter, width.max(1), height.max(1))
@@ -294,11 +294,7 @@ impl Renderer {
         let mut edges: Vec<[f32; 3]> = Vec::new();
         for element in &geometry.elements {
             vertices.extend(
-                element
-                    .mesh
-                    .flat_vertices()
-                    .into_iter()
-                    .map(|v| MeshVertex { position: v.position, normal: v.normal }),
+                element.mesh.flat_vertices().into_iter().map(|v| MeshVertex { position: v.position, normal: v.normal }),
             );
             for [a, b] in element.mesh.feature_edges(20.0) {
                 edges.push(a);
@@ -306,9 +302,9 @@ impl Renderer {
             }
         }
         self.triangles = (vertices.len() / 3) as u32;
-        self.bounds = geometry.bounds().map(|(lo, hi)| {
-            (Vec3::from_array(lo.map(|v| v as f32)), Vec3::from_array(hi.map(|v| v as f32)))
-        });
+        self.bounds = geometry
+            .bounds()
+            .map(|(lo, hi)| (Vec3::from_array(lo.map(|v| v as f32)), Vec3::from_array(hi.map(|v| v as f32))));
         let buffer = |label: &str, contents: &[u8]| {
             self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some(label),
@@ -391,9 +387,7 @@ impl Renderer {
         self.queue.submit([encoder.finish()]);
         let slice = readback.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| {});
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|e| RenderError::Device(e.to_string()))?;
+        self.device.poll(wgpu::PollType::wait_indefinitely()).map_err(|e| RenderError::Device(e.to_string()))?;
         let data = slice.get_mapped_range().map_err(|e| RenderError::Device(format!("{e:?}")))?;
         let mut pixels = Vec::with_capacity((row * height) as usize);
         for y in 0..height {
@@ -440,10 +434,7 @@ impl Renderer {
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Discard,
-                    }),
+                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Discard }),
                     stencil_ops: None,
                 }),
                 timestamp_writes: None,
@@ -517,4 +508,45 @@ fn srgb_component_to_linear(c: f32) -> f32 {
 fn srgb_to_linear(c: [f32; 3]) -> [f32; 4] {
     let [r, g, b] = c.map(srgb_component_to_linear);
     [r, g, b, 1.0]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Zeichnet die Beispielwand ohne Fenster. Ohne Grafikkarte (etwa in
+    /// Cloud-Sessions) wird der Test übersprungen.
+    #[test]
+    fn headless_renders_wall() {
+        let mut renderer = match Renderer::headless(320, 200) {
+            Ok(r) => r,
+            Err(RenderError::NoAdapter(e)) => {
+                eprintln!("übersprungen, keine Grafikkarte: {e}");
+                return;
+            }
+            Err(e) => panic!("{e}"),
+        };
+        let geometry = lot_geom::build(&lot_model::Project::sample()).unwrap();
+        renderer.set_geometry(&geometry);
+        renderer.zoom_to_fit();
+        let pixels = renderer.render_image().unwrap();
+        assert_eq!(pixels.len(), 320 * 200 * 4);
+
+        let background = BACKGROUND.map(|c| (c * 255.0).round() as i32);
+        let pixel = |x: usize, y: usize| {
+            let i = (y * 320 + x) * 4;
+            [pixels[i] as i32, pixels[i + 1] as i32, pixels[i + 2] as i32]
+        };
+        let differs = |p: [i32; 3]| p.iter().zip(background).any(|(a, b)| (a - b).abs() > 3);
+        // Die Ecke bleibt Hintergrund, im Bild ist die Wand zu sehen, mit dunklen Kanten.
+        assert!(!differs(pixel(0, 0)), "Ecke ist nicht Hintergrund: {:?}", pixel(0, 0));
+        let covered =
+            (0..200).flat_map(|y| (0..320).map(move |x| (x, y))).filter(|&(x, y)| differs(pixel(x, y))).count();
+        assert!(covered > 320 * 200 / 10, "Wand bedeckt nur {covered} Pixel");
+        let dark = (0..200)
+            .flat_map(|y| (0..320).map(move |x| (x, y)))
+            .filter(|&(x, y)| pixel(x, y).iter().all(|c| *c < 120))
+            .count();
+        assert!(dark > 50, "kaum Kanten: {dark} dunkle Pixel");
+    }
 }

@@ -13,10 +13,8 @@ pub fn to_svg(sheet: &Sheet) -> String {
     let (w, h) = (sheet.width_mm, sheet.height_mm);
     let y = |p: &PaperPoint| h - p.y;
     let mut s = String::new();
-    let _ = writeln!(
-        s,
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="0 0 {w} {h}">"#
-    );
+    let _ =
+        writeln!(s, r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="0 0 {w} {h}">"#);
     let _ = writeln!(s, "<title>{}</title>", escape(&sheet.title));
     let _ = writeln!(s, r#"<rect width="{w}" height="{h}" fill="white"/>"#);
     for object in &sheet.objects {
@@ -31,7 +29,8 @@ pub fn to_svg(sheet: &Sheet) -> String {
                     let _ = writeln!(s, r#"<path d="{d}" fill="{}" fill-rule="evenodd"/>"#, color(*gray));
                 }
                 Fill::Hatch { angle_deg, spacing_mm, pen } => {
-                    let _ = writeln!(s, r#"<g stroke="black" stroke-width="{}" stroke-linecap="butt">"#, num(pen.width_mm));
+                    let _ =
+                        writeln!(s, r#"<g stroke="black" stroke-width="{}" stroke-linecap="butt">"#, num(pen.width_mm));
                     for [a, b] in hatch_segments(&area.rings, *angle_deg, *spacing_mm) {
                         let _ = writeln!(
                             s,

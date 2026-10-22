@@ -17,7 +17,7 @@ struct InspectorView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Zwei Finger ziehen: drehen")
                     Text("Zwei Finger mit ⇧: verschieben")
-                    Text("Zwei Finger spreizen: zoomen")
+                    Text("Zwei Finger spreizen: zum Zeiger zoomen")
                     Text("Maus: ziehen dreht, mit ⌥ verschieben, Rad zoomt")
                 }
                 .font(.callout)
