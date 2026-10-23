@@ -699,3 +699,29 @@ fn aligning_the_underlay_levels_a_skewed_line() {
     let Some(lot_model::Element::Underlay(u)) = doc.project().elements.get(&id) else { panic!() };
     assert!((u.rotation + (0.1f64).atan2(8.0).to_degrees()).abs() < 1e-9, "{}", u.rotation);
 }
+
+#[test]
+fn variants_hide_the_other_variant_and_switch() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::WallTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    click(&mut doc, &mut ed, 4.0, 0.0);
+    ed.key(&mut doc, Key::Escape);
+    let wall = doc.project().walls().next().map(|(id, _)| id).unwrap();
+    ed.run(&mut doc, &Command::NewVariantSet);
+    let set = doc.project().variant_sets().next().map(|(id, _)| id).unwrap();
+    // Wand in Variante A, dann B zeigen: Die Wand ist weg und nicht mehr zu treffen.
+    ed.run(&mut doc, &Command::SelectTool);
+    ed.selection = vec![wall];
+    ed.run(&mut doc, &Command::AddSelectionToVariant(set.0));
+    assert!(doc.project().variant_view().wall(wall).is_some());
+    ed.run(&mut doc, &Command::SwitchVariant(set.0));
+    assert!(doc.project().variant_view().wall(wall).is_none());
+    assert!(doc.project().wall(wall).is_some(), "im Modell bleibt sie");
+    ed.pointer_down(&mut doc, input(2.0, 0.0), 1);
+    assert!(ed.selection.is_empty());
+    // Zurück zu A: wieder da.
+    ed.run(&mut doc, &Command::SwitchVariant(set.0));
+    assert!(doc.project().variant_view().wall(wall).is_some());
+    assert!(ed.commands(doc.project()).iter().any(|c| c.title.contains("Variante B zeigen")));
+}

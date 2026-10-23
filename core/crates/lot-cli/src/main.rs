@@ -112,7 +112,7 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
 fn render_3d(project: &lot_model::Project) -> Result<Vec<u8>> {
     let (width, height) = (1600, 1000);
     // Bei Umbauten der Zustand nach dem Umbau.
-    let geometry = lot_geom::build(&project.phase_view(lot_model::PhaseFilter::Planned))?;
+    let geometry = lot_geom::build(&project.variant_view().phase_view(lot_model::PhaseFilter::Planned))?;
     let mut renderer = lot_render::Renderer::headless(width, height)?;
     let standard = lot_plan::standard::OfficeStandard::default_standard();
     renderer.set_geometry(&geometry, &|m| standard.material(m).color);
@@ -140,7 +140,7 @@ fn render_plan_view(
             objects.extend(lot_io::cad::underlay_objects(u, &v, viewport));
         }
     }
-    objects.extend(lot_plan::floor_plan::floor_plan(project, view, standard, viewport));
+    objects.extend(lot_plan::floor_plan::floor_plan(&project.variant_view(), view, standard, viewport));
     renderer.set_plan(objects);
     let quads: Vec<lot_render::UnderlayQuad> = project
         .underlays_on(storey)

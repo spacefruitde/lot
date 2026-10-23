@@ -534,6 +534,9 @@ fn rebuild(s: &mut State, model: bool) -> f64 {
     let standard = OfficeStandard::default_standard();
     let preview = s.editor.as_ref().and_then(|e| e.preview(doc.project()));
     let project: &Project = preview.as_ref().unwrap_or(doc.project());
+    // Gezeigt werden die aktiven Varianten (2.04).
+    let shown = project.variant_sets().next().is_some().then(|| project.variant_view());
+    let project: &Project = shown.as_ref().unwrap_or(project);
     if let Some(editor) = &s.editor {
         let view = FloorPlanView { storey: editor.storey, cut_height: DEFAULT_CUT_HEIGHT, scale: s.plan_scale };
         let viewport = PlanViewport { scale: s.plan_scale, origin: PaperPoint::new(0.0, 0.0) };
@@ -633,9 +636,9 @@ fn build_model(s: &mut State) {
         let guard = doc.lock();
         let project = guard.project();
         if project.has_phases() {
-            lot_geom::build(&project.phase_view(lot_model::PhaseFilter::Planned))
+            lot_geom::build(&project.variant_view().phase_view(lot_model::PhaseFilter::Planned))
         } else {
-            lot_geom::build(project)
+            lot_geom::build(&project.variant_view())
         }
     };
     if let Ok(geometry) = built {

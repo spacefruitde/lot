@@ -46,6 +46,12 @@ pub enum Command {
     /// Neues Geschoss über dem obersten.
     AddStorey,
     DeleteSelection,
+    /// Neue Variantengruppe mit den Varianten A und B (2.04).
+    NewVariantSet,
+    /// Gewählte Bauteile in die aktive Variante der Gruppe.
+    AddSelectionToVariant(u64),
+    /// Nächste Variante der Gruppe zeigen.
+    SwitchVariant(u64),
     /// Zeichenrichtung der gewählten Wände umkehren: innen und außen tauschen.
     FlipWalls,
     SelectAll,

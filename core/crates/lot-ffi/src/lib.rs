@@ -281,6 +281,7 @@ impl LotDocument {
             Some(lot_model::Element::SectionView(v)) => v.name.clone(),
             Some(lot_model::Element::Underlay(u)) => format!("Unterlage · {}", u.source),
             Some(lot_model::Element::Terrain(t)) => format!("Gelände · {} Höhenpunkte", t.points.len()),
+            Some(lot_model::Element::VariantSet(v)) => format!("Varianten {} · {}", v.name, v.active_name()),
             Some(lot_model::Element::Annotation(a)) => match &a.shape {
                 lot_model::AnnotationShape::Text { text, .. } => format!("Text · {text}"),
                 lot_model::AnnotationShape::Polyline(_) => "Linie".into(),
@@ -310,7 +311,7 @@ impl LotDocument {
         if wanted.is_empty() {
             return Vec::new();
         }
-        let report = lot_rules::area_report(project);
+        let report = lot_rules::area_report(&project.variant_view());
         wanted
             .into_iter()
             .map(|(id, r)| {
@@ -422,7 +423,7 @@ impl LotDocument {
     /// Flächen je Geschoss (NRF, BGF, Wohnfläche).
     pub fn storey_areas(&self) -> Vec<StoreyAreaInfo> {
         let doc = self.lock();
-        lot_rules::area_report(doc.project())
+        lot_rules::area_report(&doc.project().variant_view())
             .storeys
             .iter()
             .map(|s| StoreyAreaInfo {

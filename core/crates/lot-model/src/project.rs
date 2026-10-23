@@ -193,6 +193,47 @@ impl Project {
         })
     }
 
+    /// Variantengruppen, nach Kennung.
+    pub fn variant_sets(&self) -> impl Iterator<Item = (ElementId, &crate::VariantSet)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::VariantSet(v) => Some((*id, v)),
+            _ => None,
+        })
+    }
+
+    /// Bauteile, die in einer gerade nicht gezeigten Variante stehen.
+    pub fn hidden_by_variants(&self) -> std::collections::BTreeSet<ElementId> {
+        self.variant_sets().flat_map(|(_, v)| v.hidden()).collect()
+    }
+
+    /// Das Projekt, wie die aktiven Varianten es zeigen: ohne die Bauteile der
+    /// anderen Varianten und ohne Öffnungen in Wänden, die damit wegfallen.
+    pub fn variant_view(&self) -> Project {
+        let hidden = self.hidden_by_variants();
+        if hidden.is_empty() {
+            return self.clone();
+        }
+        let mut out = self.clone();
+        out.elements.retain(|id, e| {
+            !hidden.contains(id)
+                && match e {
+                    Element::Opening(o) => !hidden.contains(&o.host),
+                    Element::SlabOpening(o) => !hidden.contains(&o.host),
+                    _ => true,
+                }
+        });
+        out
+    }
+
+    /// Wie [`Project::variant_view`], mit der Variante `index` der Gruppe `set` aktiv.
+    pub fn with_variant(&self, set: ElementId, index: usize) -> Project {
+        let mut p = self.clone();
+        if let Some(Element::VariantSet(v)) = p.elements.get_mut(&set) {
+            v.active = index.min(v.variants.len().saturating_sub(1));
+        }
+        p.variant_view()
+    }
+
     /// Das Gelände des Projekts, falls es eins gibt.
     pub fn terrain(&self) -> Option<&crate::Terrain> {
         self.elements.values().find_map(|e| match e {

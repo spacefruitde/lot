@@ -371,7 +371,9 @@ impl Editor {
                         }
                     }
                 }
-                match element_at(project, self.storey, input.point, input.tolerance) {
+                // Bauteile anderer Varianten sind nicht zu sehen und nicht zu treffen.
+                let shown = project.variant_view();
+                match element_at(&shown, self.storey, input.point, input.tolerance) {
                     Some(id) => {
                         if input.shift {
                             if let Some(pos) = self.selection.iter().position(|s| *s == id) {
@@ -606,6 +608,48 @@ impl Editor {
                 }
             }
             Command::DeleteSelection => self.delete_selection(doc),
+            Command::NewVariantSet => {
+                let n = doc.project().variant_sets().count() + 1;
+                let set = lot_model::VariantSet {
+                    name: format!("Varianten {n}"),
+                    variants: ["A", "B"]
+                        .map(|name| lot_model::Variant { name: name.into(), elements: Vec::new() })
+                        .to_vec(),
+                    active: 0,
+                };
+                Response::from_result(doc.insert(Element::VariantSet(set)).map(|_| ()))
+            }
+            Command::AddSelectionToVariant(set) => {
+                let id = ElementId(*set);
+                let Some(Element::VariantSet(old)) = doc.project().elements.get(&id).cloned() else {
+                    return Response {
+                        error: Some("Diese Variantengruppe gibt es nicht".into()),
+                        ..Default::default()
+                    };
+                };
+                let mut new = old.clone();
+                for v in &mut new.variants {
+                    v.elements.retain(|e| !self.selection.contains(e));
+                }
+                if let Some(v) = new.variants.get_mut(new.active) {
+                    v.elements.extend(self.selection.iter().copied().filter(|e| *e != id));
+                    v.elements.sort();
+                }
+                Response::from_result(replace_all(doc, "Auswahl in Variante", vec![(id, Element::VariantSet(new))]))
+            }
+            Command::SwitchVariant(set) => {
+                let id = ElementId(*set);
+                let Some(Element::VariantSet(old)) = doc.project().elements.get(&id).cloned() else {
+                    return Response {
+                        error: Some("Diese Variantengruppe gibt es nicht".into()),
+                        ..Default::default()
+                    };
+                };
+                let mut new = old.clone();
+                new.active = (old.active + 1) % old.variants.len().max(1);
+                self.selection.clear();
+                Response::from_result(replace_all(doc, "Variante wechseln", vec![(id, Element::VariantSet(new))]))
+            }
             Command::FlipWalls => self.flip_selection(doc),
             Command::SelectAll => {
                 self.tool = Tool::Select;
@@ -672,6 +716,22 @@ impl Editor {
             CommandInfo::new(Command::Undo, "Widerrufen", "⌘Z", "Bearbeiten"),
             CommandInfo::new(Command::Redo, "Wiederholen", "⇧⌘Z", "Bearbeiten"),
         ];
+        list.push(CommandInfo::new(Command::NewVariantSet, "Neue Variantengruppe (A und B)", "", "Varianten"));
+        for (id, v) in project.variant_sets() {
+            let next = v.variants.get((v.active + 1) % v.variants.len().max(1)).map_or("", |x| x.name.as_str());
+            list.push(CommandInfo::new(
+                Command::SwitchVariant(id.0),
+                format!("{}: Variante {} zeigen (jetzt {})", v.name, next, v.active_name()),
+                "",
+                "Varianten",
+            ));
+            list.push(CommandInfo::new(
+                Command::AddSelectionToVariant(id.0),
+                format!("{}: Auswahl nur in Variante {}", v.name, v.active_name()),
+                "",
+                "Varianten",
+            ));
+        }
         for (id, t) in project.wall_types() {
             let mark = if Some(id) == self.wall_type { " ✓" } else { "" };
             list.push(CommandInfo::new(Command::SetWallType(id.0), format!("{}{mark}", t.name), "", "Wandaufbau"));

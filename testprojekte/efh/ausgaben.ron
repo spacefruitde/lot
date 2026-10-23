@@ -1,6 +1,7 @@
 // Ausgaben von lot-cli render für dieses Testprojekt.
 [
     FloorPlan(name: "eg-100", storey: 2, scale: 100.0, cad: true),
+    FloorPlan(name: "eg-variante-offen", storey: 2, scale: 100.0, variant: Some((141, 1))),
     FloorPlan(name: "eg-50", storey: 2, scale: 50.0),
     FloorPlan(name: "eg-200", storey: 2, scale: 200.0),
     FloorPlan(name: "kg-100", storey: 1, scale: 100.0),

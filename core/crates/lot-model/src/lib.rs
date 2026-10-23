@@ -17,6 +17,7 @@ mod roof;
 mod stair;
 mod terrain;
 mod underlay;
+mod variant;
 
 pub use annotation::{Annotation, AnnotationShape, AnnotationView};
 pub use document::{Document, ModelError};
@@ -32,3 +33,4 @@ pub use roof::{Dormer, DormerWindow, EavePlane, Roof, RoofEdge, RoofFace, RoofWi
 pub use stair::{FlightLayout, Landing, Railing, RailingPath, Stair, StairFlight, StairLayout, Tread};
 pub use terrain::{Terrain, TerrainPoint};
 pub use underlay::{Underlay, pdf_point_scale};
+pub use variant::{Variant, VariantSet};

@@ -177,6 +177,10 @@ Project(
             (x: -4.0, y: 4.5, z: -0.35), (x: 15.0, y: 4.5, z: -0.3),
             (x: -4.0, y: 13.0, z: -0.1), (x: 5.5, y: 13.0, z: -0.1), (x: 15.0, y: 13.0, z: -0.05),
         ]),
+        // Varianten (2.04): Küche abgetrennt (Wand 35) oder offen mit Kochinsel.
+        139: Annotation(view: FloorPlan(storey: 2), shape: Polygon(points: [(x: 7.6, y: 1.6), (x: 9.6, y: 1.6), (x: 9.6, y: 2.5), (x: 7.6, y: 2.5)]), pen: 0.35),
+        140: Annotation(view: FloorPlan(storey: 2), shape: Text(position: (x: 7.75, y: 1.9), text: "Kochinsel", height: 1.8)),
+        141: VariantSet(name: "Küche", variants: [(name: "abgetrennt", elements: [35]), (name: "offen", elements: [139, 140])], active: 0),
         114: ProjectInfo(client: "Familie Muster (Testdaten)", site: "Musterweg 1, 12345 Musterstadt", architect: "Lot Testbüro", building: SmallResidential),
         115: PlanSheet(
             number: "101",

@@ -31,6 +31,9 @@ pub enum Output {
         phase: PhaseFilter,
         #[serde(default)]
         cad: bool,
+        /// Gruppe und Variante, die statt der aktiven gezeigt wird (2.04).
+        #[serde(default)]
+        variant: Option<(u64, usize)>,
     },
     /// Katalog von Ausschnitten, etwa der Wandknoten.
     Catalog { name: String, storey: u64, scale: f64, title: String, cells: Vec<CatalogCell> },
@@ -95,8 +98,20 @@ pub fn sheets(project: &Project, output: &Output, source: &str) -> Vec<Sheet> {
     let standard = OfficeStandard::default_standard();
     match output {
         Output::M0Sheet { .. } => vec![lot_plan::m0::sheet(project, source)],
-        Output::FloorPlan { storey, scale, phase, .. } => {
-            vec![floor_plan_sheet(&phase_project(project, *phase), ElementId(*storey), *scale, standard)]
+        Output::FloorPlan { storey, scale, phase, variant, .. } => {
+            let base = match variant {
+                Some((set, index)) => {
+                    let mut p = project.with_variant(ElementId(*set), *index);
+                    if let Some(lot_model::Element::VariantSet(v)) = project.elements.get(&ElementId(*set))
+                        && let Some(chosen) = v.variants.get(*index)
+                    {
+                        p.name = format!("{} (Variante {})", project.name, chosen.name);
+                    }
+                    p
+                }
+                None => project.clone(),
+            };
+            vec![floor_plan_sheet(&phase_project(&base, *phase), ElementId(*storey), *scale, standard)]
         }
         Output::Catalog { storey, scale, title, cells, .. } => {
             catalog_sheets(project, ElementId(*storey), cells, *scale, standard, title)
@@ -123,8 +138,9 @@ pub fn sheets(project: &Project, output: &Output, source: &str) -> Vec<Sheet> {
 }
 
 /// Das Projekt im gewählten Bauzustand; Bestand und Neuzustand stehen im Titel.
+/// Gezeigt werden die aktiven Varianten (2.04).
 pub fn phase_project(project: &Project, phase: PhaseFilter) -> Project {
-    let mut p = project.phase_view(phase);
+    let mut p = project.variant_view().phase_view(phase);
     if project.has_phases() {
         match phase {
             PhaseFilter::All => {}
@@ -138,7 +154,8 @@ pub fn phase_project(project: &Project, phase: PhaseFilter) -> Project {
 /// 3D-Geometrie für Schnitte und Planblätter; im Umbauplan ohne die Öffnungen,
 /// die die Wand nicht durchbrechen (siehe `Project::without_phase_openings`).
 pub fn geometry(project: &Project) -> Result<lot_geom::ModelGeometry, lot_geom::GeomError> {
-    if project.has_phases() { lot_geom::build(&project.without_phase_openings()) } else { lot_geom::build(project) }
+    let project = project.variant_view();
+    if project.has_phases() { lot_geom::build(&project.without_phase_openings()) } else { lot_geom::build(&project) }
 }
 
 /// DXF- und DWG-Dateien einer Ausgabe, falls sie welche verlangt: (Dateiname, Inhalt).
@@ -148,7 +165,7 @@ pub fn cad_files(project: &Project, output: &Output) -> Result<Vec<(String, Vec<
     let origin = lot_plan::Viewport { scale: 100.0, origin: lot_plan::PaperPoint::new(0.0, 0.0) };
     let mut docs: Vec<(String, lot_io::cad::CadDocument)> = Vec::new();
     match output {
-        Output::FloorPlan { name, storey, scale, phase, cad: true } => {
+        Output::FloorPlan { name, storey, scale, phase, cad: true, .. } => {
             let project = phase_project(project, *phase);
             let view = lot_plan::floor_plan::FloorPlanView {
                 storey: ElementId(*storey),

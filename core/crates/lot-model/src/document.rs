@@ -321,6 +321,17 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     ));
                 }
             }
+            Element::VariantSet(v) => {
+                if v.variants.len() < 2 || v.active >= v.variants.len() {
+                    return Err(invalid("Variantengruppe: mindestens zwei Varianten, eine davon aktiv"));
+                }
+                let mut seen = std::collections::BTreeSet::new();
+                for e in v.variants.iter().flat_map(|x| &x.elements) {
+                    if !seen.insert(*e) {
+                        return Err(invalid("Variantengruppe: Ein Bauteil steht in zwei Varianten"));
+                    }
+                }
+            }
             Element::Terrain(t) => {
                 if t.points.len() < 3 {
                     return Err(invalid("Gelände: mindestens drei Höhenpunkte"));
