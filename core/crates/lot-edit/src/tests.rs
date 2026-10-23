@@ -149,6 +149,7 @@ fn delete_removes_wall_with_openings() {
         width: 1.0,
         height: 2.1,
         sill_height: 0.0,
+        kind: lot_model::OpeningKind::Plain,
     }))
     .unwrap();
     ed.pointer_down(&mut doc, input(3.0, 2.0), 1);
@@ -172,6 +173,7 @@ fn flip_keeps_openings_in_place() {
             width: 1.5,
             height: 1.3,
             sill_height: 0.9,
+            kind: lot_model::OpeningKind::Plain,
         }))
         .unwrap();
     ed.selection = vec![bottom];

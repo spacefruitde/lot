@@ -206,7 +206,14 @@ impl Project {
         );
         p.elements.insert(
             ElementId(4),
-            Element::Opening(Opening { host: ElementId(3), offset: 1.75, width: 1.5, height: 1.3, sill_height: 0.9 }),
+            Element::Opening(Opening {
+                host: ElementId(3),
+                offset: 1.75,
+                width: 1.5,
+                height: 1.3,
+                sill_height: 0.9,
+                kind: crate::OpeningKind::Plain,
+            }),
         );
         p
     }

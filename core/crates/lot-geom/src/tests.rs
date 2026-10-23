@@ -426,7 +426,14 @@ fn opening_in_arc_is_cut_radially() {
     let id = p.next_id();
     p.elements.insert(
         id,
-        Element::Opening(lot_model::Opening { host: arc, offset: 1.0, width: 1.0, height: 2.0, sill_height: 0.0 }),
+        Element::Opening(lot_model::Opening {
+            host: arc,
+            offset: 1.0,
+            width: 1.0,
+            height: 2.0,
+            sill_height: 0.0,
+            kind: lot_model::OpeningKind::Plain,
+        }),
     );
     let r = regions(&p);
     let expected = (arc_length(&p, arc) - 1.0) * 0.205;
@@ -564,6 +571,7 @@ fn two_rooms() -> (Project, ElementId) {
             width: 0.885,
             height: 2.135,
             sill_height: 0.0,
+            kind: lot_model::OpeningKind::Plain,
         }),
     );
     (p, split)

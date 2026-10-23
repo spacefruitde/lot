@@ -380,6 +380,7 @@ mod tests {
                 width: 1.0,
                 height: 1.0,
                 sill_height: 0.0,
+                kind: crate::OpeningKind::Plain,
             }))
             .unwrap_err();
         assert!(matches!(err, ModelError::Invalid(_)));

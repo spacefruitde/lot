@@ -7,8 +7,10 @@
 //! 2. Muster der geschnittenen Schichten, je nach Detailgrad
 //! 3. Grenzen zwischen Schichten aus verschiedenem Material
 //! 4. Umriss aller geschnittenen Bauteile (Schnittkante)
-//! 5. Achsen mit Achskreisen
-//! 6. Raumstempel: Nummer, Name, Netto-Raumfläche
+//! 5. Türen und Fenster: Türblatt und Aufschlag, Fensterrahmen; Öffnungen
+//!    über der Schnittebene gestrichelt
+//! 6. Achsen mit Achskreisen
+//! 7. Raumstempel: Nummer, Name, Netto-Raumfläche
 //!
 //! Gleiches Material benachbarter Schichten und Wände wird zu einer Fläche
 //! vereinigt, damit an Anschlüssen keine Fugen erscheinen.
@@ -16,7 +18,7 @@
 use std::collections::BTreeMap;
 
 use lot_geom::{Area, LayerRegion};
-use lot_model::{ElementId, LayerFunction, Project};
+use lot_model::{ElementId, LayerFunction, OpeningKind, Project, WallSide};
 
 use crate::clip::clip_polyline;
 use crate::standard::{CutPattern, Detail, OfficeStandard, ScaleStyle};
@@ -82,12 +84,15 @@ pub fn floor_plan(
         objects.push(closed(paper(&ring, viewport), style.pens.cut));
     }
 
-    // 5. Achsen.
+    // 5. Türen und Fenster.
+    draw_openings(&mut objects, project, view.storey, z_cut, style, viewport);
+
+    // 6. Achsen.
     for (_, grid) in project.grid_lines() {
         draw_grid_line(&mut objects, grid, style, viewport);
     }
 
-    // 6. Raumstempel.
+    // 7. Raumstempel.
     draw_room_stamps(&mut objects, project, view.storey, style, viewport);
     objects
 }
@@ -128,6 +133,144 @@ fn draw_room_stamps(
                 anchor: Anchor::Center,
             }));
             top -= height * 0.6;
+        }
+    }
+}
+
+/// Bautiefe des Fensterrahmens, in Metern. Vorschlag, Ben prüft.
+const WINDOW_FRAME: f64 = 0.07;
+/// Dicke des Türblatts in 1:50, in Metern.
+const DOOR_LEAF: f64 = 0.04;
+/// Strichlänge und Lücke verdeckter Kanten, in mm auf dem Blatt.
+const HIDDEN_DASH: [f64; 2] = [2.0, 1.0];
+
+/// Türen und Fenster (1.06), Vorschlag nach DIN 1356-1:1995-02:
+///
+/// - Tür: Türblatt rechtwinklig zur Wand an den Bändern, Aufschlag als
+///   Viertelkreis; in 1:50 das Türblatt mit Dicke.
+/// - Fenster: in 1:200 eine Linie, in 1:100 der Rahmen, in 1:50 Rahmen und
+///   Glaslinie. Der Rahmen sitzt an der Außenkante der Tragschicht, wenn außen
+///   gedämmt ist, sonst in der Mitte der Tragschicht.
+/// - Öffnungen ganz über der Schnittebene (Oberlichter): Umriss gestrichelt.
+fn draw_openings(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    storey: ElementId,
+    z_cut: f64,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let line = |points: Vec<[f64; 2]>, width: f64, dashed: bool| {
+        PlanObject::Line(Line {
+            points: points.iter().map(|p| viewport.to_paper(p[0], p[1])).collect(),
+            closed: false,
+            pen: Pen::mm(width),
+            style: if dashed { LineStyle::Dashed(HIDDEN_DASH.to_vec()) } else { LineStyle::Solid },
+            color: Gray::BLACK,
+        })
+    };
+    for (wall_id, wall) in project.walls_on(storey) {
+        let (Some(wall_type), Some((bottom, top))) = (project.wall_type(wall.wall_type), project.wall_extent(wall))
+        else {
+            continue;
+        };
+        if !(bottom <= z_cut && z_cut < top) {
+            continue;
+        }
+        let offsets = wall.layer_offsets(wall_type);
+        let (left, right) = (offsets[0].0, offsets[offsets.len() - 1].1);
+        let at = |s: f64, t: f64| {
+            let p = wall.point_at(s, t);
+            [p.x, p.y]
+        };
+        for (_, o) in project.openings_in(wall_id) {
+            let (o0, o1) = (bottom + o.sill_height, bottom + o.sill_height + o.height);
+            let (a, b) = (o.offset, o.offset + o.width);
+            if o0 > z_cut {
+                // Über der Schnittebene: Umriss gestrichelt.
+                let ring = vec![at(a, left), at(b, left), at(b, right), at(a, right), at(a, left)];
+                objects.push(line(ring, style.pens.hidden, true));
+                continue;
+            }
+            if o1 <= z_cut {
+                continue;
+            }
+            match o.kind {
+                OpeningKind::Plain => {}
+                OpeningKind::Door(door) => {
+                    let (face, sign) = match door.opens_to {
+                        WallSide::Left => (left, 1.0),
+                        WallSide::Right => (right, -1.0),
+                    };
+                    let (hinge_s, free_s) = if door.hinge_at_end() { (b, a) } else { (a, b) };
+                    let hinge = at(hinge_s, face);
+                    let free = at(free_s, face);
+                    let (tx, ty) = wall.tangent_at(hinge_s);
+                    let normal = [-ty * sign, tx * sign];
+                    let radius = o.width;
+                    let tip = [hinge[0] + normal[0] * radius, hinge[1] + normal[1] * radius];
+                    if style.detail == Detail::Fine {
+                        // Türblatt mit Dicke, zur freien Seite hin.
+                        let toward = [(free[0] - hinge[0]) / radius, (free[1] - hinge[1]) / radius];
+                        let d = [toward[0] * DOOR_LEAF, toward[1] * DOOR_LEAF];
+                        let leaf =
+                            vec![hinge, tip, [tip[0] + d[0], tip[1] + d[1]], [hinge[0] + d[0], hinge[1] + d[1]], hinge];
+                        objects.push(line(leaf, style.pens.view, false));
+                    } else {
+                        objects.push(line(vec![hinge, tip], style.pens.view, false));
+                    }
+                    // Aufschlag: Viertelkreis von der Spitze des Türblatts zur Gegenseite.
+                    let start = (tip[1] - hinge[1]).atan2(tip[0] - hinge[0]);
+                    let end = (free[1] - hinge[1]).atan2(free[0] - hinge[0]);
+                    let mut sweep = end - start;
+                    while sweep > std::f64::consts::PI {
+                        sweep -= std::f64::consts::TAU;
+                    }
+                    while sweep < -std::f64::consts::PI {
+                        sweep += std::f64::consts::TAU;
+                    }
+                    let arc: Vec<[f64; 2]> = (0..=24)
+                        .map(|i| {
+                            let angle = start + sweep * i as f64 / 24.0;
+                            [hinge[0] + radius * angle.cos(), hinge[1] + radius * angle.sin()]
+                        })
+                        .collect();
+                    objects.push(line(arc, style.pens.hatch, false));
+                }
+                OpeningKind::Window => {
+                    let (f_out, f_in) = window_frame(wall_type, &offsets);
+                    let mid = (f_out + f_in) / 2.0;
+                    match style.detail {
+                        Detail::Coarse => objects.push(line(vec![at(a, mid), at(b, mid)], style.pens.view, false)),
+                        Detail::Medium | Detail::Fine => {
+                            let frame = vec![at(a, f_out), at(b, f_out), at(b, f_in), at(a, f_in), at(a, f_out)];
+                            objects.push(line(frame, style.pens.view, false));
+                            if style.detail == Detail::Fine {
+                                objects.push(line(vec![at(a, mid), at(b, mid)], style.pens.hatch, false));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Lage des Fensterrahmens quer zur Wand: (außen, innen) als Abstand von der Bezugslinie.
+fn window_frame(wall_type: &lot_model::WallType, offsets: &[(f64, f64)]) -> (f64, f64) {
+    let structure = wall_type.layers.iter().position(|l| l.function == LayerFunction::Structure);
+    match structure {
+        Some(k) if wall_type.layers[..k].iter().any(|l| l.function == LayerFunction::Insulation) => {
+            // Außen gedämmt: Rahmen innen an der Außenkante der Tragschicht.
+            (offsets[k].0, offsets[k].0 - WINDOW_FRAME)
+        }
+        Some(k) => {
+            let mid = (offsets[k].0 + offsets[k].1) / 2.0;
+            (mid + WINDOW_FRAME / 2.0, mid - WINDOW_FRAME / 2.0)
+        }
+        None => {
+            let mid = (offsets[0].0 + offsets[offsets.len() - 1].1) / 2.0;
+            (mid + WINDOW_FRAME / 2.0, mid - WINDOW_FRAME / 2.0)
         }
     }
 }

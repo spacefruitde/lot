@@ -401,8 +401,8 @@ impl Wall {
     }
 }
 
-/// Öffnung in einer Wand (IfcOpeningElement). Rechteckig, ohne Rahmen,
-/// Laibung oder Anschlag; Türen und Fenster folgen in M2.
+/// Öffnung in einer Wand (IfcOpeningElement), rechteckig. Maße sind
+/// Rohbaumaße; eine Tür oder ein Fenster füllt die Öffnung (IfcDoor, IfcWindow).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Opening {
     /// Die Wand, in der die Öffnung sitzt.
@@ -413,6 +413,75 @@ pub struct Opening {
     pub height: f64,
     /// Brüstungshöhe über Unterkante Wand.
     pub sill_height: f64,
+    #[serde(default, skip_serializing_if = "OpeningKind::is_plain")]
+    pub kind: OpeningKind,
+}
+
+/// Was in einer Öffnung sitzt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum OpeningKind {
+    /// Nichts: Durchgang oder Durchbruch.
+    #[default]
+    Plain,
+    Door(Door),
+    Window,
+}
+
+impl OpeningKind {
+    pub fn is_plain(&self) -> bool {
+        *self == OpeningKind::Plain
+    }
+}
+
+/// Drehflügeltür.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Door {
+    /// Seite der Wand, zu der die Tür aufschlägt, bezogen auf die Zeichenrichtung der Wand.
+    pub opens_to: WallSide,
+    /// Anschlag nach DIN 107:1974-04: von der Seite gesehen, zu der die Tür
+    /// aufschlägt, sitzen die Bänder links (DIN links) oder rechts (DIN rechts).
+    pub hinge: Handing,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WallSide {
+    Left,
+    Right,
+}
+
+impl WallSide {
+    pub fn other(self) -> Self {
+        match self {
+            WallSide::Left => WallSide::Right,
+            WallSide::Right => WallSide::Left,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Handing {
+    DinLeft,
+    DinRight,
+}
+
+impl Handing {
+    pub fn other(self) -> Self {
+        match self {
+            Handing::DinLeft => Handing::DinRight,
+            Handing::DinRight => Handing::DinLeft,
+        }
+    }
+}
+
+impl Door {
+    /// Ob die Bänder am Ende der Öffnung sitzen, das in Zeichenrichtung der Wand
+    /// hinten liegt (bei `offset + width`), sonst vorne (bei `offset`).
+    ///
+    /// Wer auf der linken Seite der Wand steht und auf sie blickt, hat die
+    /// Zeichenrichtung zur Linken; auf der rechten Seite zur Rechten.
+    pub fn hinge_at_end(&self) -> bool {
+        matches!((self.opens_to, self.hinge), (WallSide::Left, Handing::DinLeft) | (WallSide::Right, Handing::DinRight))
+    }
 }
 
 /// Stütze (IfcColumn).
