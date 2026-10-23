@@ -7,6 +7,7 @@
 
 pub mod area_table;
 pub mod clip;
+pub mod dimensions;
 pub mod floor_plan;
 pub mod m0;
 pub mod sheets;
@@ -99,6 +100,9 @@ pub struct Text {
     /// Schrifthöhe (Versalhöhe) in mm, wie bei Normschrift nach DIN EN ISO 3098.
     pub height_mm: f64,
     pub anchor: Anchor,
+    /// Drehung um `position` in Grad, gegen den Uhrzeigersinn. Lesbar bleibt
+    /// Text nach DIN 1356-1 von unten und von rechts, also zwischen −90° und 90°.
+    pub rotation: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -154,6 +158,7 @@ impl Sheet {
             text: text.into(),
             height_mm,
             anchor,
+            rotation: 0.0,
         }));
     }
 }

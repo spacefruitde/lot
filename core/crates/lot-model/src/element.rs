@@ -33,6 +33,7 @@ pub enum Element {
     Opening(Opening),
     Column(Column),
     Room(Room),
+    Dimension(Dimension),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -45,6 +46,7 @@ pub enum ElementKind {
     Opening,
     Column,
     Room,
+    Dimension,
 }
 
 impl Element {
@@ -57,6 +59,7 @@ impl Element {
             Element::Opening(_) => ElementKind::Opening,
             Element::Column(_) => ElementKind::Column,
             Element::Room(_) => ElementKind::Room,
+            Element::Dimension(_) => ElementKind::Dimension,
         }
     }
 
@@ -599,6 +602,40 @@ impl RoomUsage {
     pub fn is_usable(self) -> bool {
         !matches!(self, RoomUsage::Technical | RoomUsage::Circulation)
     }
+}
+
+/// Maßkette (3.05). Gespeichert werden die Bezüge, nicht die Maße: Ändert sich
+/// eine Wand oder Öffnung, ändert sich die Kette mit (assoziativ).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Dimension {
+    pub storey: ElementId,
+    /// Ein Punkt auf der Maßlinie.
+    pub position: Point2,
+    /// Richtung der Maßlinie; muss nicht normiert sein.
+    pub direction: Point2,
+    /// Gemessen wird zwischen den Bezügen, in der Reihenfolge entlang der Maßlinie.
+    pub refs: Vec<DimRef>,
+}
+
+/// Ein Bezugspunkt einer Maßkette.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum DimRef {
+    /// Wandende auf einer Wandseite; an einer L-Ecke die äußere Ecke beider Wände.
+    WallEnd { wall: ElementId, end: WallEnd, side: WallSide },
+    /// Laibung einer Öffnung auf einer Wandseite. `End` ist die Laibung bei `offset + width`.
+    Jamb { opening: ElementId, end: WallEnd, side: WallSide },
+    /// Fläche einer Wand, für Maße quer zur Wand.
+    WallFace { wall: ElementId, side: WallSide },
+    /// Achse.
+    Grid(ElementId),
+    /// Fester Punkt.
+    Point(Point2),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WallEnd {
+    Start,
+    End,
 }
 
 /// Querschnitt einer Stütze.

@@ -10,7 +10,8 @@
 //! 5. Türen und Fenster: Türblatt und Aufschlag, Fensterrahmen; Öffnungen
 //!    über der Schnittebene gestrichelt
 //! 6. Achsen mit Achskreisen
-//! 7. Raumstempel: Nummer, Name, Netto-Raumfläche
+//! 7. Maßketten
+//! 8. Raumstempel: Nummer, Name, Netto-Raumfläche
 //!
 //! Gleiches Material benachbarter Schichten und Wände wird zu einer Fläche
 //! vereinigt, damit an Anschlüssen keine Fugen erscheinen.
@@ -92,7 +93,10 @@ pub fn floor_plan(
         draw_grid_line(&mut objects, grid, style, viewport);
     }
 
-    // 7. Raumstempel.
+    // 7. Maßketten.
+    crate::dimensions::draw_dimensions(&mut objects, project, view.storey, style, viewport);
+
+    // 8. Raumstempel.
     draw_room_stamps(&mut objects, project, view.storey, style, viewport);
     objects
 }
@@ -131,6 +135,7 @@ fn draw_room_stamps(
                 text,
                 height_mm: height,
                 anchor: Anchor::Center,
+                rotation: 0.0,
             }));
             top -= height * 0.6;
         }
@@ -429,6 +434,7 @@ fn draw_grid_line(objects: &mut Vec<PlanObject>, grid: &lot_model::GridLine, sty
         text: grid.label.clone(),
         height_mm: height,
         anchor: Anchor::Center,
+        rotation: 0.0,
     }));
 }
 

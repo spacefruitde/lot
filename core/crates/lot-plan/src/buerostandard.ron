@@ -82,6 +82,7 @@ OfficeStandard(
             // Raumstempel: Name und Zeilen für Nummer und Fläche, Normschrift nach ISO 3098.
             room_name: 3.5,
             room_text: 2.5,
+            dimension_text: 2.5,
             grid_bubble: 10.0,
         ),
         // 1:100: Tragschicht schraffiert, weitere Schichten nur als Linie.
@@ -92,6 +93,7 @@ OfficeStandard(
             text: 2.5,
             room_name: 2.5,
             room_text: 1.8,
+            dimension_text: 1.8,
             grid_bubble: 8.0,
         ),
         // 1:200 und kleiner: Wände als gefüllte Fläche ohne Schichten.
@@ -102,6 +104,7 @@ OfficeStandard(
             text: 2.0,
             room_name: 2.5,
             room_text: 1.8,
+            dimension_text: 1.8,
             grid_bubble: 6.0,
         ),
     ],

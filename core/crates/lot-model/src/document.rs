@@ -262,6 +262,14 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     return Err(invalid("Die Öffnung ragt oben oder unten aus der Wand"));
                 }
             }
+            Element::Dimension(d) => {
+                if project.storey(d.storey).is_none() {
+                    return Err(invalid("Maßkette: Das Geschoss fehlt"));
+                }
+                if d.direction.x.hypot(d.direction.y) < 1e-9 {
+                    return Err(invalid("Maßkette: Die Richtung fehlt"));
+                }
+            }
             Element::Room(r) => {
                 if project.storey(r.storey).is_none() {
                     return Err(invalid(format!("Raum {}: Das Geschoss fehlt", r.name)));

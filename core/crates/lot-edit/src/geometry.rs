@@ -123,7 +123,33 @@ fn element_except_rooms(project: &Project, storey: ElementId, p: Point2, toleran
     opening_at(project, storey, p, tolerance).or_else(|| other_elements(project, storey, p, tolerance))
 }
 
+/// Die Maßkette, deren Maßlinie am Punkt liegt.
+fn dimension_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    project
+        .dimensions_on(storey)
+        .filter_map(|(id, d)| {
+            let (a, b) = dimension_extent(project, d)?;
+            Some((id, segment_distance(a, b, p)))
+        })
+        .filter(|(_, dist)| *dist <= tolerance)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
+/// Anfang und Ende der Maßlinie.
+fn dimension_extent(project: &Project, d: &lot_model::Dimension) -> Option<(Point2, Point2)> {
+    let points = lot_geom::dimensions::resolve(project, d);
+    let (first, last) = (points.first()?, points.last()?);
+    let dir = lot_geom::dimensions::direction(d);
+    let at = |s: f64| Point2::new(d.position.x + dir[0] * s, d.position.y + dir[1] * s);
+    Some((at(first.along), at(last.along)))
+}
+
 fn other_elements(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    dimension_at(project, storey, p, tolerance).or_else(|| walls_columns_grids(project, storey, p, tolerance))
+}
+
+fn walls_columns_grids(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
     let column = project
         .columns_on(storey)
         .map(|(id, c)| (id, column_distance(c, p)))
@@ -159,6 +185,12 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
         Element::Wall(w) => Some(footprint(project, w)),
         Element::Column(c) => Some(column_outline(c)),
         Element::Opening(o) => opening_outline(project, o),
+        Element::Dimension(d) => {
+            let (a, b) = dimension_extent(project, d)?;
+            let len = a.distance(b).max(1e-9);
+            let (nx, ny) = (-(b.y - a.y) / len * 0.05, (b.x - a.x) / len * 0.05);
+            Some(vec![[a.x - nx, a.y - ny], [b.x - nx, b.y - ny], [b.x + nx, b.y + ny], [a.x + nx, a.y + ny]])
+        }
         Element::Room(r) => {
             // Die Fläche des Raums, bei offenen Räumen der Bereich des Stempels.
             let finder = lot_geom::rooms::RoomFinder::new(project, r.storey);
@@ -224,6 +256,11 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
                 let mut n = r.clone();
                 n.position = shift(r.position);
                 changes.push((*id, Element::Room(n)));
+            }
+            Some(Element::Dimension(d)) => {
+                let mut n = d.clone();
+                n.position = shift(d.position);
+                changes.push((*id, Element::Dimension(n)));
             }
             // Öffnungen gleiten entlang ihrer Wand; mit der Wand bewegen sie sich ohnehin.
             Some(Element::Opening(o)) if !walls.contains(&o.host) => {

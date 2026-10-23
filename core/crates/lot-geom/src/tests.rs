@@ -629,3 +629,29 @@ fn interior_point_lies_inside_an_l_shape() {
     let p = rooms::interior_point(&l).unwrap();
     assert!(l.contains(p), "{p:?}");
 }
+
+#[test]
+fn dimension_corners_follow_the_l_corner() {
+    // L-Ecke aus tragenden Innenwänden (20,5 cm, Achse mittig): Wand a nach Osten,
+    // Wand b von deren Ende nach Norden. Rechts von a liegt außen.
+    let mut p = project();
+    let a = add_wall(&mut p, INNEN, (0.0, 0.0), (4.0, 0.0), WallAlignment::Center);
+    add_wall(&mut p, INNEN, (4.0, 0.0), (4.0, 3.0), WallAlignment::Center);
+    let dim = |side| lot_model::Dimension {
+        storey: STOREY,
+        position: Point2::new(0.0, -1.0),
+        direction: Point2::new(1.0, 0.0),
+        refs: vec![
+            lot_model::DimRef::WallEnd { wall: a, end: lot_model::WallEnd::Start, side },
+            lot_model::DimRef::WallEnd { wall: a, end: lot_model::WallEnd::End, side },
+        ],
+    };
+    // Außen (rechts): bis zur Außenfläche von b bei x = 4,1025.
+    let outer = dimensions::resolve(&p, &dim(lot_model::WallSide::Right));
+    assert!((outer[1].along - 4.1025).abs() < 1e-9, "{outer:?}");
+    // Innen (links): bis zur Innenfläche von b bei x = 3,8975.
+    let inner = dimensions::resolve(&p, &dim(lot_model::WallSide::Left));
+    assert!((inner[1].along - 3.8975).abs() < 1e-9, "{inner:?}");
+    // Das freie Anfangsende bleibt, wo es ist.
+    assert!(inner[0].along.abs() < 1e-9);
+}

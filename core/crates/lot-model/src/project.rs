@@ -76,6 +76,13 @@ impl Project {
         })
     }
 
+    pub fn dimensions_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Dimension)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Dimension(d) if d.storey == storey => Some((*id, d)),
+            _ => None,
+        })
+    }
+
     pub fn rooms_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Room)> {
         self.elements.iter().filter_map(move |(id, e)| match e {
             Element::Room(r) if r.storey == storey => Some((*id, r)),

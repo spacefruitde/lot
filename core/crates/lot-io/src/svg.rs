@@ -51,9 +51,20 @@ pub fn to_svg(sheet: &Sheet) -> String {
                     Anchor::Right => "end",
                 };
                 let size = crate::plan_font::plan_font().size_for_cap_height(text.height_mm);
+                // SVG zählt y nach unten, eine Drehung gegen den Uhrzeigersinn ist dort negativ.
+                let rotate = if text.rotation == 0.0 {
+                    String::new()
+                } else {
+                    format!(
+                        r#" transform="rotate({} {} {})""#,
+                        num(-text.rotation),
+                        num(text.position.x),
+                        num(y(&text.position))
+                    )
+                };
                 let _ = writeln!(
                     s,
-                    r#"<text x="{}" y="{}" font-family="{FAMILY}" font-size="{}" text-anchor="{anchor}">{}</text>"#,
+                    r#"<text x="{}" y="{}" font-family="{FAMILY}" font-size="{}" text-anchor="{anchor}"{rotate}>{}</text>"#,
                     num(text.position.x),
                     num(y(&text.position)),
                     num(size),

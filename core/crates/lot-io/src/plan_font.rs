@@ -101,9 +101,11 @@ impl PlanFont {
         let size = self.size_for_cap_height(text.height_mm);
         let scale = size / self.units_per_em;
         let mut x = self.start_x(text);
+        let (sin, cos) = text.rotation.to_radians().sin_cos();
+        let origin = (text.position.x, text.position.y);
         for c in text.text.chars() {
             let Some(glyph) = face.glyph_index(c) else { continue };
-            let mut builder = Builder { sink, x, y: text.position.y, scale };
+            let mut builder = Builder { sink, x, y: text.position.y, scale, origin, sin, cos };
             face.outline_glyph(glyph, &mut builder);
             x += face.glyph_hor_advance(glyph).unwrap_or(0) as f64 * scale;
         }
@@ -124,11 +126,20 @@ struct Builder<'a, S: OutlineSink> {
     x: f64,
     y: f64,
     scale: f64,
+    /// Drehpunkt und Drehung des ganzen Textes.
+    origin: (f64, f64),
+    sin: f64,
+    cos: f64,
 }
 
 impl<S: OutlineSink> Builder<'_, S> {
     fn p(&self, x: f32, y: f32) -> (f64, f64) {
-        (self.x + x as f64 * self.scale, self.y + y as f64 * self.scale)
+        let (px, py) = (self.x + x as f64 * self.scale, self.y + y as f64 * self.scale);
+        if self.sin == 0.0 {
+            return (px, py);
+        }
+        let (dx, dy) = (px - self.origin.0, py - self.origin.1);
+        (self.origin.0 + dx * self.cos - dy * self.sin, self.origin.1 + dx * self.sin + dy * self.cos)
     }
 }
 

@@ -21,6 +21,8 @@ pub enum Command {
     FlipDoorSwing,
     /// Gewählte Türen: DIN links und DIN rechts tauschen.
     FlipDoorHinge,
+    /// Maßketten an den gewählten Wänden: Öffnungen und Gesamtmaß, außen.
+    DimensionWalls,
     /// Einen Raum in jeden umschlossenen Bereich ohne Raum setzen.
     DetectRooms,
     SetWallType(u64),

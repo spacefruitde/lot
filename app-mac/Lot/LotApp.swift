@@ -63,6 +63,7 @@ struct LotApp: App {
                 Button("Fenster setzen") { model.run("WindowTool") }
                 Button("Raum setzen") { model.run("RoomTool") }
                 Button("Räume erkennen") { model.run("DetectRooms") }
+                Button("Gewählte Wände bemaßen") { model.run("DimensionWalls") }
                 Divider()
                 Button("Alles auswählen") { model.run("SelectAll") }
                     .keyboardShortcut("a")

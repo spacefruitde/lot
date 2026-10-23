@@ -498,3 +498,26 @@ fn door_swing_and_hinge_can_be_flipped() {
     };
     assert_ne!(last.hinge_at_end(), before.hinge_at_end());
 }
+
+#[test]
+fn dimension_chain_follows_the_wall() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::WindowTool);
+    click(&mut doc, &mut ed, 2.0, 0.0);
+    ed.run(&mut doc, &Command::SelectTool);
+    ed.selection = vec![wall];
+    let r = ed.run(&mut doc, &Command::DimensionWalls);
+    assert!(r.model_changed, "{:?}", r.error);
+    let dims: Vec<_> = doc.project().dimensions_on(ElementId(1)).map(|(_, d)| d.clone()).collect();
+    assert_eq!(dims.len(), 2, "Öffnungskette und Gesamtmaß");
+    let measures = |doc: &Document, d: &lot_model::Dimension| -> Vec<f64> {
+        let p = lot_geom::dimensions::resolve(doc.project(), d);
+        p.windows(2).map(|w| ((w[1].along - w[0].along) * 1000.0).round() / 1000.0).collect()
+    };
+    assert_eq!(measures(&doc, &dims[0]), vec![1.37, 1.26, 3.37]);
+    assert_eq!(measures(&doc, &dims[1]), vec![6.0]);
+    // Assoziativ: Die Wand wird länger, die Kette rechnet mit.
+    doc.set_param(wall, lot_model::Param::WallLength, 7.0).unwrap();
+    assert_eq!(measures(&doc, &dims[1]), vec![7.0]);
+    assert_eq!(measures(&doc, &dims[0]), vec![1.37, 1.26, 4.37]);
+}

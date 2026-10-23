@@ -7,6 +7,7 @@
 //! - [`build`]: 3D-Körper aus den Schichtflächen, Höhenabschnitt für
 //!   Höhenabschnitt hochgezogen und mit manifold-rust vereinigt (ADR 0004)
 
+pub mod dimensions;
 pub mod joins;
 mod mesh;
 pub mod poly;

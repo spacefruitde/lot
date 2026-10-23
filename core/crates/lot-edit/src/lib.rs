@@ -467,6 +467,7 @@ impl Editor {
                 d.hinge = d.hinge.other();
             }),
             Command::FlipDoorHinge => self.change_doors(doc, "Anschlag wechseln", |d| d.hinge = d.hinge.other()),
+            Command::DimensionWalls => self.dimension_walls(doc),
             Command::DetectRooms => self.detect_rooms(doc),
             Command::SetWallType(id) => {
                 let id = ElementId(*id);
@@ -546,6 +547,7 @@ impl Editor {
             CommandInfo::new(Command::WindowTool, "Fenster setzen", "F", "Werkzeug"),
             CommandInfo::new(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "", "Auswahl"),
             CommandInfo::new(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "", "Auswahl"),
+            CommandInfo::new(Command::DimensionWalls, "Bemaßen: Maßketten an den gewählten Wänden", "M", "Auswahl"),
             CommandInfo::new(Command::DetectRooms, "Räume erkennen (jeder umschlossene Bereich)", "", "Werkzeug"),
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
@@ -819,6 +821,57 @@ impl Editor {
             OpeningKind::Window
         };
         Some(Opening { host, offset, width, height, sill_height: sill, kind })
+    }
+
+    /// Maßketten außen an den gewählten geraden Wänden (Vorschlag): in 1,00 m
+    /// Abstand Wandenden und Laibungen, in 1,70 m das Gesamtmaß. Ohne
+    /// Öffnungen nur das Gesamtmaß in 1,00 m.
+    fn dimension_walls(&mut self, doc: &mut Document) -> Response {
+        use lot_model::{DimRef, Dimension, WallEnd};
+        let project = doc.project();
+        let mut ops = Vec::new();
+        let mut next = project.next_id().0;
+        for id in &self.selection {
+            let Some(wall) = project.wall(*id) else { continue };
+            if wall.is_curved() {
+                return Response {
+                    error: Some("Bogenwände lassen sich noch nicht bemaßen".into()),
+                    ..Response::redraw()
+                };
+            }
+            let (left, _) = geometry::faces(project, wall);
+            let ends = |end| DimRef::WallEnd { wall: *id, end, side: WallSide::Left };
+            let mut openings: Vec<(ElementId, f64)> =
+                project.openings_in(*id).map(|(oid, o)| (oid, o.offset)).collect();
+            openings.sort_by(|a, b| a.1.total_cmp(&b.1));
+            let mut chains = Vec::new();
+            if !openings.is_empty() {
+                let mut refs = vec![ends(WallEnd::Start)];
+                for (oid, _) in &openings {
+                    refs.push(DimRef::Jamb { opening: *oid, end: WallEnd::Start, side: WallSide::Left });
+                    refs.push(DimRef::Jamb { opening: *oid, end: WallEnd::End, side: WallSide::Left });
+                }
+                refs.push(ends(WallEnd::End));
+                chains.push((1.0, refs));
+            }
+            let total = if openings.is_empty() { 1.0 } else { 1.7 };
+            chains.push((total, vec![ends(WallEnd::Start), ends(WallEnd::End)]));
+            let (dx, dy) = wall.direction();
+            for (distance, refs) in chains {
+                let element = Element::Dimension(Dimension {
+                    storey: self.storey,
+                    position: wall.point_at(0.0, left + distance),
+                    direction: Point2::new(dx, dy),
+                    refs,
+                });
+                ops.push(Operation::Insert { id: ElementId(next), element });
+                next += 1;
+            }
+        }
+        if ops.is_empty() {
+            return Response { error: Some("Keine Wand gewählt".into()), ..Response::redraw() };
+        }
+        Response::from_result(doc.apply(Operation::Group { label: "Bemaßen".into(), ops }))
     }
 
     fn change_doors(&mut self, doc: &mut Document, label: &str, change: impl Fn(&mut lot_model::Door)) -> Response {

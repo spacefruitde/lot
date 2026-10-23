@@ -138,6 +138,7 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
             }
             Element::Column(c) => inside(c.position.x, c.position.y),
             Element::Room(r) => inside(r.position.x, r.position.y),
+            Element::Dimension(d) => inside(d.position.x, d.position.y),
             Element::GridLine(g) => inside(g.start.x, g.start.y) && inside(g.end.x, g.end.y),
             Element::Opening(_) => false,
         };
