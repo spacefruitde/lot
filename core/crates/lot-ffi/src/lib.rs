@@ -100,6 +100,16 @@ pub struct RoomInfo {
     pub living_area: Option<f64>,
 }
 
+/// Tür mit Anschlag und Aufschlag, für den Inspektor.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DoorInfo {
+    pub element: u64,
+    /// DIN links nach DIN 107, sonst DIN rechts.
+    pub din_left: bool,
+    /// Schlägt zur linken Seite der Wand auf (in Zeichenrichtung).
+    pub opens_left: bool,
+}
+
 /// Nutzungsgruppe nach DIN 277 zur Auswahl.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct RoomUsageItem {
@@ -214,7 +224,11 @@ impl LotDocument {
             Some(lot_model::Element::Wall(w)) => {
                 format!("Wand · {}", p.wall_type(w.wall_type).map_or("?", |t| t.name.as_str()))
             }
-            Some(lot_model::Element::Opening(_)) => "Öffnung".into(),
+            Some(lot_model::Element::Opening(o)) => match o.kind {
+                lot_model::OpeningKind::Plain => "Öffnung".into(),
+                lot_model::OpeningKind::Door(_) => "Tür".into(),
+                lot_model::OpeningKind::Window => "Fenster".into(),
+            },
             Some(lot_model::Element::Storey(s)) => format!("Geschoss {}", s.name),
             Some(lot_model::Element::Column(_)) => "Stütze".into(),
             Some(lot_model::Element::Room(r)) => format!("Raum {} {}", r.number, r.name).trim_end().to_string(),
@@ -252,6 +266,23 @@ impl LotDocument {
                     net_area: area.and_then(|a| a.net),
                     living_area: area.and_then(|a| a.living),
                 }
+            })
+            .collect()
+    }
+
+    /// Die Türen unter den Elementen `ids`.
+    pub fn doors(&self, ids: Vec<u64>) -> Vec<DoorInfo> {
+        let doc = self.lock();
+        ids.iter()
+            .filter_map(|id| match doc.project().elements.get(&ElementId(*id)) {
+                Some(lot_model::Element::Opening(lot_model::Opening {
+                    kind: lot_model::OpeningKind::Door(d), ..
+                })) => Some(DoorInfo {
+                    element: *id,
+                    din_left: d.hinge == lot_model::Handing::DinLeft,
+                    opens_left: d.opens_to == lot_model::WallSide::Left,
+                }),
+                _ => None,
             })
             .collect()
     }

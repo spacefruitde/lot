@@ -14,8 +14,8 @@ use geometry::{
     End, as_elements, column_outline, element_at, end_point, footprint, moved_elements, moved_endpoint, outline,
 };
 use lot_model::{
-    Column, ColumnProfile, Document, Element, ElementId, GridLine, ModelError, Operation, Point2, Project, Room,
-    Storey, Top, Wall, WallAlignment,
+    Column, ColumnProfile, Document, Element, ElementId, GridLine, Handing, ModelError, Opening, OpeningKind,
+    Operation, Point2, Project, Room, Storey, Top, Wall, WallAlignment, WallSide,
 };
 pub use snap::{Snap, SnapKind};
 
@@ -76,6 +76,10 @@ pub enum Tool {
     Column,
     /// Raum: ein Klick in den Bereich
     Room,
+    /// Tür: ein Klick auf die Wand, zur Seite, zu der sie aufschlägt
+    Door,
+    /// Fenster: ein Klick auf die Wand
+    Window,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -115,6 +119,8 @@ pub struct Editor {
     chain_start: Option<Point2>,
     /// Endpunkt einer Bogenwand, deren Stich noch fehlt.
     arc_end: Option<Point2>,
+    /// Fangradius der letzten Zeigerbewegung, für die Vorschau von Türen und Fenstern.
+    hover_tolerance: f64,
     drag: Option<Drag>,
     pointer: Option<Snap>,
     typed: String,
@@ -132,6 +138,7 @@ impl Editor {
             selection: Vec::new(),
             chain_start: None,
             arc_end: None,
+            hover_tolerance: 0.1,
             drag: None,
             pointer: None,
             typed: String::new(),
@@ -169,6 +176,11 @@ impl Editor {
                 ));
                 Response::redraw()
             }
+            Tool::Door | Tool::Window => {
+                self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
+                self.hover_tolerance = input.tolerance;
+                Response::redraw()
+            }
             Tool::Room | Tool::Select => Response::default(),
         }
     }
@@ -188,6 +200,13 @@ impl Editor {
                 };
                 Response::from_result(doc.insert(Element::Column(column)).map(|_| ()))
             }
+            Tool::Door | Tool::Window => match self.placed_opening(doc.project(), input.point, input.tolerance) {
+                Some(opening) => Response::from_result(doc.insert(Element::Opening(opening)).map(|_| ())),
+                None => Response {
+                    error: Some(format!("{} braucht eine Wand mit genug Platz", self.opening_title())),
+                    ..Response::redraw()
+                },
+            },
             Tool::Room => {
                 let p = Point2::new((input.point.x / 0.01).round() * 0.01, (input.point.y / 0.01).round() * 0.01);
                 let room = self.new_room(doc.project(), p, 0);
@@ -440,6 +459,14 @@ impl Editor {
             Command::GridTool => self.set_tool(Tool::Grid),
             Command::ColumnTool => self.set_tool(Tool::Column),
             Command::RoomTool => self.set_tool(Tool::Room),
+            Command::DoorTool => self.set_tool(Tool::Door),
+            Command::WindowTool => self.set_tool(Tool::Window),
+            Command::FlipDoorSwing => self.change_doors(doc, "Aufschlag wechseln", |d| {
+                // Die Bänder bleiben, wo sie sind: mit der Seite wechselt auch DIN links und rechts.
+                d.opens_to = d.opens_to.other();
+                d.hinge = d.hinge.other();
+            }),
+            Command::FlipDoorHinge => self.change_doors(doc, "Anschlag wechseln", |d| d.hinge = d.hinge.other()),
             Command::DetectRooms => self.detect_rooms(doc),
             Command::SetWallType(id) => {
                 let id = ElementId(*id);
@@ -515,10 +542,14 @@ impl Editor {
             CommandInfo::new(Command::GridTool, "Achse zeichnen", "A", "Werkzeug"),
             CommandInfo::new(Command::ColumnTool, "Stütze setzen", "S", "Werkzeug"),
             CommandInfo::new(Command::RoomTool, "Raum setzen", "R", "Werkzeug"),
+            CommandInfo::new(Command::DoorTool, "Tür setzen", "T", "Werkzeug"),
+            CommandInfo::new(Command::WindowTool, "Fenster setzen", "F", "Werkzeug"),
+            CommandInfo::new(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "", "Auswahl"),
+            CommandInfo::new(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "", "Auswahl"),
             CommandInfo::new(Command::DetectRooms, "Räume erkennen (jeder umschlossene Bereich)", "", "Werkzeug"),
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
-            CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "F", "Auswahl"),
+            CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "⇧F", "Auswahl"),
             CommandInfo::new(Command::Undo, "Widerrufen", "⌘Z", "Bearbeiten"),
             CommandInfo::new(Command::Redo, "Wiederholen", "⇧⌘Z", "Bearbeiten"),
         ];
@@ -568,6 +599,12 @@ impl Editor {
                 base_offset: 0.0,
                 top: Top::Storey { offset: 0.0 },
             }));
+        }
+        if matches!(self.tool, Tool::Door | Tool::Window)
+            && let Some(p) = self.pointer
+            && let Some(o) = self.placed_opening(project, p.point, self.hover_tolerance)
+        {
+            overlay.preview = geometry::opening_outline(project, &o);
         }
         if self.tool == Tool::Grid {
             overlay.snap = self.pointer;
@@ -641,15 +678,20 @@ impl Editor {
             (Tool::Grid, None, _) => "Achse: Anfangspunkt klicken. Esc: zurück zum Auswählen.".into(),
             (Tool::Grid, Some(_), _) => "Achse: Endpunkt klicken. ⇧: nur rechte Winkel.".into(),
             (Tool::Column, _, _) => "Stütze 30/30: Mittelpunkt klicken. Esc: zurück zum Auswählen.".into(),
+            (Tool::Door, _, _) => {
+                "Tür: auf die Wand klicken, auf der Seite, zu der sie aufschlägt. Esc: zurück zum Auswählen.".into()
+            }
+            (Tool::Window, _, _) => "Fenster: auf die Wand klicken. Esc: zurück zum Auswählen.".into(),
             (Tool::Room, _, _) => {
                 "Raum: in den Bereich klicken, dort steht der Raumstempel. Esc: zurück zum Auswählen.".into()
             }
             (Tool::Select, _, Some(_)) => "Loslassen setzt ab. Esc bricht ab.".into(),
             (Tool::Select, _, None) if self.selection.is_empty() => {
-                "Anklicken wählt. W: Wand, B: Bogenwand, A: Achse, S: Stütze, R: Raum. ⌘K: Befehle.".into()
+                "Anklicken wählt. W: Wand, B: Bogenwand, T: Tür, F: Fenster, R: Raum, A: Achse, S: Stütze. ⌘K: Befehle."
+                    .into()
             }
             (Tool::Select, _, None) => {
-                "Ziehen verschiebt, Enden ziehen ändert die Länge. ⌫ löscht. F dreht um. ⌘K: Befehle.".into()
+                "Ziehen verschiebt, Enden ziehen ändert die Länge. ⌫ löscht. ⇧F dreht um. ⌘K: Befehle.".into()
             }
         }
     }
@@ -744,6 +786,60 @@ impl Editor {
             };
         }
         Response::from_result(doc.apply(Operation::Group { label: "Räume erkennen".into(), ops }))
+    }
+
+    fn opening_title(&self) -> &'static str {
+        if self.tool == Tool::Door { "Eine Tür" } else { "Ein Fenster" }
+    }
+
+    /// Tür oder Fenster an der Stelle `p` auf einer Wand, mittig zum Zeiger, in
+    /// üblichen Rohbaumaßen nach DIN 18100:1983-10 (Vorschlag): Tür 1,01 × 2,135 m,
+    /// Fenster 1,26 × 1,385 m mit Brüstung 0,885 m. Die Tür schlägt zur Seite
+    /// des Zeigers auf, die Bänder sitzen am näheren Wandende.
+    fn placed_opening(&self, project: &Project, p: Point2, tolerance: f64) -> Option<Opening> {
+        let host = geometry::wall_at(project, self.storey, p, tolerance)?;
+        let wall = project.wall(host)?;
+        let (width, height, sill) = if self.tool == Tool::Door { (1.01, 2.135, 0.0) } else { (1.26, 1.385, 0.885) };
+        let length = wall.length();
+        if length < width + 0.02 {
+            return None;
+        }
+        let (s, t) = wall.locate(p);
+        let offset = ((s - width / 2.0) / 0.01).round() * 0.01;
+        let offset = offset.clamp(0.0, length - width);
+        let kind = if self.tool == Tool::Door {
+            let (left, right) = geometry::faces(project, wall);
+            let opens_to = if t > (left + right) / 2.0 { WallSide::Left } else { WallSide::Right };
+            let mut door = lot_model::Door { opens_to, hinge: Handing::DinLeft };
+            if door.hinge_at_end() != (s > length / 2.0) {
+                door.hinge = Handing::DinRight;
+            }
+            OpeningKind::Door(door)
+        } else {
+            OpeningKind::Window
+        };
+        Some(Opening { host, offset, width, height, sill_height: sill, kind })
+    }
+
+    fn change_doors(&mut self, doc: &mut Document, label: &str, change: impl Fn(&mut lot_model::Door)) -> Response {
+        let changes: Vec<(ElementId, Element)> = self
+            .selection
+            .iter()
+            .filter_map(|id| match doc.project().elements.get(id) {
+                Some(Element::Opening(o)) => match o.kind {
+                    OpeningKind::Door(mut d) => {
+                        change(&mut d);
+                        Some((*id, Element::Opening(Opening { kind: OpeningKind::Door(d), ..o.clone() })))
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        if changes.is_empty() {
+            return Response { error: Some("Keine Tür gewählt".into()), ..Response::redraw() };
+        }
+        Response::from_result(replace_all(doc, label, changes))
     }
 
     fn change_selected(&mut self, doc: &mut Document, label: &str, change: impl Fn(&mut Wall)) -> Response {

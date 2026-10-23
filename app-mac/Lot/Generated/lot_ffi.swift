@@ -606,6 +606,11 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func canUndo()  -> Bool
     
     /**
+     * Die Türen unter den Elementen `ids`.
+     */
+    func doors(ids: [UInt64])  -> [DoorInfo]
+    
+    /**
      * Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36“.
      */
     func elementLabel(element: UInt64)  -> String
@@ -751,6 +756,19 @@ open func canUndo() -> Bool  {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_lotdocument_can_undo(
             self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Die Türen unter den Elementen `ids`.
+     */
+open func doors(ids: [UInt64]) -> [DoorInfo]  {
+    return try!  FfiConverterSequenceTypeDoorInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_doors(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
     )
 })
 }
@@ -1380,6 +1398,79 @@ public func FfiConverterTypeCommandItem_lift(_ buf: RustBuffer) throws -> Comman
 #endif
 public func FfiConverterTypeCommandItem_lower(_ value: CommandItem) -> RustBuffer {
     return FfiConverterTypeCommandItem.lower(value)
+}
+
+
+/**
+ * Tür mit Anschlag und Aufschlag, für den Inspektor.
+ */
+public struct DoorInfo: Equatable, Hashable {
+    public var element: UInt64
+    /**
+     * DIN links nach DIN 107, sonst DIN rechts.
+     */
+    public var dinLeft: Bool
+    /**
+     * Schlägt zur linken Seite der Wand auf (in Zeichenrichtung).
+     */
+    public var opensLeft: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, 
+        /**
+         * DIN links nach DIN 107, sonst DIN rechts.
+         */dinLeft: Bool, 
+        /**
+         * Schlägt zur linken Seite der Wand auf (in Zeichenrichtung).
+         */opensLeft: Bool) {
+        self.element = element
+        self.dinLeft = dinLeft
+        self.opensLeft = opensLeft
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension DoorInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDoorInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DoorInfo {
+        return
+            try DoorInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                dinLeft: FfiConverterBool.read(from: &buf), 
+                opensLeft: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DoorInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterBool.write(value.dinLeft, into: &buf)
+        FfiConverterBool.write(value.opensLeft, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDoorInfo_lift(_ buf: RustBuffer) throws -> DoorInfo {
+    return try FfiConverterTypeDoorInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDoorInfo_lower(_ value: DoorInfo) -> RustBuffer {
+    return FfiConverterTypeDoorInfo.lower(value)
 }
 
 
@@ -2302,6 +2393,31 @@ fileprivate struct FfiConverterSequenceTypeCommandItem: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDoorInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [DoorInfo]
+
+    public static func write(_ value: [DoorInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDoorInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DoorInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DoorInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDoorInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeParamValue: FfiConverterRustBuffer {
     typealias SwiftType = [ParamValue]
 
@@ -2431,6 +2547,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_can_undo() != 5022) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_doors() != 14145) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_element_label() != 44890) {

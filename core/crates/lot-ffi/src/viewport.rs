@@ -325,6 +325,8 @@ impl Viewport {
                         Tool::Grid => "grid",
                         Tool::Column => "column",
                         Tool::Room => "room",
+                        Tool::Door => "door",
+                        Tool::Window => "window",
                     }
                     .to_string(),
                 )

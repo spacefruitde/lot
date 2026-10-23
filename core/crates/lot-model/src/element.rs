@@ -693,4 +693,15 @@ mod tests {
         assert!((w.sagitta - 1.5).abs() < 1e-12);
         assert!(close(w.start, Point2::new(0.0, 0.0)));
     }
+
+    #[test]
+    fn din_handing_depends_on_the_opening_side() {
+        // Wand nach Osten gezeichnet, links ist Norden. Wer von Norden auf die Wand
+        // blickt, hat Osten (das Ende der Öffnung) zur Linken.
+        let door = |opens_to, hinge| Door { opens_to, hinge };
+        assert!(door(WallSide::Left, Handing::DinLeft).hinge_at_end());
+        assert!(!door(WallSide::Left, Handing::DinRight).hinge_at_end());
+        assert!(!door(WallSide::Right, Handing::DinLeft).hinge_at_end());
+        assert!(door(WallSide::Right, Handing::DinRight).hinge_at_end());
+    }
 }

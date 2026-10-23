@@ -97,7 +97,33 @@ pub fn element_at(project: &Project, storey: ElementId, p: Point2, tolerance: f6
     })
 }
 
+/// Umriss einer Öffnung in ihrer Wand, über die ganze Wanddicke.
+pub fn opening_outline(project: &Project, o: &lot_model::Opening) -> Option<Vec<[f64; 2]>> {
+    let wall = project.wall(o.host)?;
+    let (left, right) = faces(project, wall);
+    lot_geom::wall_section(wall, (o.offset, o.offset + o.width), (left, right)).rings().into_iter().next()
+}
+
+/// Die Öffnung unter dem Punkt, falls er in einer Öffnung einer Wand des Geschosses liegt.
+fn opening_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    project.walls_on(storey).find_map(|(wall_id, wall)| {
+        let (s, t) = wall.locate(p);
+        let (left, right) = faces(project, wall);
+        if t > left + tolerance || t < right - tolerance {
+            return None;
+        }
+        project
+            .openings_in(wall_id)
+            .find(|(_, o)| s >= o.offset - tolerance / 2.0 && s <= o.offset + o.width + tolerance / 2.0)
+            .map(|(id, _)| id)
+    })
+}
+
 fn element_except_rooms(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    opening_at(project, storey, p, tolerance).or_else(|| other_elements(project, storey, p, tolerance))
+}
+
+fn other_elements(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
     let column = project
         .columns_on(storey)
         .map(|(id, c)| (id, column_distance(c, p)))
@@ -132,6 +158,7 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
     match project.elements.get(&id)? {
         Element::Wall(w) => Some(footprint(project, w)),
         Element::Column(c) => Some(column_outline(c)),
+        Element::Opening(o) => opening_outline(project, o),
         Element::Room(r) => {
             // Die Fläche des Raums, bei offenen Räumen der Bereich des Stempels.
             let finder = lot_geom::rooms::RoomFinder::new(project, r.storey);
@@ -197,6 +224,16 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
                 let mut n = r.clone();
                 n.position = shift(r.position);
                 changes.push((*id, Element::Room(n)));
+            }
+            // Öffnungen gleiten entlang ihrer Wand; mit der Wand bewegen sie sich ohnehin.
+            Some(Element::Opening(o)) if !walls.contains(&o.host) => {
+                let Some(wall) = project.wall(o.host) else { continue };
+                let (tx, ty) = wall.tangent_at(o.offset + o.width / 2.0);
+                let along = delta.0 * tx + delta.1 * ty;
+                let mut n = o.clone();
+                n.offset = ((o.offset + along) / 0.01).round() * 0.01;
+                n.offset = n.offset.clamp(0.0, (wall.length() - o.width).max(0.0));
+                changes.push((*id, Element::Opening(n)));
             }
             Some(Element::GridLine(g)) => {
                 let mut n = g.clone();

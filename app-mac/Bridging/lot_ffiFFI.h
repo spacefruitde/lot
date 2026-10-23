@@ -285,6 +285,11 @@ int8_t uniffi_lot_ffi_fn_method_lotdocument_can_redo(uint64_t ptr, RustCallStatu
 int8_t uniffi_lot_ffi_fn_method_lotdocument_can_undo(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_DOORS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_DOORS
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_doors(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_ELEMENT_LABEL
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_ELEMENT_LABEL
 RustBuffer uniffi_lot_ffi_fn_method_lotdocument_element_label(uint64_t ptr, uint64_t element, RustCallStatus *_Nonnull out_status
@@ -726,6 +731,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_can_redo(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_CAN_UNDO
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_CAN_UNDO
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_can_undo(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_DOORS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_DOORS
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_doors(void
     
 );
 #endif

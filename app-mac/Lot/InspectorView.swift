@@ -31,6 +31,9 @@ struct InspectorView: View {
                 ForEach(groups, id: \.0) { element, parameters in
                     Section(model.label(for: element)) {
                         ForEach(parameters, id: \.kind) { ParameterRow(parameter: $0) }
+                        if let door = model.doors.first(where: { $0.element == element }) {
+                            DoorRows(door: door)
+                        }
                     }
                 }
             }
@@ -43,7 +46,7 @@ struct InspectorView: View {
             }
             Section("Bedienung") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("W: Wand, B: Bogenwand, A: Achse, S: Stütze, R: Raum, V: Auswählen, ⌘K: Befehle")
+                    Text("W: Wand, B: Bogenwand, T: Tür, F: Fenster, R: Raum, A: Achse, S: Stütze, V: Auswählen, ⌘K: Befehle")
                     Text("Zeichnen: klicken, Länge tippen und ⏎, ⇧ rechtwinklig")
                     Text("Grundriss: zwei Finger verschieben, spreizen zoomt")
                     Text("3D: zwei Finger drehen, mit ⇧ verschieben")
@@ -117,6 +120,27 @@ private struct RoomSection: View {
     private func commit() {
         guard number != room.number || name != room.name else { return }
         model.setRoom(room, number: number, name: name)
+    }
+}
+
+/// Anschlag und Aufschlag einer Tür. Die Knöpfe wirken auf alle gewählten Türen.
+private struct DoorRows: View {
+    @Environment(AppModel.self) private var model
+    let door: DoorInfo
+
+    var body: some View {
+        LabeledContent("Anschlag") {
+            HStack {
+                Text(door.dinLeft ? "DIN links" : "DIN rechts")
+                Button("Wechseln") { model.run("FlipDoorHinge") }
+            }
+        }
+        LabeledContent("Aufschlag") {
+            HStack {
+                Text(door.opensLeft ? "zur linken Wandseite" : "zur rechten Wandseite")
+                Button("Wechseln") { model.run("FlipDoorSwing") }
+            }
+        }
     }
 }
 

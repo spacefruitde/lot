@@ -249,6 +249,14 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                 if o.offset < 0.0 || o.offset + o.width > wall.length() + TOLERANCE {
                     return Err(invalid("Die Öffnung ragt seitlich aus der Wand"));
                 }
+                let overlaps = project.openings_in(o.host).any(|(other_id, other)| {
+                    other_id != *id
+                        && o.offset < other.offset + other.width - TOLERANCE
+                        && other.offset < o.offset + o.width - TOLERANCE
+                });
+                if overlaps {
+                    return Err(invalid("Die Öffnung überschneidet sich mit einer anderen in derselben Wand"));
+                }
                 let (bottom, top) = project.wall_extent(wall).unwrap_or((0.0, 0.0));
                 if o.sill_height < 0.0 || o.sill_height + o.height > top - bottom + TOLERANCE {
                     return Err(invalid("Die Öffnung ragt oben oder unten aus der Wand"));

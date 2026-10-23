@@ -15,6 +15,12 @@ pub enum Command {
     GridTool,
     ColumnTool,
     RoomTool,
+    DoorTool,
+    WindowTool,
+    /// Gewählte Türen schlagen zur anderen Wandseite auf.
+    FlipDoorSwing,
+    /// Gewählte Türen: DIN links und DIN rechts tauschen.
+    FlipDoorHinge,
     /// Einen Raum in jeden umschlossenen Bereich ohne Raum setzen.
     DetectRooms,
     SetWallType(u64),

@@ -439,3 +439,67 @@ fn paper(ring: &[[f64; 2]], viewport: Viewport) -> Vec<PaperPoint> {
 fn closed(points: Vec<PaperPoint>, width: f64) -> PlanObject {
     PlanObject::Line(Line { points, closed: true, pen: Pen::mm(width), style: LineStyle::Solid, color: Gray::BLACK })
 }
+
+#[cfg(test)]
+mod tests {
+    use lot_model::{Door, Element, ElementId, Handing, OpeningKind, Project, WallSide};
+
+    use super::*;
+
+    /// Beispielwand (5 m nach Osten, 30 cm) mit einer Tür statt des Fensters.
+    fn door_project(door: Door) -> Project {
+        let mut p = Project::sample();
+        if let Some(Element::Opening(o)) = p.elements.get_mut(&ElementId(4)) {
+            o.sill_height = 0.0;
+            o.height = 2.0;
+            o.width = 1.0;
+            o.offset = 2.0;
+            o.kind = OpeningKind::Door(door);
+        }
+        p
+    }
+
+    fn lines(p: &Project) -> Vec<Vec<PaperPoint>> {
+        let view = FloorPlanView { storey: ElementId(1), cut_height: DEFAULT_CUT_HEIGHT, scale: 100.0 };
+        let viewport = Viewport { scale: 100.0, origin: PaperPoint::new(0.0, 0.0) };
+        floor_plan(p, view, OfficeStandard::default_standard(), viewport)
+            .into_iter()
+            .filter_map(|o| match o {
+                PlanObject::Line(l) => Some(l.points),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn door_swings_to_its_side_from_its_hinge() {
+        // Aufschlag nach Norden (links), DIN links: Bänder am östlichen Ende bei x = 3 m.
+        let p = door_project(Door { opens_to: WallSide::Left, hinge: Handing::DinLeft });
+        let all = lines(&p);
+        // Türblatt: von (3,0; 0,15) nach Norden, 1 m lang (10 mm auf dem Blatt).
+        let leaf = all.iter().find(|l| l.len() == 2 && (l[0].x - 30.0).abs() < 1e-6 && (l[0].y - 1.5).abs() < 1e-6);
+        let leaf = leaf.expect("Türblatt fehlt");
+        assert!((leaf[1].x - 30.0).abs() < 1e-6 && (leaf[1].y - 11.5).abs() < 1e-6, "{leaf:?}");
+        // Aufschlag: Viertelkreis um die Bänder mit Radius 10 mm, endet an der Gegenseite bei x = 2 m.
+        let arc = all.iter().find(|l| l.len() == 25).expect("Aufschlag fehlt");
+        assert!(arc.iter().all(|q| ((q.x - 30.0).hypot(q.y - 1.5) - 10.0).abs() < 1e-6));
+        assert!((arc[24].x - 20.0).abs() < 1e-6 && (arc[24].y - 1.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn window_above_cut_is_dashed() {
+        let mut p = Project::sample();
+        if let Some(Element::Opening(o)) = p.elements.get_mut(&ElementId(4)) {
+            o.sill_height = 1.6;
+            o.height = 0.6;
+            o.kind = OpeningKind::Window;
+        }
+        let view = FloorPlanView { storey: ElementId(1), cut_height: DEFAULT_CUT_HEIGHT, scale: 100.0 };
+        let viewport = Viewport { scale: 100.0, origin: PaperPoint::new(0.0, 0.0) };
+        let dashed = floor_plan(&p, view, OfficeStandard::default_standard(), viewport)
+            .into_iter()
+            .filter(|o| matches!(o, PlanObject::Line(Line { style: LineStyle::Dashed(_), .. })))
+            .count();
+        assert_eq!(dashed, 1);
+    }
+}

@@ -152,7 +152,8 @@ fn delete_removes_wall_with_openings() {
         kind: lot_model::OpeningKind::Plain,
     }))
     .unwrap();
-    ed.pointer_down(&mut doc, input(3.0, 2.0), 1);
+    // Neben der Öffnung klicken; in der Öffnung wäre die Öffnung gewählt.
+    ed.pointer_down(&mut doc, input(3.0, 3.0), 1);
     ed.pointer_up(&mut doc);
     let r = ed.key(&mut doc, Key::Delete);
     assert!(r.model_changed, "{:?}", r.error);
@@ -412,4 +413,88 @@ fn cellar_rooms_are_not_living_space() {
     let r: Vec<_> = doc.project().rooms_on(kg).map(|(_, r)| r.clone()).collect();
     assert_eq!(r[0].number, "-1.01");
     assert!(!r[0].living_space);
+}
+
+/// Eine Wand von (0,0) nach (6,0), Außenwand WDVS mit Bezugslinie in der Mitte.
+fn one_wall() -> (Document, Editor, ElementId) {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::WallTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    click(&mut doc, &mut ed, 6.0, 0.0);
+    ed.key(&mut doc, Key::Escape);
+    let wall = doc.project().walls().next().unwrap().0;
+    (doc, ed, wall)
+}
+
+fn openings(doc: &Document, wall: ElementId) -> Vec<Opening> {
+    doc.project().openings_in(wall).map(|(_, o)| o.clone()).collect()
+}
+
+#[test]
+fn door_opens_to_the_clicked_side_with_hinges_near_the_closer_end() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::DoorTool);
+    // Klick rechts (südlich) der Wand, nahe dem Anfang.
+    click(&mut doc, &mut ed, 1.5, -0.1);
+    let o = &openings(&doc, wall)[0];
+    assert!((o.offset - 1.0).abs() < 1e-9 && (o.width - 1.01).abs() < 1e-9, "mittig zum Klick: {o:?}");
+    let lot_model::OpeningKind::Door(d) = o.kind else { panic!("keine Tür") };
+    assert_eq!(d.opens_to, lot_model::WallSide::Right);
+    assert!(!d.hinge_at_end(), "Bänder am Wandanfang");
+}
+
+#[test]
+fn window_tool_places_window_and_rejects_overlap() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::WindowTool);
+    click(&mut doc, &mut ed, 4.0, 0.05);
+    let o = &openings(&doc, wall)[0];
+    assert_eq!(o.kind, lot_model::OpeningKind::Window);
+    assert!((o.sill_height - 0.885).abs() < 1e-9);
+    // Ein zweites Fenster an derselben Stelle überschneidet sich.
+    let r = click(&mut doc, &mut ed, 4.2, 0.05);
+    assert!(r.error.is_some());
+    assert_eq!(openings(&doc, wall).len(), 1);
+}
+
+#[test]
+fn opening_slides_along_its_wall() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::WindowTool);
+    click(&mut doc, &mut ed, 2.0, 0.0);
+    ed.run(&mut doc, &Command::SelectTool);
+    ed.pointer_down(&mut doc, input(2.0, 0.0), 1);
+    assert_eq!(ed.selection.len(), 1, "Klick in die Öffnung wählt die Öffnung");
+    assert!(matches!(doc.project().elements[&ed.selection[0]], lot_model::Element::Opening(_)));
+    // Schräg ziehen: nur der Anteil entlang der Wand zählt, die Wand bleibt.
+    ed.pointer_dragged(doc.project(), input(3.0, 0.7));
+    ed.pointer_up(&mut doc);
+    assert!((openings(&doc, wall)[0].offset - 2.37).abs() < 1e-9, "{:?}", openings(&doc, wall));
+    assert_eq!(walls(&doc)[0].start, Point2::new(0.0, 0.0));
+}
+
+#[test]
+fn door_swing_and_hinge_can_be_flipped() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::DoorTool);
+    click(&mut doc, &mut ed, 4.5, 0.1);
+    let before = match openings(&doc, wall)[0].kind {
+        lot_model::OpeningKind::Door(d) => d,
+        _ => panic!(),
+    };
+    ed.run(&mut doc, &Command::SelectAll);
+    ed.selection = doc.project().openings_in(wall).map(|(id, _)| id).collect();
+    ed.run(&mut doc, &Command::FlipDoorSwing);
+    let after = match openings(&doc, wall)[0].kind {
+        lot_model::OpeningKind::Door(d) => d,
+        _ => panic!(),
+    };
+    assert_eq!(after.opens_to, before.opens_to.other());
+    assert_eq!(after.hinge_at_end(), before.hinge_at_end(), "die Bänder bleiben am selben Ende");
+    ed.run(&mut doc, &Command::FlipDoorHinge);
+    let last = match openings(&doc, wall)[0].kind {
+        lot_model::OpeningKind::Door(d) => d,
+        _ => panic!(),
+    };
+    assert_ne!(last.hinge_at_end(), before.hinge_at_end());
 }

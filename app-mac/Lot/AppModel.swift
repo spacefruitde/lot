@@ -15,6 +15,8 @@ final class AppModel {
     private(set) var parameters: [ParamValue] = []
     /// Gewählte Räume mit Flächen.
     private(set) var rooms: [RoomInfo] = []
+    /// Gewählte Türen.
+    private(set) var doors: [DoorInfo] = []
     /// Flächen je Geschoss, für die Übersicht im Inspektor.
     private(set) var storeyAreas: [StoreyAreaInfo] = []
     /// Nutzungsgruppen nach DIN 277.
@@ -94,6 +96,7 @@ final class AppModel {
         commands = viewport.commands()
         parameters = state.selection.isEmpty ? [] : document.parameters(ids: state.selection)
         rooms = state.selection.isEmpty ? [] : document.rooms(ids: state.selection)
+        doors = state.selection.isEmpty ? [] : document.doors(ids: state.selection)
     }
 
     // MARK: Modell
