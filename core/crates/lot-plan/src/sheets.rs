@@ -178,6 +178,8 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
             Element::Slab(_)
             | Element::SlabOpening(_)
             | Element::Roof(_)
+            | Element::RoofWindow(_)
+            | Element::Dormer(_)
             | Element::Stair(_)
             | Element::Railing(_)
             | Element::SectionView(_)

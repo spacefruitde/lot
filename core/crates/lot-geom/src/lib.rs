@@ -7,10 +7,12 @@
 //! - [`slabs`]: Decken und Bodenplatten
 //! - [`roofs`]: Dächer und lichte Höhen darunter
 //! - [`stairs`]: Treppen und Geländer
+//! - [`dormers`]: Gauben und Dachfenster
 //! - [`build`]: 3D-Körper aus den Schichtflächen, Höhenabschnitt für
 //!   Höhenabschnitt hochgezogen und mit manifold-rust vereinigt (ADR 0004)
 
 pub mod dimensions;
+pub mod dormers;
 pub mod joins;
 mod mesh;
 pub mod openings;
@@ -125,7 +127,7 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
         })
         .collect();
     let roof_elements: Vec<ElementGeometry> = parallel_map(&roofs, |(id, roof)| {
-        roofs::roof_solids(project, roof)
+        roofs::roof_solids(project, *id, roof)
             .into_iter()
             .map(|(layer, material, solid)| ElementGeometry { id: *id, layer, material, mesh: to_trimesh(&solid) })
             .collect::<Vec<_>>()
@@ -150,16 +152,26 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
     .into_iter()
     .flatten()
     .collect();
-    // Treppen und Geländer.
+    // Treppen, Geländer, Gauben und Dachfenster.
     let stairs: Vec<_> = project
         .elements
         .iter()
-        .filter(|(_, e)| matches!(e, lot_model::Element::Stair(_) | lot_model::Element::Railing(_)))
+        .filter(|(_, e)| {
+            matches!(
+                e,
+                lot_model::Element::Stair(_)
+                    | lot_model::Element::Railing(_)
+                    | lot_model::Element::Dormer(_)
+                    | lot_model::Element::RoofWindow(_)
+            )
+        })
         .collect();
     let stair_elements: Vec<ElementGeometry> = parallel_map(&stairs, |(id, e)| {
         let solids = match e {
             lot_model::Element::Stair(s) => stairs::stair_solids(project, s),
             lot_model::Element::Railing(r) => stairs::railing_solids(project, r),
+            lot_model::Element::Dormer(d) => dormers::dormer_solids(project, d),
+            lot_model::Element::RoofWindow(w) => dormers::roof_window_solids(project, w),
             _ => Vec::new(),
         };
         solids
@@ -171,7 +183,7 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
     .flatten()
     .collect();
     let under: BTreeMap<ElementId, Manifold> =
-        roofs.iter().filter_map(|(_, r)| Some((r.storey, roofs::under_roof(project, r)?))).collect();
+        roofs.iter().filter_map(|(id, r)| Some((r.storey, roofs::under_roof(project, *id, r)?))).collect();
     let slab_elements: Vec<ElementGeometry> = slab_solids
         .into_iter()
         .map(|(id, layer, material, solid)| ElementGeometry { id, layer, material, mesh: to_trimesh(&solid) })

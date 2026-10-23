@@ -24,5 +24,5 @@ pub use element::{
 };
 pub use operation::Operation;
 pub use project::Project;
-pub use roof::{EavePlane, Roof, RoofEdge};
+pub use roof::{Dormer, DormerWindow, EavePlane, Roof, RoofEdge, RoofFace, RoofWindow};
 pub use stair::{FlightLayout, Landing, Railing, RailingPath, Stair, StairFlight, StairLayout, Tread};

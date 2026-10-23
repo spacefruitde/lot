@@ -218,6 +218,13 @@ fn layer_function(project: &Project, id: ElementId, layer: usize) -> Option<Laye
         Element::Wall(w) => project.wall_type(w.wall_type)?.layers.get(layer).map(|l| l.function),
         Element::Slab(s) => project.slab_type(s.slab_type)?.layers.get(layer).map(|l| l.function),
         Element::Roof(r) => project.slab_type(r.roof_type)?.layers.get(layer).map(|l| l.function),
+        Element::Dormer(d) => match layer.checked_sub(lot_geom::dormers::DORMER_WALL_LAYER) {
+            Some(j) if j < 10 => project.wall_type(d.wall_type)?.layers.get(j).map(|l| l.function),
+            Some(_) => None,
+            None => {
+                project.roof(d.roof).and_then(|r| project.slab_type(r.roof_type))?.layers.get(layer).map(|l| l.function)
+            }
+        },
         _ => None,
     }
 }

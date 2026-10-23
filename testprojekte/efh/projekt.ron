@@ -152,6 +152,18 @@ Project(
         125: Railing(storey: 2, path: Flight(stair: 121, flight: 0, side: Right), height: 0.9),
         126: Railing(storey: 2, path: Flight(stair: 121, flight: 1, side: Right), height: 0.9),
         127: Railing(storey: 3, path: Points([(x: 9.6, y: 5.72), (x: 8.6, y: 5.72), (x: 8.6, y: 8.61)]), height: 0.9),
+        // Schleppgaube über Schlafen, Dachfenster über Kind und Bad.
+        128: WallType(
+            name: "Gaubenwand Holzrahmen",
+            layers: [
+                (material: "holz", thickness: 0.024, function: Finish),
+                (material: "daemmung", thickness: 0.16, function: Structure),
+                (material: "gipskarton", thickness: 0.0125, function: Finish),
+            ],
+        ),
+        129: Dormer(roof: 107, edge: 0, offset: 9.0, width: 3.0, setback: 0.2, eave_height: 3.0, slope: 12.0, wall_type: 128, window: Some(width: 1.76, height: 0.9, sill_height: 1.65)),
+        130: RoofWindow(roof: 107, edge: 0, offset: 1.9, width: 0.78, height: 1.4, sill_height: 1.6),
+        131: RoofWindow(roof: 107, edge: 2, offset: 8.0, width: 0.78, height: 1.4, sill_height: 1.6),
         114: ProjectInfo(client: "Familie Muster (Testdaten)", site: "Musterweg 1, 12345 Musterstadt", architect: "Lot Testbüro", building: SmallResidential),
         115: PlanSheet(
             number: "101",

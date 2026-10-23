@@ -158,6 +158,154 @@ impl Roof {
     }
 }
 
+/// Eine Dachfläche, gesehen von ihrer Traufe: Punkt (a, d) liegt `a` entlang
+/// der Traufkante ab ihrem Anfang und `d` waagerecht nach innen.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RoofFace {
+    pub origin: Point2,
+    /// Einheitsvektor entlang der Traufkante.
+    pub along: (f64, f64),
+    /// Einheitsvektor nach innen.
+    pub inward: (f64, f64),
+    pub tan: f64,
+    pub cos: f64,
+}
+
+impl RoofFace {
+    pub fn point(&self, a: f64, d: f64) -> Point2 {
+        Point2::new(
+            self.origin.x + self.along.0 * a + self.inward.0 * d,
+            self.origin.y + self.along.1 * a + self.inward.1 * d,
+        )
+    }
+
+    /// Rechteck a0..a1 × d0..d1 im Grundriss, gegen den Uhrzeigersinn.
+    pub fn rect(&self, (a0, a1): (f64, f64), (d0, d1): (f64, f64)) -> Vec<Point2> {
+        let pts = vec![self.point(a0, d0), self.point(a1, d0), self.point(a1, d1), self.point(a0, d1)];
+        let area: f64 = (0..4).map(|i| pts[i].x * pts[(i + 1) % 4].y - pts[(i + 1) % 4].x * pts[i].y).sum();
+        if area < 0.0 { pts.into_iter().rev().collect() } else { pts }
+    }
+}
+
+impl Roof {
+    /// Dachfläche der Traufe `edge`; `None` bei Giebeln.
+    pub fn face(&self, edge: usize) -> Option<RoofFace> {
+        let RoofEdge::Eave { slope, .. } = *self.edges.get(edge)? else { return None };
+        let n = self.outline.len();
+        let (a, b) = (self.outline[edge], self.outline[(edge + 1) % n]);
+        let len = a.distance(b).max(1e-12);
+        let r = slope.to_radians();
+        Some(RoofFace {
+            origin: a,
+            along: ((b.x - a.x) / len, (b.y - a.y) / len),
+            inward: self.inward(edge),
+            tan: r.tan(),
+            cos: r.cos(),
+        })
+    }
+}
+
+/// Rechteck in einer Dachfläche: Fläche, (a0, a1) entlang der Traufe, (d0, d1) nach innen.
+pub type FaceRect = (RoofFace, (f64, f64), (f64, f64));
+
+/// Dachfenster (1.05) in der Dachfläche einer Traufe, Maße in m.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RoofWindow {
+    pub roof: ElementId,
+    /// Traufkante, zu deren Dachfläche das Fenster gehört.
+    pub edge: usize,
+    /// Mitte des Fensters entlang der Traufe, ab dem Anfang der Kante.
+    pub offset: f64,
+    /// Außenmaß des Rahmens, quer und in Richtung der Neigung.
+    pub width: f64,
+    pub height: f64,
+    /// Höhe der Unterkante auf der Dachhaut über OKFF des Dachgeschosses.
+    pub sill_height: f64,
+}
+
+impl RoofWindow {
+    /// Lage im Grundriss: Dachfläche, (a0, a1) entlang der Traufe, (d0, d1) nach innen.
+    pub fn extent(&self, roof: &Roof) -> Option<FaceRect> {
+        let face = roof.face(self.edge)?;
+        if face.tan < 1e-9 {
+            return None;
+        }
+        let d0 = (self.sill_height - roof.eave_height) / face.tan;
+        let d1 = d0 + self.height * face.cos;
+        Some((face, (self.offset - self.width / 2.0, self.offset + self.width / 2.0), (d0, d1)))
+    }
+}
+
+/// Gaube (1.05), vorerst als Schleppgaube: Vorderwand und zwei Wangen, darüber
+/// ein Pultdach mit geringerer Neigung als das Hauptdach, das in die
+/// Dachfläche der Traufe `edge` einschneidet. Maße in m.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Dormer {
+    pub roof: ElementId,
+    pub edge: usize,
+    /// Mitte der Gaube entlang der Traufe, ab dem Anfang der Kante.
+    pub offset: f64,
+    /// Außenbreite über die Wangen.
+    pub width: f64,
+    /// Abstand der Außenseite der Vorderwand vom Dachumriss nach innen.
+    pub setback: f64,
+    /// Höhe der Dachhaut der Gaube über OKFF, an der Außenseite der Vorderwand.
+    pub eave_height: f64,
+    /// Neigung des Gaubendachs in Grad.
+    pub slope: f64,
+    /// Überstand des Gaubendachs vorn und seitlich, waagerecht.
+    #[serde(default = "default_dormer_overhang")]
+    pub overhang: f64,
+    /// Aufbau von Vorderwand und Wangen, Schichten von außen nach innen.
+    pub wall_type: ElementId,
+    #[serde(default)]
+    pub window: Option<DormerWindow>,
+}
+
+fn default_dormer_overhang() -> f64 {
+    0.3
+}
+
+/// Fenster in der Vorderwand einer Gaube, mittig.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct DormerWindow {
+    pub width: f64,
+    pub height: f64,
+    /// Brüstungshöhe über OKFF.
+    pub sill_height: f64,
+}
+
+impl Dormer {
+    /// Neigung des Gaubendachs als (tan, cos).
+    pub fn pitch(&self) -> (f64, f64) {
+        let r = self.slope.to_radians();
+        (r.tan(), r.cos())
+    }
+
+    /// Wo die Dachhaut der Gaube die des Hauptdachs trifft, als Abstand vom
+    /// Umriss nach innen. `None`, wenn die Gaube nicht aus dem Dach ragt oder
+    /// ihr Dach nicht flacher ist.
+    pub fn ridge_distance(&self, roof: &Roof) -> Option<f64> {
+        let face = roof.face(self.edge)?;
+        let (tan, _) = self.pitch();
+        let front = roof.eave_height + face.tan * self.setback;
+        if self.eave_height <= front + 1e-6 || tan >= face.tan - 1e-9 {
+            return None;
+        }
+        Some(self.setback + (self.eave_height - front) / (face.tan - tan))
+    }
+
+    /// Höhe der Dachhaut der Gaube über OKFF im Abstand `d` vom Umriss.
+    pub fn top_at(&self, d: f64) -> f64 {
+        self.eave_height + self.pitch().0 * (d - self.setback)
+    }
+
+    /// Außenkanten (a0, a1) entlang der Traufe.
+    pub fn span(&self) -> (f64, f64) {
+        (self.offset - self.width / 2.0, self.offset + self.width / 2.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

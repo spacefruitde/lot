@@ -339,8 +339,30 @@ fn draw_roof_lines(
     let paper_ring = |ring: &[[f64; 2]]| ring.iter().map(|p| viewport.to_paper(p[0], p[1])).collect::<Vec<_>>();
     let finder = lot_geom::spaces::SpaceFinder::new(project, storey);
     let rooms: Vec<Vec<PaperPoint>> = finder.enclosed.iter().flat_map(|a| a.rings()).map(|r| paper_ring(&r)).collect();
-    for (_, roof) in roofs {
+    for (roof_id, roof) in roofs {
         let outer: Vec<[f64; 2]> = roof.outer_outline().iter().map(|p| [p.x, p.y]).collect();
+        // Gauben und Dachfenster gestrichelt wie der Dachumriss.
+        let mut outlines: Vec<Vec<lot_model::Point2>> = Vec::new();
+        for (_, d) in project.dormers_in(roof_id) {
+            if let (Some(face), Some(ridge)) = (roof.face(d.edge), d.ridge_distance(roof)) {
+                outlines.push(face.rect(d.span(), (d.setback, ridge)));
+            }
+        }
+        for (_, w) in project.roof_windows_in(roof_id) {
+            if let Some((face, a, d)) = w.extent(roof) {
+                outlines.push(face.rect(a, d));
+            }
+        }
+        for o in outlines {
+            let ring: Vec<[f64; 2]> = o.iter().map(|p| [p.x, p.y]).collect();
+            objects.push(PlanObject::Line(Line {
+                points: paper_ring(&ring),
+                closed: true,
+                pen: Pen::mm(style.pens.hidden),
+                style: LineStyle::Dashed(HIDDEN_DASH.to_vec()),
+                color: Gray::BLACK,
+            }));
+        }
         objects.push(PlanObject::Line(Line {
             points: paper_ring(&outer),
             closed: true,
@@ -349,7 +371,7 @@ fn draw_roof_lines(
             color: Gray::BLACK,
         }));
         for height in [1.0, 2.0] {
-            let region = lot_geom::roofs::clear_height_region(project, roof, height);
+            let region = lot_geom::roofs::clear_height_region(project, roof_id, roof, height);
             let mut labelled = Vec::new();
             for ring in region.rings() {
                 let ring = paper_ring(&ring);

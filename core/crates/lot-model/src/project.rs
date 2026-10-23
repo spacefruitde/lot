@@ -162,6 +162,29 @@ impl Project {
         self.vertical_extent(wall.storey, wall.base_offset, wall.top)
     }
 
+    pub fn roof(&self, id: ElementId) -> Option<&crate::Roof> {
+        match self.elements.get(&id) {
+            Some(Element::Roof(r)) => Some(r),
+            _ => None,
+        }
+    }
+
+    /// Gauben in einem Dach.
+    pub fn dormers_in(&self, roof: ElementId) -> impl Iterator<Item = (ElementId, &crate::Dormer)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Dormer(d) if d.roof == roof => Some((*id, d)),
+            _ => None,
+        })
+    }
+
+    /// Dachfenster in einem Dach.
+    pub fn roof_windows_in(&self, roof: ElementId) -> impl Iterator<Item = (ElementId, &crate::RoofWindow)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::RoofWindow(w) if w.roof == roof => Some((*id, w)),
+            _ => None,
+        })
+    }
+
     pub fn stairs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Stair)> {
         self.elements.iter().filter_map(move |(id, e)| match e {
             Element::Stair(s) if s.storey == storey => Some((*id, s)),

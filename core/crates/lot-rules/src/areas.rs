@@ -119,15 +119,17 @@ impl AreaReport {
 
 /// Wohnfläche eines Bereichs nach WoFlV § 4 Nr. 1 und 2, nach lichter Höhe unter den Dächern.
 fn counted_living_area(project: &Project, storey: ElementId, region: &lot_geom::Area) -> f64 {
-    let roofs: Vec<&lot_model::Roof> = project.roofs_on(storey).map(|(_, r)| r).collect();
+    let roofs: Vec<(ElementId, &lot_model::Roof)> = project.roofs_on(storey).collect();
     if roofs.is_empty() {
         return region.area();
     }
     let ring = |r: &lot_model::Roof| r.outer_outline().iter().map(|p| [p.x, p.y]).collect::<Vec<_>>();
-    let covered =
-        lot_geom::Area::union_all(roofs.iter().map(|r| lot_geom::Area::from_ring(&ring(r))).collect::<Vec<_>>().iter());
+    let covered = lot_geom::Area::union_all(
+        roofs.iter().map(|(_, r)| lot_geom::Area::from_ring(&ring(r))).collect::<Vec<_>>().iter(),
+    );
     let at_least = |h: f64| {
-        let regions: Vec<_> = roofs.iter().map(|r| lot_geom::roofs::clear_height_region(project, r, h)).collect();
+        let regions: Vec<_> =
+            roofs.iter().map(|(id, r)| lot_geom::roofs::clear_height_region(project, *id, r, h)).collect();
         region.intersection(&lot_geom::Area::union_all(regions.iter())).area()
     };
     let open = region.difference(&covered).area();

@@ -298,6 +298,29 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     return Err(invalid("Planblatt: Der Maßstab muss größer als null sein"));
                 }
             }
+            Element::RoofWindow(w) => {
+                let Some(roof) = project.roof(w.roof) else { return Err(invalid("Dachfenster: Das Dach fehlt")) };
+                if roof.face(w.edge).is_none_or(|f| f.tan < 1e-9) {
+                    return Err(invalid("Dachfenster: Es braucht eine geneigte Dachfläche an einer Traufe"));
+                }
+                if w.width < 0.2 || w.height < 0.2 {
+                    return Err(invalid("Dachfenster: Breite und Höhe ab 20 cm"));
+                }
+            }
+            Element::Dormer(d) => {
+                let Some(roof) = project.roof(d.roof) else { return Err(invalid("Gaube: Das Dach fehlt")) };
+                if project.wall_type(d.wall_type).is_none() {
+                    return Err(invalid("Gaube: Der Wandaufbau fehlt"));
+                }
+                if d.width < 0.5 || d.overhang < 0.0 {
+                    return Err(invalid("Gaube: Breite ab 50 cm, Überstand nicht negativ"));
+                }
+                if d.ridge_distance(roof).is_none() {
+                    return Err(invalid(
+                        "Gaube: Sie muss aus der Dachfläche ragen, und ihr Dach muss flacher sein als das Hauptdach",
+                    ));
+                }
+            }
             Element::Stair(s) => {
                 if project.storey(s.storey).is_none() {
                     return Err(invalid("Treppe: Das Geschoss fehlt"));
