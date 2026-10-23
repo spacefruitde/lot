@@ -586,14 +586,22 @@ fn draw_level_marks(
                 })
                 .map(|p| roof.top_at(p))
                 .fold(f64::NEG_INFINITY, f64::max);
-        marks.push((eave, format!("Traufe {}", format_height(eave))));
+        // Flachdächer haben keine Traufe, die Höhe ist die Oberkante der Dachhaut.
+        let label = if roof.eave_planes().is_empty() { "OK Dach" } else { "Traufe" };
+        marks.push((eave, format!("{label} {}", format_height(eave))));
         if ridge > eave + 0.01 {
             marks.push((ridge, format!("First {}", format_height(ridge))));
         }
     }
     let pen = Pen::mm(style.pens.annotation);
+    marks.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // Liegen zwei Höhen dicht beieinander, rückt die obere Beschriftung nach oben.
+    let gap = style.space_text * 1.6;
+    let mut last_text = f64::NEG_INFINITY;
     for (z, text) in marks {
         let p = viewport.to_paper(u, z);
+        let text_y = (p.y + 0.8).max(last_text + gap);
+        last_text = text_y;
         // Waagerechter Strich und offenes Dreieck, das mit der Spitze auf der Höhe steht.
         objects.push(PlanObject::Line(Line {
             points: vec![PaperPoint::new(p.x - 4.0, p.y), PaperPoint::new(p.x + 4.0, p.y)],
@@ -611,7 +619,7 @@ fn draw_level_marks(
         }));
         // Beschriftung links vom Dreieck, damit sie nicht ins Bild läuft.
         objects.push(PlanObject::Text(Text {
-            position: PaperPoint::new(p.x - 2.0, p.y + 0.8),
+            position: PaperPoint::new(p.x - 2.0, text_y),
             text,
             height_mm: style.space_text,
             anchor: Anchor::Right,

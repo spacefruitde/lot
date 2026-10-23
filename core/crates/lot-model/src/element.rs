@@ -102,6 +102,22 @@ impl Element {
         }
     }
 
+    /// Bauzustand (2.05); `None` bei Elementen ohne Bauzustand (Geschosse, Typen, Ansichten).
+    pub fn phase(&self) -> Option<Phase> {
+        Some(match self {
+            Element::Wall(w) => w.phase,
+            Element::Opening(o) => o.phase,
+            Element::Column(c) => c.phase,
+            Element::Slab(s) => s.phase,
+            Element::SlabOpening(o) => o.phase,
+            Element::Stair(s) => s.phase,
+            Element::Railing(r) => r.phase,
+            Element::Roof(r) => r.phase,
+            Element::Space(r) => r.phase,
+            _ => return None,
+        })
+    }
+
     /// Setzt den Bauzustand (2.05). `false`, wenn das Element keinen hat.
     pub fn set_phase(&mut self, phase: Phase) -> bool {
         match self {
@@ -112,6 +128,8 @@ impl Element {
             Element::SlabOpening(o) => o.phase = phase,
             Element::Stair(s) => s.phase = phase,
             Element::Railing(r) => r.phase = phase,
+            Element::Roof(r) => r.phase = phase,
+            Element::Space(r) => r.phase = phase,
             _ => return false,
         }
         true
@@ -599,6 +617,9 @@ pub struct Space {
     /// Abstellräume außerhalb der Wohnung zählen nicht (WoFlV vom 25.11.2003, § 2 Abs. 3).
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub living_space: bool,
+    /// Bestand, Abbruch oder Neubau (2.05); abgebrochene Räume fehlen im Umbauplan.
+    #[serde(default, skip_serializing_if = "Phase::is_new")]
+    pub phase: Phase,
 }
 
 fn yes() -> bool {

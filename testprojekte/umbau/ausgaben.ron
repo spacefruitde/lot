@@ -1,0 +1,13 @@
+// Was `lot-cli render` für das Umbau-Testprojekt schreibt.
+[
+    FloorPlan(name: "eg-bestand", storey: 1, scale: 100.0, phase: Existing),
+    FloorPlan(name: "eg-umbau", storey: 1, scale: 100.0),
+    FloorPlan(name: "eg-neu", storey: 1, scale: 100.0, phase: Planned),
+    FloorPlan(name: "eg-umbau-50", storey: 1, scale: 50.0),
+    PlanView(name: "eg-planansicht", storey: 1, scale: 100.0),
+    Section(name: "schnitt-a", view: 90, scale: 100.0),
+    Section(name: "ansicht-sued", view: 91, scale: 100.0),
+    Section(name: "ansicht-ost", view: 92, scale: 100.0),
+    View3d(name: "umbau-3d"),
+    AreaTable(name: "flaechen", phase: Planned),
+]

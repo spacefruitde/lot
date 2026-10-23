@@ -22,6 +22,9 @@ pub struct Roof {
     pub edges: Vec<RoofEdge>,
     /// Höhe der Dachhaut über OKFF am Umriss (Traufhöhe).
     pub eave_height: f64,
+    /// Bestand, Abbruch oder Neubau (2.05).
+    #[serde(default, skip_serializing_if = "crate::Phase::is_new")]
+    pub phase: crate::Phase,
 }
 
 /// Art einer Umrisskante.
@@ -313,6 +316,7 @@ mod tests {
     /// Satteldach über 10 × 8 m, Traufen an den Längsseiten (y = 0 und y = 8), 45°.
     fn gable_roof() -> Roof {
         Roof {
+            phase: Default::default(),
             storey: ElementId(1),
             roof_type: ElementId(2),
             outline: vec![Point2::new(0.0, 0.0), Point2::new(10.0, 0.0), Point2::new(10.0, 8.0), Point2::new(0.0, 8.0)],

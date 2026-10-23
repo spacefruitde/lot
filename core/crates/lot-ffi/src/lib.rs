@@ -502,6 +502,7 @@ mod tests {
         let id = doc
             .lock()
             .insert(lot_model::Element::Space(lot_model::Space {
+                phase: Default::default(),
                 storey,
                 position: lot_model::Point2::new(1.0, 1.0),
                 number: "0.01".into(),

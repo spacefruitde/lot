@@ -70,8 +70,9 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
             }
             continue;
         }
-        if let Output::AreaTable { name } = &output {
-            let csv = lot_plan::area_table::area_csv(&lot_rules::area_report(&project));
+        if let Output::AreaTable { name, phase } = &output {
+            let csv =
+                lot_plan::area_table::area_csv(&lot_rules::area_report(&lot_cli::phase_project(&project, *phase)));
             write(&out.join(format!("{name}.csv")), csv.as_bytes())?;
         }
         let pages = sheets(&project, &output, &source);

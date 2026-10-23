@@ -36,8 +36,13 @@ pub enum Output {
     View3d { name: String },
     /// Planansicht der App als Bild, ohne Fenster gerechnet.
     PlanView { name: String, storey: u64, scale: f64 },
-    /// Flächenaufstellung nach DIN 277 und WoFlV, als Blatt und als CSV.
-    AreaTable { name: String },
+    /// Flächenaufstellung nach DIN 277 und WoFlV, als Blatt und als CSV; bei
+    /// Umbauten im gewählten Bauzustand (sonst alles).
+    AreaTable {
+        name: String,
+        #[serde(default)]
+        phase: PhaseFilter,
+    },
     /// Schnitt oder Ansicht (Element `view` im Projekt).
     Section {
         name: String,
@@ -58,7 +63,7 @@ impl Output {
             | Output::Catalog { name, .. }
             | Output::View3d { name }
             | Output::PlanView { name, .. }
-            | Output::AreaTable { name }
+            | Output::AreaTable { name, .. }
             | Output::Section { name, .. }
             | Output::PlanSheets { name } => name,
         }
@@ -86,7 +91,10 @@ pub fn sheets(project: &Project, output: &Output, source: &str) -> Vec<Sheet> {
         Output::Catalog { storey, scale, title, cells, .. } => {
             catalog_sheets(project, ElementId(*storey), cells, *scale, standard, title)
         }
-        Output::AreaTable { .. } => lot_plan::area_table::area_sheets(&project.name, &lot_rules::area_report(project)),
+        Output::AreaTable { phase, .. } => {
+            let project = phase_project(project, *phase);
+            lot_plan::area_table::area_sheets(&project.name, &lot_rules::area_report(&project))
+        }
         Output::Section { view, scale, phase, .. } => {
             let project = phase_project(project, *phase);
             match geometry(&project) {

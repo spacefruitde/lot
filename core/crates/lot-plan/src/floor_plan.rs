@@ -124,11 +124,17 @@ fn draw_space_tags(
     style: &ScaleStyle,
     viewport: Viewport,
 ) {
-    let spaces: Vec<_> = project.spaces_on(storey).collect();
+    // Im Umbauplan stehen die Räume nach dem Umbau, mit ihren Flächen ohne die
+    // abgebrochenen Wände.
+    let planned = project.has_phases().then(|| project.phase_view(lot_model::PhaseFilter::Planned));
+    let spaces: Vec<_> = project
+        .spaces_on(storey)
+        .filter(|(_, r)| r.phase != lot_model::Phase::Demolished || planned.is_none())
+        .collect();
     if spaces.is_empty() {
         return;
     }
-    let finder = lot_geom::spaces::SpaceFinder::new(project, storey);
+    let finder = lot_geom::spaces::SpaceFinder::new(planned.as_ref().unwrap_or(project), storey);
     for (_, space) in spaces {
         let area = finder.area_at([space.position.x, space.position.y]).map(|a| a.area());
         let mut lines: Vec<(String, f64)> = Vec::new();
@@ -200,8 +206,11 @@ fn draw_openings(
             [p.x, p.y]
         };
         for (_, o) in project.openings_in(wall_id) {
-            // Zugemauerte Öffnungen zeigt der Umbauplan als rote Fläche ohne Symbol.
-            if o.phase == lot_model::Phase::Demolished && project.has_phases() {
+            // Zugemauerte Öffnungen zeigt der Umbauplan als rote Fläche ohne Symbol,
+            // Öffnungen in abgebrochenen Wänden ohne Symbol.
+            if project.has_phases()
+                && (o.phase == lot_model::Phase::Demolished || wall.phase == lot_model::Phase::Demolished)
+            {
                 continue;
             }
             let (o0, o1) = (bottom + o.sill_height, bottom + o.sill_height + o.height);
@@ -389,7 +398,9 @@ fn draw_roof_lines(
             style: LineStyle::Dashed(HIDDEN_DASH.to_vec()),
             color: Color::BLACK,
         }));
-        for height in [1.0, 2.0] {
+        // Flachdächer haben überall dieselbe lichte Höhe; Linien braucht es nur unter Schrägen.
+        let heights: &[f64] = if roof.eave_planes().is_empty() { &[] } else { &[1.0, 2.0] };
+        for &height in heights {
             let region = lot_geom::roofs::clear_height_region(project, roof_id, roof, height);
             let mut labelled = Vec::new();
             for ring in region.rings() {

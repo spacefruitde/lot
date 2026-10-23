@@ -999,6 +999,7 @@ impl Editor {
     fn new_space(&self, project: &Project, position: Point2, skip: u32) -> Space {
         let below_ground = project.storey(self.storey).is_some_and(|s| s.elevation < -0.01);
         Space {
+            phase: Default::default(),
             storey: self.storey,
             position,
             number: next_space_number(project, self.storey, skip),
@@ -1240,6 +1241,7 @@ impl Editor {
         let knee = if knee.is_finite() { knee } else { storey.height };
         let thickness = project.slab_type(roof_type).map_or(0.0, |t| t.thickness());
         let roof = Roof {
+            phase: Default::default(),
             storey: self.storey,
             roof_type,
             outline,

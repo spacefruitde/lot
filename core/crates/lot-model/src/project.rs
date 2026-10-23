@@ -229,16 +229,7 @@ impl Project {
 
     /// Bauzustand eines Elements; Elemente ohne Bauzustand gelten als Neubau.
     pub fn phase_of(&self, id: ElementId) -> crate::Phase {
-        match self.elements.get(&id) {
-            Some(Element::Wall(w)) => w.phase,
-            Some(Element::Opening(o)) => o.phase,
-            Some(Element::Column(c)) => c.phase,
-            Some(Element::Slab(s)) => s.phase,
-            Some(Element::SlabOpening(o)) => o.phase,
-            Some(Element::Stair(s)) => s.phase,
-            Some(Element::Railing(r)) => r.phase,
-            _ => crate::Phase::New,
-        }
+        self.elements.get(&id).and_then(Element::phase).unwrap_or_default()
     }
 
     /// Gibt es Bestand oder Abbruch? Dann werden Pläne farbig (2.05).
@@ -254,8 +245,12 @@ impl Project {
         if filter == crate::PhaseFilter::All {
             return out;
         }
-        let gone: Vec<ElementId> =
-            self.elements.keys().copied().filter(|id| !self.phase_of(*id).shown_in(filter)).collect();
+        let gone: Vec<ElementId> = self
+            .elements
+            .iter()
+            .filter(|(_, e)| e.phase().is_some_and(|p| !p.shown_in(filter)))
+            .map(|(id, _)| *id)
+            .collect();
         for id in &gone {
             out.elements.remove(id);
         }

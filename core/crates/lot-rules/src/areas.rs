@@ -234,6 +234,7 @@ mod tests {
         p.elements.insert(
             id,
             Element::Space(Space {
+                phase: Default::default(),
                 storey,
                 position: Point2::new(2.5, 2.0),
                 number: "0.01".into(),
@@ -306,6 +307,7 @@ mod tests {
             p.elements.insert(
                 id,
                 Element::Space(Space {
+                    phase: Default::default(),
                     storey,
                     position: Point2::new(x, 2.0),
                     number: String::new(),
@@ -361,6 +363,7 @@ mod roof_tests {
         p.elements.insert(
             id,
             Element::Roof(Roof {
+                phase: Default::default(),
                 storey,
                 roof_type: slab_type,
                 outline: vec![
@@ -382,6 +385,7 @@ mod roof_tests {
         p.elements.insert(
             id,
             Element::Space(Space {
+                phase: Default::default(),
                 storey,
                 position: Point2::new(3.0, 3.0),
                 number: "1.01".into(),
