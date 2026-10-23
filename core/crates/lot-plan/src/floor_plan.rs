@@ -9,7 +9,8 @@
 //! 4. Umriss aller geschnittenen Bauteile (Schnittkante)
 //! 5. Türen und Fenster: Türblatt und Aufschlag, Fensterrahmen; Öffnungen
 //!    über der Schnittebene gestrichelt. Deckendurchbrüche im Boden mit
-//!    Diagonalkreuz, in der Decke darüber gestrichelt
+//!    Diagonalkreuz, in der Decke darüber gestrichelt. Treppen und Geländer
+//!    (siehe [`crate::stairs`])
 //! 6. Dach: Umriss mit Überstand gestrichelt, Linien gleicher lichter Höhe
 //!    (1,00 m und 2,00 m) in den Räumen darunter
 //! 7. Achsen mit Achskreisen
@@ -75,6 +76,9 @@ pub fn floor_plan(
     // 5. Türen und Fenster, Deckendurchbrüche.
     draw_openings(&mut objects, project, view.storey, z_cut, style, viewport);
     draw_slab_openings(&mut objects, project, view.storey, style, viewport);
+
+    // 5a. Treppen und Geländer.
+    crate::stairs::draw_stairs(&mut objects, project, view.storey, view.cut_height, style, viewport);
 
     // 6. Dach.
     draw_roof_lines(&mut objects, project, view.storey, style, viewport);
@@ -286,8 +290,9 @@ fn draw_slab_openings(
             let ring: Vec<[f64; 2]> = o.outline.iter().map(|p| [p.x, p.y]).collect();
             if own {
                 objects.push(line(ring.clone(), style.pens.view, false, true));
-                // Diagonalkreuz über die Ecken des umschließenden Rechtecks der ersten vier Punkte.
-                if ring.len() >= 4 {
+                // Diagonalkreuz über die Ecken des umschließenden Rechtecks der
+                // ersten vier Punkte; nicht, wo eine Treppe von unten heraufkommt.
+                if ring.len() >= 4 && !stair_from_below(project, storey, &ring) {
                     objects.push(line(vec![ring[0], ring[2]], style.pens.hatch, false, false));
                     objects.push(line(vec![ring[1], ring[3]], style.pens.hatch, false, false));
                 }
@@ -296,6 +301,21 @@ fn draw_slab_openings(
             }
         }
     }
+}
+
+/// Ob eine Treppe aus dem Geschoss darunter im Durchbruch `ring` ankommt.
+fn stair_from_below(project: &Project, storey: ElementId, ring: &[[f64; 2]]) -> bool {
+    let storeys = project.storeys();
+    let Some(below) = storeys.iter().position(|(id, _)| *id == storey).and_then(|i| i.checked_sub(1)) else {
+        return false;
+    };
+    let hole = Area::from_ring(ring);
+    project.stairs_on(storeys[below].0).filter_map(|(_, s)| project.stair_layout(s)).any(|layout| {
+        layout.flights.iter().flat_map(|f| layout.treads(f)).any(|t| {
+            let c = t.outline.iter().fold([0.0, 0.0], |acc, p| [acc[0] + p.x / 4.0, acc[1] + p.y / 4.0]);
+            hole.contains(c)
+        })
+    })
 }
 
 /// Strichlänge und Lücke der Linien gleicher lichter Höhe, in mm auf dem Blatt.

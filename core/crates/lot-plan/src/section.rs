@@ -116,6 +116,7 @@ pub fn section(
 
     // 2. Sichtbare Kanten dahinter.
     let mut buffer = DepthBuffer::new(&meshes, view.depth);
+    buffer.underground = cut_all.bounds().map(|(lo, hi)| (lo[0], hi[0]));
     for (e, uvw) in &meshes {
         for t in &e.mesh.triangles {
             buffer.fill(t.map(|i| uvw[i as usize]));
@@ -300,6 +301,9 @@ struct DepthBuffer {
     res: f64,
     depth: Vec<f64>,
     max_w: f64,
+    /// Bereich in u, in dem Kanten unter dem Gelände sichtbar sind: im Schnitt
+    /// innerhalb des geschnittenen Gebäudes (Kellerräume), in Ansichten nirgends.
+    underground: Option<(f64, f64)>,
 }
 
 impl DepthBuffer {
@@ -315,14 +319,21 @@ impl DepthBuffer {
             }
         }
         if !lo[0].is_finite() {
-            return Self { origin: [0.0, 0.0], size: [0, 0], res: RESOLUTION, depth: Vec::new(), max_w };
+            return Self {
+                origin: [0.0, 0.0],
+                size: [0, 0],
+                res: RESOLUTION,
+                depth: Vec::new(),
+                max_w,
+                underground: None,
+            };
         }
         // Rand für Dreiecke, die erst nach dem Kappen an der Ebene hineinreichen.
         let pad = 1.0;
         let (lo, hi) = ([lo[0] - pad, lo[1] - pad], [hi[0] + pad, hi[1] + pad]);
         let res = RESOLUTION.max((hi[0] - lo[0]).max(hi[1] - lo[1]) / 4000.0);
         let size = [((hi[0] - lo[0]) / res).ceil() as usize + 1, ((hi[1] - lo[1]) / res).ceil() as usize + 1];
-        Self { origin: lo, size, res, depth: vec![f64::INFINITY; size[0] * size[1]], max_w }
+        Self { origin: lo, size, res, depth: vec![f64::INFINITY; size[0] * size[1]], max_w, underground: None }
     }
 
     /// Ausdehnung der gezeichneten Fläche (ohne Rand).
@@ -422,7 +433,8 @@ impl DepthBuffer {
         for k in 0..=steps {
             let s = k as f64 / steps as f64;
             let r = [p[0] + (q[0] - p[0]) * s, p[1] + (q[1] - p[1]) * s, p[2] + (q[2] - p[2]) * s];
-            let shown = r[1] >= GROUND - 1e-6 && self.visible(r);
+            let underground = self.underground.is_some_and(|(u0, u1)| r[0] > u0 && r[0] < u1);
+            let shown = (r[1] >= GROUND - 1e-6 || underground) && self.visible(r);
             match (shown, run) {
                 (true, None) => run = Some(s),
                 (false, Some(s0)) => {

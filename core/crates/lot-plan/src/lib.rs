@@ -13,6 +13,7 @@ pub mod layout;
 pub mod m0;
 pub mod section;
 pub mod sheets;
+pub mod stairs;
 pub mod standard;
 
 /// Punkt auf dem Blatt in Millimetern.

@@ -162,6 +162,32 @@ impl Project {
         self.vertical_extent(wall.storey, wall.base_offset, wall.top)
     }
 
+    pub fn stairs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Stair)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Stair(s) if s.storey == storey => Some((*id, s)),
+            _ => None,
+        })
+    }
+
+    pub fn stair(&self, id: ElementId) -> Option<&crate::Stair> {
+        match self.elements.get(&id) {
+            Some(Element::Stair(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Form einer Treppe; sie überwindet die Geschosshöhe ihres Geschosses.
+    pub fn stair_layout(&self, stair: &crate::Stair) -> Option<crate::StairLayout> {
+        Some(stair.layout(self.storey(stair.storey)?.height))
+    }
+
+    pub fn railings_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Railing)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Railing(r) if r.storey == storey => Some((*id, r)),
+            _ => None,
+        })
+    }
+
     /// Angaben für den Plankopf; leer, wenn das Projekt keine hat.
     pub fn info(&self) -> crate::ProjectInfo {
         self.elements

@@ -6,6 +6,7 @@
 //! - [`spaces`]: Räume als von Wänden umschlossene Flächen
 //! - [`slabs`]: Decken und Bodenplatten
 //! - [`roofs`]: Dächer und lichte Höhen darunter
+//! - [`stairs`]: Treppen und Geländer
 //! - [`build`]: 3D-Körper aus den Schichtflächen, Höhenabschnitt für
 //!   Höhenabschnitt hochgezogen und mit manifold-rust vereinigt (ADR 0004)
 
@@ -17,6 +18,7 @@ pub mod poly;
 pub mod roofs;
 pub mod slabs;
 pub mod spaces;
+pub mod stairs;
 
 use std::collections::BTreeMap;
 
@@ -148,6 +150,26 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
     .into_iter()
     .flatten()
     .collect();
+    // Treppen und Geländer.
+    let stairs: Vec<_> = project
+        .elements
+        .iter()
+        .filter(|(_, e)| matches!(e, lot_model::Element::Stair(_) | lot_model::Element::Railing(_)))
+        .collect();
+    let stair_elements: Vec<ElementGeometry> = parallel_map(&stairs, |(id, e)| {
+        let solids = match e {
+            lot_model::Element::Stair(s) => stairs::stair_solids(project, s),
+            lot_model::Element::Railing(r) => stairs::railing_solids(project, r),
+            _ => Vec::new(),
+        };
+        solids
+            .into_iter()
+            .map(|(layer, material, solid)| ElementGeometry { id: **id, layer, material, mesh: to_trimesh(&solid) })
+            .collect::<Vec<_>>()
+    })
+    .into_iter()
+    .flatten()
+    .collect();
     let under: BTreeMap<ElementId, Manifold> =
         roofs.iter().filter_map(|(_, r)| Some((r.storey, roofs::under_roof(project, r)?))).collect();
     let slab_elements: Vec<ElementGeometry> = slab_solids
@@ -184,6 +206,7 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
             .chain(slab_elements)
             .chain(roof_elements)
             .chain(opening_elements)
+            .chain(stair_elements)
             .filter(|e| !e.mesh.is_empty())
             .collect(),
     })

@@ -89,6 +89,11 @@ OfficeStandard(
             color: (226, 214, 196),
             cut: Empty,
         ),
+        "stahl": Material(
+            name: "Stahl",
+            color: (96, 100, 106),
+            cut: Empty,
+        ),
         "klinker": Material(
             name: "Klinker (Vormauerschale)",
             color: (176, 108, 84),

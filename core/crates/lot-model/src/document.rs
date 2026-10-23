@@ -298,6 +298,39 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     return Err(invalid("Planblatt: Der Maßstab muss größer als null sein"));
                 }
             }
+            Element::Stair(s) => {
+                if project.storey(s.storey).is_none() {
+                    return Err(invalid("Treppe: Das Geschoss fehlt"));
+                }
+                if s.flights.is_empty() || s.flights.iter().any(|f| f.risers < 2) {
+                    return Err(invalid("Treppe: Jeder Lauf braucht mindestens zwei Steigungen"));
+                }
+                if s.width < 0.3 || s.tread < 0.1 || s.thickness < 0.02 {
+                    return Err(invalid("Treppe: Laufbreite ab 30 cm, Auftritt ab 10 cm, Laufplatte ab 2 cm"));
+                }
+                if s.direction.x.hypot(s.direction.y) < 1e-9 {
+                    return Err(invalid("Treppe: Die Laufrichtung fehlt"));
+                }
+            }
+            Element::Railing(r) => {
+                if project.storey(r.storey).is_none() {
+                    return Err(invalid("Geländer: Das Geschoss fehlt"));
+                }
+                if r.height < 0.3 {
+                    return Err(invalid("Geländer: Die Höhe muss mindestens 30 cm betragen"));
+                }
+                match &r.path {
+                    crate::RailingPath::Points(points) => {
+                        if points.len() < 2 {
+                            return Err(invalid("Geländer: Der Verlauf braucht mindestens zwei Punkte"));
+                        }
+                    }
+                    crate::RailingPath::Flight { stair, flight, .. } => match project.stair(*stair) {
+                        Some(s) if s.storey == r.storey && *flight < s.flights.len() => {}
+                        _ => return Err(invalid("Geländer: Treppe oder Lauf fehlt")),
+                    },
+                }
+            }
             Element::SectionView(v) => {
                 if v.start.distance(v.end) < MIN_LENGTH || v.depth <= 0.0 {
                     return Err(invalid("Schnitt: Linie und Blicktiefe müssen größer als null sein"));

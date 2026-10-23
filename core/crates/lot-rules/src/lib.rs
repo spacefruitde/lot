@@ -5,7 +5,10 @@
 //!
 //! - [`areas`]: Flächen nach DIN 277:2021-08 (4.01) und Wohnfläche nach der
 //!   Wohnflächenverordnung (WoFlV) vom 25.11.2003 (4.02), dazu der Brutto-Rauminhalt (4.03)
+//! - [`stairs`]: Treppen nach DIN 18065:2020-08 (1.07)
 
 pub mod areas;
+pub mod stairs;
 
 pub use areas::{AreaReport, SpaceArea, StoreyAreas, area_report};
+pub use stairs::{StairCheck, check_stairs};

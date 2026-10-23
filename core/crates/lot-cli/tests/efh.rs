@@ -34,3 +34,16 @@ fn efh_plan_sheets_are_complete() {
     assert_eq!(storeys.len(), project.storeys().len());
     assert_eq!((sections, elevations), (2, 4));
 }
+
+#[test]
+fn efh_stairs_meet_din_18065() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../testprojekte/efh/projekt.ron");
+    let project = lot_io::testproject::load(&path).unwrap();
+    let checks = lot_rules::check_stairs(&project);
+    assert_eq!(checks.len(), 2);
+    for c in &checks {
+        assert!(c.problems.is_empty(), "{:?}", c.problems);
+        let clear = c.headroom.unwrap();
+        assert!(clear >= 2.0, "lichte Durchgangshöhe {clear}");
+    }
+}

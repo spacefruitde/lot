@@ -38,6 +38,8 @@ pub enum Element {
     Slab(Slab),
     SlabOpening(SlabOpening),
     Roof(crate::Roof),
+    Stair(crate::Stair),
+    Railing(crate::Railing),
     SectionView(SectionView),
     ProjectInfo(ProjectInfo),
     PlanSheet(PlanSheet),
@@ -58,6 +60,8 @@ pub enum ElementKind {
     Slab,
     SlabOpening,
     Roof,
+    Stair,
+    Railing,
     SectionView,
     ProjectInfo,
     PlanSheet,
@@ -78,6 +82,8 @@ impl Element {
             Element::Slab(_) => ElementKind::Slab,
             Element::SlabOpening(_) => ElementKind::SlabOpening,
             Element::Roof(_) => ElementKind::Roof,
+            Element::Stair(_) => ElementKind::Stair,
+            Element::Railing(_) => ElementKind::Railing,
             Element::SectionView(_) => ElementKind::SectionView,
             Element::ProjectInfo(_) => ElementKind::ProjectInfo,
             Element::PlanSheet(_) => ElementKind::PlanSheet,
@@ -770,6 +776,19 @@ pub struct ProjectInfo {
     /// Entwurfsverfasser (Büro).
     #[serde(default)]
     pub architect: String,
+    /// Gebäudeart, bestimmt etwa die Grenzwerte für Treppen.
+    #[serde(default)]
+    pub building: BuildingClass,
+}
+
+/// Gebäudeart nach DIN 18065:2020-08, Tabelle 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum BuildingClass {
+    /// Sonstige Gebäude (strengere Grenzwerte).
+    #[default]
+    General,
+    /// Wohngebäude mit nicht mehr als zwei Wohnungen, und innerhalb von Wohnungen.
+    SmallResidential,
 }
 
 /// Planblatt (3.07) mit Plankopf und darauf platzierten Ansichten.

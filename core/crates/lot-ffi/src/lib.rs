@@ -248,6 +248,8 @@ impl LotDocument {
             Some(lot_model::Element::SlabType(t)) => format!("Deckenaufbau {}", t.name),
             Some(lot_model::Element::SlabOpening(_)) => "Deckendurchbruch".into(),
             Some(lot_model::Element::Roof(_)) => "Dach".into(),
+            Some(lot_model::Element::Stair(s)) => format!("Treppe · {} Steigungen", s.risers()),
+            Some(lot_model::Element::Railing(_)) => "Geländer".into(),
             Some(lot_model::Element::SectionView(v)) => v.name.clone(),
             Some(lot_model::Element::ProjectInfo(_)) => "Projektangaben".into(),
             Some(lot_model::Element::PlanSheet(s)) => format!("Planblatt {} {}", s.number, s.title),

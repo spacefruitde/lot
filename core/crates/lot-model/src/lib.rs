@@ -13,14 +13,16 @@ mod element;
 mod operation;
 mod project;
 mod roof;
+mod stair;
 
 pub use document::{Document, ModelError};
 pub use element::{
-    CircularArc, Column, ColumnProfile, DimRef, DimensionChain, Door, Element, ElementId, ElementKind, GridLine,
-    Handing, Layer, LayerFunction, Opening, OpeningKind, Param, PlacedView, PlanSheet, Point2, ProjectInfo,
+    BuildingClass, CircularArc, Column, ColumnProfile, DimRef, DimensionChain, Door, Element, ElementId, ElementKind,
+    GridLine, Handing, Layer, LayerFunction, Opening, OpeningKind, Param, PlacedView, PlanSheet, Point2, ProjectInfo,
     SectionKind, SectionView, Slab, SlabKind, SlabOpening, SlabType, Space, SpaceUsage, Storey, Top, ViewContent, Wall,
     WallAlignment, WallEnd, WallSide, WallType,
 };
 pub use operation::Operation;
 pub use project::Project;
 pub use roof::{EavePlane, Roof, RoofEdge};
+pub use stair::{FlightLayout, Landing, Railing, RailingPath, Stair, StairFlight, StairLayout, Tread};
