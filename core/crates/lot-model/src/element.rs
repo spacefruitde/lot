@@ -37,6 +37,7 @@ pub enum Element {
     SlabType(SlabType),
     Slab(Slab),
     SlabOpening(SlabOpening),
+    Roof(crate::Roof),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -53,6 +54,7 @@ pub enum ElementKind {
     SlabType,
     Slab,
     SlabOpening,
+    Roof,
 }
 
 impl Element {
@@ -69,6 +71,7 @@ impl Element {
             Element::SlabType(_) => ElementKind::SlabType,
             Element::Slab(_) => ElementKind::Slab,
             Element::SlabOpening(_) => ElementKind::SlabOpening,
+            Element::Roof(_) => ElementKind::Roof,
         }
     }
 
@@ -79,11 +82,11 @@ impl Element {
             (Element::Wall(w), Param::WallSagitta) => Some(w.sagitta),
             (Element::Wall(w), Param::WallHeight) => match w.top {
                 Top::Height(h) => Some(h),
-                Top::Storey { .. } => None,
+                Top::Storey { .. } | Top::Roof { .. } => None,
             },
             (Element::Wall(w), Param::WallTopOffset) => match w.top {
                 Top::Storey { offset } => Some(offset),
-                Top::Height(_) => None,
+                Top::Height(_) | Top::Roof { .. } => None,
             },
             (Element::Wall(w), Param::BaseOffset) => Some(w.base_offset),
             (Element::Column(c), Param::BaseOffset) => Some(c.base_offset),
@@ -101,6 +104,11 @@ impl Element {
                 ColumnProfile::Rectangle { depth, .. } => Some(depth),
                 ColumnProfile::Circle { .. } => None,
             },
+            (Element::Roof(r), Param::RoofEaveHeight) => Some(r.eave_height),
+            (Element::Roof(r), Param::RoofSlope) => r.edges.iter().find_map(|e| match e {
+                crate::RoofEdge::Eave { slope, .. } => Some(*slope),
+                crate::RoofEdge::Gable { .. } => None,
+            }),
             _ => None,
         }
     }
@@ -130,6 +138,14 @@ impl Element {
             (Element::Column(c), Param::ColumnDepth) => {
                 if let ColumnProfile::Rectangle { depth, .. } = &mut c.profile {
                     *depth = value;
+                }
+            }
+            (Element::Roof(r), Param::RoofEaveHeight) => r.eave_height = value,
+            (Element::Roof(r), Param::RoofSlope) => {
+                for e in &mut r.edges {
+                    if let crate::RoofEdge::Eave { slope, .. } = e {
+                        *slope = value;
+                    }
                 }
             }
             _ => return false,
@@ -232,6 +248,8 @@ pub enum Top {
     Height(f64),
     /// Bis OKFF des darüberliegenden Geschosses (Geschosshöhe), plus Versatz.
     Storey { offset: f64 },
+    /// Bis unter das Dach desselben Geschosses, plus Versatz (Giebelwände, Wände im Dachgeschoss).
+    Roof { offset: f64 },
 }
 
 /// Wand (IfcWall). Die Bezugslinie läuft von `start` nach `end`.
@@ -721,6 +739,10 @@ pub enum Param {
     /// Breite einer Rechteckstütze oder Durchmesser einer Rundstütze.
     ColumnWidth,
     ColumnDepth,
+    /// Traufhöhe eines Dachs über OKFF.
+    RoofEaveHeight,
+    /// Neigung aller Traufen eines Dachs, in Grad.
+    RoofSlope,
 }
 
 #[cfg(test)]

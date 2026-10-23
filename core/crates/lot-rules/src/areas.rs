@@ -20,8 +20,9 @@
 //! - § 3 Abs. 3 Nr. 1: Stützen bis 0,1 m² Grundfläche oder bis 1,50 m Höhe werden nicht abgezogen.
 //! - § 3 Abs. 3 Nr. 3: Türnischen bleiben außer Betracht; das ergibt sich, weil
 //!   Räume ohne Öffnungen ermittelt werden.
-//! - § 4: Anrechnung nach lichter Höhe (unter 1 m gar nicht, 1 bis 2 m zur Hälfte).
-//!   Ohne Dachschrägen im Modell (M3) haben alle Räume volle Höhe und zählen ganz.
+//! - § 4 Nr. 1 und 2: Flächen mit mindestens 2 m lichter Höhe zählen ganz, mit
+//!   1 bis 2 m zur Hälfte, unter 1 m gar nicht. Die lichte Höhe ergibt sich aus
+//!   der Unterseite der Dächer im selben Geschoss; außerhalb von Dächern zählt alles ganz.
 
 use lot_geom::spaces::SpaceFinder;
 use lot_model::{ElementId, Project, SpaceUsage};
@@ -116,6 +117,25 @@ impl AreaReport {
     }
 }
 
+/// Wohnfläche eines Bereichs nach WoFlV § 4 Nr. 1 und 2, nach lichter Höhe unter den Dächern.
+fn counted_living_area(project: &Project, storey: ElementId, region: &lot_geom::Area) -> f64 {
+    let roofs: Vec<&lot_model::Roof> = project.roofs_on(storey).map(|(_, r)| r).collect();
+    if roofs.is_empty() {
+        return region.area();
+    }
+    let ring = |r: &lot_model::Roof| r.outer_outline().iter().map(|p| [p.x, p.y]).collect::<Vec<_>>();
+    let covered =
+        lot_geom::Area::union_all(roofs.iter().map(|r| lot_geom::Area::from_ring(&ring(r))).collect::<Vec<_>>().iter());
+    let at_least = |h: f64| {
+        let regions: Vec<_> = roofs.iter().map(|r| lot_geom::roofs::clear_height_region(project, r, h)).collect();
+        region.intersection(&lot_geom::Area::union_all(regions.iter())).area()
+    };
+    let open = region.difference(&covered).area();
+    let full = at_least(2.0);
+    let half = at_least(1.0) - full;
+    open + full + 0.5 * half
+}
+
 /// Rechnet die Flächen aller Geschosse.
 pub fn area_report(project: &Project) -> AreaReport {
     let mut report = AreaReport::default();
@@ -140,8 +160,11 @@ pub fn area_report(project: &Project) -> AreaReport {
                 None => report.warnings.push(format!("Raum {label} ist nicht von Wänden umschlossen")),
             }
             let net = finder.area_at(p).map(|a| a.area());
-            // WoFlV § 4 Nr. 1: Ohne Dachschrägen haben alle Räume mindestens 2 m lichte Höhe.
-            let living = if space.living_space { finder.living_area_at(p) } else { None };
+            let living = if space.living_space {
+                finder.living_region_at(p).map(|region| counted_living_area(project, storey_id, &region))
+            } else {
+                None
+            };
             spaces.push(SpaceArea {
                 id,
                 number: space.number.clone(),
@@ -292,5 +315,81 @@ mod tests {
         assert_eq!(r.warnings.len(), 2, "{:?}", r.warnings);
         assert!(r.warnings.iter().any(|w| w.contains("Doppelt") && w.contains("0.01 Wohnen")));
         assert!(r.warnings.iter().any(|w| w.contains("Draußen") && w.contains("nicht von Wänden")));
+    }
+}
+
+#[cfg(test)]
+mod roof_tests {
+    use lot_model::{Element, Point2, Roof, RoofEdge, Space, SpaceUsage, Top, Wall, WallAlignment};
+
+    use super::*;
+
+    #[test]
+    fn sloped_ceiling_reduces_living_area() {
+        // Raum 6 × 6 m (Achsmaß, tragende Innenwände 20,5 cm) unter einem Pultdach,
+        // das an der Südseite (y = 0) mit 45° ansteigt; Dachunterseite am Umriss 0,5 m über OKFF.
+        let mut p = Project::template("Test");
+        let storey = p.storeys()[0].0;
+        let wall_type = p.wall_types().find(|(_, t)| t.name.contains("tragend")).unwrap().0;
+        for (a, b) in
+            [((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 6.0)), ((6.0, 6.0), (0.0, 6.0)), ((0.0, 6.0), (0.0, 0.0))]
+        {
+            let id = p.next_id();
+            p.elements.insert(
+                id,
+                Element::Wall(Wall {
+                    storey,
+                    wall_type,
+                    start: Point2::new(a.0, a.1),
+                    end: Point2::new(b.0, b.1),
+                    alignment: WallAlignment::Center,
+                    base_offset: 0.0,
+                    top: Top::Roof { offset: 0.0 },
+                    sagitta: 0.0,
+                }),
+            );
+        }
+        let slab_type = p.slab_types().next().unwrap().0;
+        let thickness = p.slab_type(slab_type).unwrap().thickness();
+        let id = p.next_id();
+        let r = 45f64.to_radians();
+        p.elements.insert(
+            id,
+            Element::Roof(Roof {
+                storey,
+                roof_type: slab_type,
+                outline: vec![
+                    Point2::new(0.0, 0.0),
+                    Point2::new(6.0, 0.0),
+                    Point2::new(6.0, 6.0),
+                    Point2::new(0.0, 6.0),
+                ],
+                edges: vec![
+                    RoofEdge::Eave { slope: 45.0, overhang: 0.0 },
+                    RoofEdge::Gable { overhang: 0.0 },
+                    RoofEdge::Gable { overhang: 0.0 },
+                    RoofEdge::Gable { overhang: 0.0 },
+                ],
+                eave_height: 0.5 + thickness / r.cos(),
+            }),
+        );
+        let id = p.next_id();
+        p.elements.insert(
+            id,
+            Element::Space(Space {
+                storey,
+                position: Point2::new(3.0, 3.0),
+                number: "1.01".into(),
+                name: "Studio".into(),
+                usage: SpaceUsage::Living,
+                living_space: true,
+            }),
+        );
+        let space = &area_report(&p).storeys[0].spaces[0];
+        // Lichte Höhe 1 m bei y = 0,5, 2 m bei y = 1,5; der Raum reicht innen von y = 0,1025 bis 5,8975.
+        let width = 6.0 - 0.205;
+        let expected = width * (5.8975 - 1.5) + 0.5 * width * 1.0;
+        assert!((space.living.unwrap() - expected).abs() < 1e-6, "{} statt {expected}", space.living.unwrap());
+        assert!((space.net.unwrap() - width * width).abs() < 1e-6, "NRF bleibt ganz");
     }
 }

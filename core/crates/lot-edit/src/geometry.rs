@@ -149,6 +149,21 @@ fn other_elements(project: &Project, storey: ElementId, p: Point2, tolerance: f6
     dimension_at(project, storey, p, tolerance)
         .or_else(|| walls_columns_grids(project, storey, p, tolerance))
         .or_else(|| slab_opening_at(project, storey, p, tolerance))
+        .or_else(|| roof_at(project, storey, p, tolerance))
+}
+
+/// Das Dach des Geschosses, dessen Umriss mit Überstand am Punkt liegt.
+fn roof_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    project
+        .roofs_on(storey)
+        .filter_map(|(id, r)| {
+            let outer = r.outer_outline();
+            let n = outer.len();
+            let d = (0..n).map(|i| segment_distance(outer[i], outer[(i + 1) % n], p)).fold(f64::INFINITY, f64::min);
+            (d <= tolerance).then_some((id, d))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
 }
 
 /// Der Deckendurchbruch des Geschosses, dessen Rand am Punkt liegt.
@@ -203,6 +218,7 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
         Element::Column(c) => Some(column_outline(c)),
         Element::Opening(o) => opening_outline(project, o),
         Element::SlabOpening(o) => Some(o.outline.iter().map(|p| [p.x, p.y]).collect()),
+        Element::Roof(r) => Some(r.outer_outline().iter().map(|p| [p.x, p.y]).collect()),
         Element::DimensionChain(d) => {
             let (a, b) = dimension_extent(project, d)?;
             let len = a.distance(b).max(1e-9);
@@ -279,6 +295,11 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
                 let mut n = o.clone();
                 n.outline = o.outline.iter().map(|p| shift(*p)).collect();
                 changes.push((*id, Element::SlabOpening(n)));
+            }
+            Some(Element::Roof(r)) => {
+                let mut n = r.clone();
+                n.outline = r.outline.iter().map(|p| shift(*p)).collect();
+                changes.push((*id, Element::Roof(n)));
             }
             Some(Element::Slab(s)) => {
                 let mut n = s.clone();

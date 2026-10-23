@@ -66,6 +66,7 @@ struct LotApp: App {
                 Button("Gewählte Wände bemaßen") { model.run("DimensionWalls") }
                 Button("Decke aus Wänden") { model.run("SlabFromWalls") }
                 Button("Deckendurchbruch zeichnen") { model.run("SlabOpeningTool") }
+                Button("Satteldach über dem Geschoss") { model.run("GableRoofFromWalls") }
                 Divider()
                 Button("Alles auswählen") { model.run("SelectAll") }
                     .keyboardShortcut("a")

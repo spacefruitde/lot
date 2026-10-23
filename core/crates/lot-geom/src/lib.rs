@@ -5,6 +5,7 @@
 //! - [`joins`]: Wandanschlüsse im Grundriss, je Schicht eine Fläche
 //! - [`spaces`]: Räume als von Wänden umschlossene Flächen
 //! - [`slabs`]: Decken und Bodenplatten
+//! - [`roofs`]: Dächer und lichte Höhen darunter
 //! - [`build`]: 3D-Körper aus den Schichtflächen, Höhenabschnitt für
 //!   Höhenabschnitt hochgezogen und mit manifold-rust vereinigt (ADR 0004)
 
@@ -12,6 +13,7 @@ pub mod dimensions;
 pub mod joins;
 mod mesh;
 pub mod poly;
+pub mod roofs;
 pub mod slabs;
 pub mod spaces;
 
@@ -110,6 +112,26 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
     // Wände und Stützen enden unter den Decken, die auf ihnen liegen.
     let all_slabs: Vec<Manifold> = slab_solids.iter().map(|s| s.3.clone()).collect();
     let cut = if all_slabs.is_empty() { None } else { Some(Manifold::batch_boolean(&all_slabs, OpType::Add)) };
+    // Dächer, und der Raum unter jedem Dach für Wände, die bis unter das Dach reichen.
+    let roofs: Vec<_> = project
+        .elements
+        .iter()
+        .filter_map(|(id, e)| match e {
+            lot_model::Element::Roof(r) => Some((*id, r)),
+            _ => None,
+        })
+        .collect();
+    let roof_elements: Vec<ElementGeometry> = parallel_map(&roofs, |(id, roof)| {
+        roofs::roof_solids(project, roof)
+            .into_iter()
+            .map(|(layer, material, solid)| ElementGeometry { id: *id, layer, material, mesh: to_trimesh(&solid) })
+            .collect::<Vec<_>>()
+    })
+    .into_iter()
+    .flatten()
+    .collect();
+    let under: BTreeMap<ElementId, Manifold> =
+        roofs.iter().filter_map(|(_, r)| Some((r.storey, roofs::under_roof(project, r)?))).collect();
     let slab_elements: Vec<ElementGeometry> = slab_solids
         .into_iter()
         .map(|(id, layer, material, solid)| ElementGeometry { id, layer, material, mesh: to_trimesh(&solid) })
@@ -126,9 +148,26 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
             Some(cut) => solid.difference(cut),
             None => solid,
         };
+        // Bis unter das Dach: oberhalb der Dachunterseite abschneiden.
+        let to_roof = match project.elements.get(id) {
+            Some(lot_model::Element::Wall(w)) => matches!(w.top, lot_model::Top::Roof { .. }).then_some(w.storey),
+            Some(lot_model::Element::Column(c)) => matches!(c.top, lot_model::Top::Roof { .. }).then_some(c.storey),
+            _ => None,
+        };
+        let solid = match to_roof.and_then(|s| under.get(&s)) {
+            Some(space) => solid.intersection(space),
+            None => solid,
+        };
         ElementGeometry { id: *id, layer: *layer, material: material.clone(), mesh: to_trimesh(&solid) }
     });
-    Ok(ModelGeometry { elements: elements.into_iter().chain(slab_elements).filter(|e| !e.mesh.is_empty()).collect() })
+    Ok(ModelGeometry {
+        elements: elements
+            .into_iter()
+            .chain(slab_elements)
+            .chain(roof_elements)
+            .filter(|e| !e.mesh.is_empty())
+            .collect(),
+    })
 }
 
 /// `f` auf alle Einträge angewandt, verteilt auf die Prozessorkerne. Die

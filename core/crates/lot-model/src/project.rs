@@ -142,6 +142,17 @@ impl Project {
         let top = match top {
             Top::Height(h) => bottom + h,
             Top::Storey { offset } => s.elevation + s.height + offset,
+            Top::Roof { offset } => {
+                // Höchster Punkt der Dachunterseite; im 3D wird darunter genau geschnitten.
+                let highest = self
+                    .roofs_on(storey)
+                    .flat_map(|(_, r)| {
+                        let t = self.roof_thickness(r);
+                        r.outline.clone().into_iter().chain(ridge_samples(r)).map(move |p| r.underside_at(p, t))
+                    })
+                    .fold(f64::NEG_INFINITY, f64::max);
+                if highest.is_finite() { s.elevation + highest + offset } else { s.elevation + s.height + offset }
+            }
         };
         Some((bottom, top))
     }
@@ -149,6 +160,18 @@ impl Project {
     /// Unter- und Oberkante einer Wand über ±0,00.
     pub fn wall_extent(&self, wall: &Wall) -> Option<(f64, f64)> {
         self.vertical_extent(wall.storey, wall.base_offset, wall.top)
+    }
+
+    pub fn roofs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Roof)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Roof(r) if r.storey == storey => Some((*id, r)),
+            _ => None,
+        })
+    }
+
+    /// Dicke eines Dachs aus seinem Aufbau, senkrecht zur Dachfläche.
+    pub fn roof_thickness(&self, roof: &crate::Roof) -> f64 {
+        self.slab_type(roof.roof_type).map_or(0.0, |t| t.thickness())
     }
 
     /// Neues, leeres Projekt mit einem Erdgeschoss und üblichen Wandaufbauten.
@@ -219,6 +242,14 @@ impl Project {
                     layer("stahlbeton", 0.25, Structure),
                 ],
             ),
+            (
+                "Steildach Sparren 22",
+                vec![
+                    layer("dachziegel", 0.06, Finish),
+                    layer("daemmung", 0.22, Insulation),
+                    layer("gipskarton", 0.0125, Finish),
+                ],
+            ),
         ];
         for (i, (name, layers)) in slabs.into_iter().enumerate() {
             p.elements
@@ -277,4 +308,19 @@ impl Project {
         );
         p
     }
+}
+
+/// Punkte, an denen ein Dach am höchsten sein kann: Mitten zwischen allen Eckpaaren.
+fn ridge_samples(r: &crate::Roof) -> Vec<Point2> {
+    let n = r.outline.len();
+    let mut points = Vec::new();
+    for i in 0..n {
+        for j in i + 1..n {
+            let (a, b) = (r.outline[i], r.outline[j]);
+            points.push(Point2::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0));
+        }
+    }
+    let c = r.outline.iter().fold((0.0, 0.0), |acc, p| (acc.0 + p.x / n as f64, acc.1 + p.y / n as f64));
+    points.push(Point2::new(c.0, c.1));
+    points
 }

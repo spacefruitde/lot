@@ -69,6 +69,11 @@ OfficeStandard(
             color: (222, 220, 214),
             cut: Empty,
         ),
+        "dachziegel": Material(
+            name: "Dachziegel mit Lattung",
+            color: (178, 92, 70),
+            cut: Empty,
+        ),
         "klinker": Material(
             name: "Klinker (Vormauerschale)",
             color: (176, 108, 84),

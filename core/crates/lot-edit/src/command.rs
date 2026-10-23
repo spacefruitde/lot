@@ -26,6 +26,8 @@ pub enum Command {
     DimensionWalls,
     /// Decke im aktuellen Geschoss aus den Wänden darunter, im untersten Geschoss Bodenplatte.
     SlabFromWalls,
+    /// Satteldach über den Wänden des Geschosses; Wände bis zum Geschoss reichen dann bis unters Dach.
+    GableRoofFromWalls,
     /// Einen Raum in jeden umschlossenen Bereich ohne Raum setzen.
     DetectSpaces,
     SetWallType(u64),

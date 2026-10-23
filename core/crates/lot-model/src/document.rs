@@ -289,6 +289,32 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     return Err(invalid("Eine Decke braucht einen Umriss mit mindestens 0,01 m²"));
                 }
             }
+            Element::Roof(r) => {
+                if project.storey(r.storey).is_none() {
+                    return Err(invalid("Dach: Das Geschoss fehlt"));
+                }
+                if project.slab_type(r.roof_type).is_none() {
+                    return Err(invalid("Dach: Der Dachaufbau fehlt"));
+                }
+                if r.outline.len() < 3 || r.edges.len() != r.outline.len() {
+                    return Err(invalid("Dach: Jede Umrisskante braucht eine Angabe, Traufe oder Giebel"));
+                }
+                if !r.is_convex() {
+                    return Err(invalid(
+                        "Dächer über verwinkelten Grundrissen folgen später; der Umriss muss konvex sein",
+                    ));
+                }
+                for e in &r.edges {
+                    if let crate::RoofEdge::Eave { slope, .. } = e
+                        && !(0.0..75.0).contains(slope)
+                    {
+                        return Err(invalid("Dach: Die Neigung muss zwischen 0° und 75° liegen"));
+                    }
+                    if e.overhang() < 0.0 {
+                        return Err(invalid("Dach: Der Überstand darf nicht negativ sein"));
+                    }
+                }
+            }
             Element::SlabOpening(o) => {
                 if !matches!(project.elements.get(&o.host), Some(Element::Slab(_))) {
                     return Err(invalid("Der Durchbruch sitzt nicht in einer Decke"));

@@ -2100,6 +2100,8 @@ public enum ParamKind: Equatable, Hashable {
     case storeyHeight
     case columnWidth
     case columnDepth
+    case roofEaveHeight
+    case roofSlope
 
 
 
@@ -2146,6 +2148,10 @@ public struct FfiConverterTypeParamKind: FfiConverterRustBuffer {
         case 12: return .columnWidth
         
         case 13: return .columnDepth
+        
+        case 14: return .roofEaveHeight
+        
+        case 15: return .roofSlope
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -2205,6 +2211,14 @@ public struct FfiConverterTypeParamKind: FfiConverterRustBuffer {
         
         case .columnDepth:
             writeInt(&buf, Int32(13))
+        
+        
+        case .roofEaveHeight:
+            writeInt(&buf, Int32(14))
+        
+        
+        case .roofSlope:
+            writeInt(&buf, Int32(15))
         
         }
     }

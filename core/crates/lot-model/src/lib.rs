@@ -12,6 +12,7 @@ mod document;
 mod element;
 mod operation;
 mod project;
+mod roof;
 
 pub use document::{Document, ModelError};
 pub use element::{
@@ -21,3 +22,4 @@ pub use element::{
 };
 pub use operation::Operation;
 pub use project::Project;
+pub use roof::{EavePlane, Roof, RoofEdge};

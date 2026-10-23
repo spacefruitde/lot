@@ -486,6 +486,7 @@ impl Editor {
             Command::FlipDoorHinge => self.change_doors(doc, "Anschlag wechseln", |d| d.hinge = d.hinge.other()),
             Command::DimensionWalls => self.dimension_walls(doc),
             Command::SlabFromWalls => self.slab_from_walls(doc),
+            Command::GableRoofFromWalls => self.gable_roof_from_walls(doc),
             Command::DetectSpaces => self.detect_spaces(doc),
             Command::SetWallType(id) => {
                 let id = ElementId(*id);
@@ -574,6 +575,7 @@ impl Editor {
                 "",
                 "Geschoss",
             ),
+            CommandInfo::new(Command::GableRoofFromWalls, "Satteldach über dem Geschoss", "", "Geschoss"),
             CommandInfo::new(Command::DetectSpaces, "Räume erkennen (jeder umschlossene Bereich)", "", "Werkzeug"),
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
@@ -975,6 +977,79 @@ impl Editor {
         let outline = vec![a, Point2::new(b.x, a.y), b, Point2::new(a.x, b.y)];
         let opening = lot_model::SlabOpening { host, outline };
         Response::from_result(doc.insert(Element::SlabOpening(opening)).map(|_| ()))
+    }
+
+    /// Satteldach über dem aktuellen Geschoss (Vorschlag): Umriss an den
+    /// Außenkanten der Wände, Traufen an den Seiten parallel zur längsten Kante,
+    /// 40° Neigung, 50 cm Traufüberstand, 30 cm am Ortgang. Die Dachhaut liegt
+    /// so hoch, dass die Unterseite an der Außenkante auf der höchsten
+    /// Außenwand mit fester Höhe (Kniestock) aufliegt, sonst auf Geschosshöhe.
+    /// Wände bis zum nächsten Geschoss reichen danach bis unter das Dach.
+    fn gable_roof_from_walls(&mut self, doc: &mut Document) -> Response {
+        use lot_model::{Roof, RoofEdge, Top};
+        let project = doc.project();
+        let Some(storey) = project.storey(self.storey) else { return Response::default() };
+        let Some(roof_type) = project
+            .slab_types()
+            .find(|(_, t)| t.name.contains("dach"))
+            .or_else(|| project.slab_types().last())
+            .map(|(id, _)| id)
+        else {
+            return Response { error: Some("Im Projekt gibt es noch keinen Dachaufbau".into()), ..Response::redraw() };
+        };
+        let finder = lot_geom::spaces::SpaceFinder::new(project, self.storey);
+        let outer: Vec<_> = finder.footprint.rings().into_iter().filter(|r| lot_geom::signed_area(r) > 0.0).collect();
+        let [ring] = &outer[..] else {
+            return Response {
+                error: Some("Für ein Dach braucht das Geschoss genau einen geschlossenen Umriss aus Wänden".into()),
+                ..Response::redraw()
+            };
+        };
+        let outline: Vec<Point2> = ring.iter().map(|p| Point2::new(p[0], p[1])).collect();
+        let n = outline.len();
+        let dir = |i: usize| {
+            let (a, b) = (outline[i], outline[(i + 1) % n]);
+            let len = a.distance(b).max(1e-12);
+            ((b.x - a.x) / len, (b.y - a.y) / len, len)
+        };
+        let longest = (0..n).max_by(|a, b| dir(*a).2.total_cmp(&dir(*b).2)).unwrap_or(0);
+        let (lx, ly, _) = dir(longest);
+        let slope: f64 = 40.0;
+        let edges: Vec<RoofEdge> = (0..n)
+            .map(|i| {
+                let (x, y, _) = dir(i);
+                if (x * ly - y * lx).abs() < 0.05 {
+                    RoofEdge::Eave { slope, overhang: 0.5 }
+                } else {
+                    RoofEdge::Gable { overhang: 0.3 }
+                }
+            })
+            .collect();
+        let knee = project
+            .walls_on(self.storey)
+            .filter_map(|(_, w)| match w.top {
+                Top::Height(h) => Some(h + w.base_offset),
+                _ => None,
+            })
+            .fold(f64::NEG_INFINITY, f64::max);
+        let knee = if knee.is_finite() { knee } else { storey.height };
+        let thickness = project.slab_type(roof_type).map_or(0.0, |t| t.thickness());
+        let roof = Roof {
+            storey: self.storey,
+            roof_type,
+            outline,
+            edges,
+            eave_height: knee + thickness / slope.to_radians().cos(),
+        };
+        let mut ops = vec![Operation::Insert { id: project.next_id(), element: Element::Roof(roof) }];
+        for (id, w) in project.walls_on(self.storey) {
+            if let Top::Storey { offset } = w.top {
+                let mut n = w.clone();
+                n.top = Top::Roof { offset };
+                ops.push(Operation::Replace { id, old: Element::Wall(w.clone()), new: Element::Wall(n) });
+            }
+        }
+        Response::from_result(doc.apply(Operation::Group { label: "Satteldach".into(), ops }))
     }
 
     fn change_doors(&mut self, doc: &mut Document, label: &str, change: impl Fn(&mut lot_model::Door)) -> Response {

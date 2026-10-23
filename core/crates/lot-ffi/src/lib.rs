@@ -46,6 +46,8 @@ pub enum ParamKind {
     StoreyHeight,
     ColumnWidth,
     ColumnDepth,
+    RoofEaveHeight,
+    RoofSlope,
 }
 
 impl From<ParamKind> for Param {
@@ -64,11 +66,13 @@ impl From<ParamKind> for Param {
             ParamKind::StoreyHeight => Param::StoreyHeight,
             ParamKind::ColumnWidth => Param::ColumnWidth,
             ParamKind::ColumnDepth => Param::ColumnDepth,
+            ParamKind::RoofEaveHeight => Param::RoofEaveHeight,
+            ParamKind::RoofSlope => Param::RoofSlope,
         }
     }
 }
 
-const ALL_PARAMS: [ParamKind; 13] = [
+const ALL_PARAMS: [ParamKind; 15] = [
     ParamKind::WallLength,
     ParamKind::WallSagitta,
     ParamKind::WallHeight,
@@ -82,6 +86,8 @@ const ALL_PARAMS: [ParamKind; 13] = [
     ParamKind::StoreyHeight,
     ParamKind::ColumnWidth,
     ParamKind::ColumnDepth,
+    ParamKind::RoofEaveHeight,
+    ParamKind::RoofSlope,
 ];
 
 /// Raum mit Stempeltext und Flächen, für den Inspektor.
@@ -241,6 +247,7 @@ impl LotDocument {
             },
             Some(lot_model::Element::SlabType(t)) => format!("Deckenaufbau {}", t.name),
             Some(lot_model::Element::SlabOpening(_)) => "Deckendurchbruch".into(),
+            Some(lot_model::Element::Roof(_)) => "Dach".into(),
             Some(lot_model::Element::Space(r)) => format!("Raum {} {}", r.number, r.name).trim_end().to_string(),
             Some(lot_model::Element::GridLine(g)) => format!("Achse {}", g.label),
             Some(lot_model::Element::WallType(t)) => format!("Wandaufbau {}", t.name),

@@ -10,9 +10,11 @@
 //! 5. Türen und Fenster: Türblatt und Aufschlag, Fensterrahmen; Öffnungen
 //!    über der Schnittebene gestrichelt. Deckendurchbrüche im Boden mit
 //!    Diagonalkreuz, in der Decke darüber gestrichelt
-//! 6. Achsen mit Achskreisen
-//! 7. Maßketten
-//! 8. Raumstempel: Nummer, Name, Netto-Raumfläche
+//! 6. Dach: Umriss mit Überstand gestrichelt, Linien gleicher lichter Höhe
+//!    (1,00 m und 2,00 m) in den Räumen darunter
+//! 7. Achsen mit Achskreisen
+//! 8. Maßketten
+//! 9. Raumstempel: Nummer, Name, Netto-Raumfläche
 //!
 //! Gleiches Material benachbarter Schichten und Wände wird zu einer Fläche
 //! vereinigt, damit an Anschlüssen keine Fugen erscheinen.
@@ -90,15 +92,18 @@ pub fn floor_plan(
     draw_openings(&mut objects, project, view.storey, z_cut, style, viewport);
     draw_slab_openings(&mut objects, project, view.storey, style, viewport);
 
-    // 6. Achsen.
+    // 6. Dach.
+    draw_roof_lines(&mut objects, project, view.storey, style, viewport);
+
+    // 7. Achsen.
     for (_, grid) in project.grid_lines() {
         draw_grid_line(&mut objects, grid, style, viewport);
     }
 
-    // 7. Maßketten.
+    // 8. Maßketten.
     crate::dimensions::draw_dimensions(&mut objects, project, view.storey, style, viewport);
 
-    // 8. Raumstempel.
+    // 9. Raumstempel.
     draw_space_tags(&mut objects, project, view.storey, style, viewport);
     objects
 }
@@ -303,6 +308,81 @@ fn draw_slab_openings(
                 }
             } else {
                 objects.push(line(ring, style.pens.hidden, true, true));
+            }
+        }
+    }
+}
+
+/// Strichlänge und Lücke der Linien gleicher lichter Höhe, in mm auf dem Blatt.
+const HEIGHT_LINE_DASH: [f64; 4] = [6.0, 1.0, 1.0, 1.0];
+
+/// Dach im Grundriss seines Geschosses (Vorschlag): Umriss mit Überstand
+/// gestrichelt wie verdeckte Kanten über der Schnittebene; in den Räumen die
+/// Linien, an denen die lichte Höhe 1,00 m und 2,00 m beträgt (WoFlV § 4),
+/// beschriftet mit der Höhe.
+fn draw_roof_lines(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    storey: ElementId,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let roofs: Vec<_> = project.roofs_on(storey).collect();
+    if roofs.is_empty() {
+        return;
+    }
+    let paper_ring = |ring: &[[f64; 2]]| ring.iter().map(|p| viewport.to_paper(p[0], p[1])).collect::<Vec<_>>();
+    let finder = lot_geom::spaces::SpaceFinder::new(project, storey);
+    let rooms: Vec<Vec<PaperPoint>> = finder.enclosed.iter().flat_map(|a| a.rings()).map(|r| paper_ring(&r)).collect();
+    for (_, roof) in roofs {
+        let outer: Vec<[f64; 2]> = roof.outer_outline().iter().map(|p| [p.x, p.y]).collect();
+        objects.push(PlanObject::Line(Line {
+            points: paper_ring(&outer),
+            closed: true,
+            pen: Pen::mm(style.pens.hidden),
+            style: LineStyle::Dashed(HIDDEN_DASH.to_vec()),
+            color: Gray::BLACK,
+        }));
+        for height in [1.0, 2.0] {
+            let region = lot_geom::roofs::clear_height_region(project, roof, height);
+            let mut labelled = Vec::new();
+            for ring in region.rings() {
+                let ring = paper_ring(&ring);
+                let n = ring.len();
+                for i in 0..n {
+                    for [a, b] in crate::clip::clip_segment(ring[i], ring[(i + 1) % n], &rooms) {
+                        // Jede Linie ab 20 mm Länge bekommt ihre Höhe.
+                        if (b.x - a.x).hypot(b.y - a.y) >= 20.0 {
+                            labelled.push([a, b]);
+                        }
+                        objects.push(PlanObject::Line(Line {
+                            points: vec![a, b],
+                            closed: false,
+                            pen: Pen::mm(style.pens.hatch),
+                            style: LineStyle::Dashed(HEIGHT_LINE_DASH.to_vec()),
+                            color: Gray::BLACK,
+                        }));
+                    }
+                }
+            }
+            for [a, b] in labelled {
+                let angle = (b.y - a.y).atan2(b.x - a.x).to_degrees();
+                let angle = if angle > 90.0 {
+                    angle - 180.0
+                } else if angle <= -90.0 {
+                    angle + 180.0
+                } else {
+                    angle
+                };
+                let (s, c) = angle.to_radians().sin_cos();
+                let mid = PaperPoint::new((a.x + b.x) / 2.0 - s * 0.8, (a.y + b.y) / 2.0 + c * 0.8);
+                objects.push(PlanObject::Text(Text {
+                    position: mid,
+                    text: format!("{} m", crate::format_de(height, 2)),
+                    height_mm: style.space_text,
+                    anchor: Anchor::Center,
+                    rotation: angle,
+                }));
             }
         }
     }

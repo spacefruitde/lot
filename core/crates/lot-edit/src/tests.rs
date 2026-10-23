@@ -558,3 +558,24 @@ fn slab_opening_needs_a_slab_and_cuts_it() {
     let cut = lot_geom::slabs::slab_area(doc.project(), slab_id, &slab).area();
     assert!((full - cut - 1.2 * 2.0).abs() < 1e-6, "{full} - {cut}");
 }
+
+#[test]
+fn gable_roof_covers_the_walls_and_raises_them() {
+    let (mut doc, mut ed) = setup();
+    // 10 × 6 m: Traufen an den langen Seiten.
+    ed.run(&mut doc, &Command::WallTool);
+    for (x, y) in [(0.0, 0.0), (0.0, 6.0), (10.0, 6.0), (10.0, 0.0), (0.0, 0.0)] {
+        click(&mut doc, &mut ed, x, y);
+    }
+    ed.key(&mut doc, Key::Escape);
+    let r = ed.run(&mut doc, &Command::GableRoofFromWalls);
+    assert!(r.model_changed, "{:?}", r.error);
+    let roof = doc.project().roofs_on(ElementId(1)).next().unwrap().1.clone();
+    let eaves = roof.edges.iter().filter(|e| matches!(e, lot_model::RoofEdge::Eave { .. })).count();
+    assert_eq!(eaves, 2);
+    assert!(walls(&doc).iter().all(|w| matches!(w.top, lot_model::Top::Roof { .. })));
+    // Ein Undo nimmt Dach und Wandhöhen zusammen zurück.
+    doc.undo().unwrap();
+    assert!(doc.project().roofs_on(ElementId(1)).next().is_none());
+    assert!(walls(&doc).iter().all(|w| matches!(w.top, lot_model::Top::Storey { .. })));
+}

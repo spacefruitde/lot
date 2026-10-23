@@ -158,8 +158,8 @@ private struct ParameterRow: View {
                 TextField("", value: value, format: .number.precision(.fractionLength(2)))
                     .multilineTextAlignment(.trailing)
                     .frame(width: 64)
-                Text("m").foregroundStyle(.secondary)
-                Stepper("", value: value, step: 0.05)
+                Text(parameter.kind == .roofSlope ? "°" : "m").foregroundStyle(.secondary)
+                Stepper("", value: value, step: parameter.kind == .roofSlope ? 1 : 0.05)
                     .labelsHidden()
             }
         }
@@ -182,6 +182,8 @@ extension ParamKind {
         case .storeyHeight: "Geschosshöhe"
         case .columnWidth: "Breite"
         case .columnDepth: "Tiefe"
+        case .roofEaveHeight: "Traufhöhe über OKFF"
+        case .roofSlope: "Neigung (Grad)"
         }
     }
 }
