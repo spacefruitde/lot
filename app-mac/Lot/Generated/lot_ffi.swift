@@ -596,10 +596,33 @@ fileprivate struct FfiConverterString: FfiConverter {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+    typealias SwiftType = Data
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        let len: Int32 = try readInt(&buf)
+        return Data(try readBytes(&buf, count: Int(len)))
+    }
+
+    public static func write(_ value: Data, into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        writeBytes(&buf, value)
+    }
+}
+
 
 
 
 public protocol LotDocumentProtocol: AnyObject, Sendable {
+    
+    /**
+     * Legt eine Datei im Projekt ab, etwa eine Unterlage. Gleicher Name ersetzt.
+     */
+    func addAttachment(name: String, data: Data) 
     
     /**
      * Inhalt eines 2D-Texts; `None`, wenn das Element kein Text ist.
@@ -610,6 +633,11 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
      * Schrifthöhe eines 2D-Texts in mm; `None`, wenn das Element kein Text ist.
      */
     func annotationTextHeight(element: UInt64)  -> Double?
+    
+    /**
+     * Inhalt einer Datei im Projekt.
+     */
+    func attachment(name: String)  -> Data?
     
     func canRedo()  -> Bool
     
@@ -624,6 +652,11 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
      * Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36“.
      */
     func elementLabel(element: UInt64)  -> String
+    
+    /**
+     * Bauzustand eines Elements: 0 Bestand, 1 Abbruch, 2 Neubau; `None`, wenn es keinen hat.
+     */
+    func elementPhase(element: UInt64)  -> UInt32?
     
     func name()  -> String
     
@@ -758,6 +791,19 @@ public static func openTestproject(path: String)throws  -> LotDocument  {
 
     
     /**
+     * Legt eine Datei im Projekt ab, etwa eine Unterlage. Gleicher Name ersetzt.
+     */
+open func addAttachment(name: String, data: Data)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_add_attachment(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(name),
+        FfiConverterData.lower(data),uniffiCallStatus
+    )
+}
+}
+    
+    /**
      * Inhalt eines 2D-Texts; `None`, wenn das Element kein Text ist.
      */
 open func annotationText(element: UInt64) -> String?  {
@@ -779,6 +825,19 @@ open func annotationTextHeight(element: UInt64) -> Double?  {
     uniffi_lot_ffi_fn_method_lotdocument_annotation_text_height(
             self.uniffiCloneHandle(),
         FfiConverterUInt64.lower(element),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Inhalt einer Datei im Projekt.
+     */
+open func attachment(name: String) -> Data?  {
+    return try!  FfiConverterOptionData.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_attachment(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(name),uniffiCallStatus
     )
 })
 }
@@ -821,6 +880,19 @@ open func elementLabel(element: UInt64) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_lotdocument_element_label(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Bauzustand eines Elements: 0 Bestand, 1 Abbruch, 2 Neubau; `None`, wenn es keinen hat.
+     */
+open func elementPhase(element: UInt64) -> UInt32?  {
+    return try!  FfiConverterOptionUInt32.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_element_phase(
             self.uniffiCloneHandle(),
         FfiConverterUInt64.lower(element),uniffiCallStatus
     )
@@ -995,11 +1067,23 @@ public func FfiConverterTypeLotDocument_lower(_ value: LotDocument) -> UInt64 {
 public protocol ViewportProtocol: AnyObject, Sendable {
     
     /**
+     * Legt eine Unterlage im aktuellen Geschoss an, mittig in der Ansicht.
+     * `width` und `height` in Einheiten der Vorlage (PDF-Punkte oder Bildpunkte),
+     * `scale` in Metern je Einheit (vor dem Kalibrieren geschätzt).
+     */
+    func addUnderlay(source: String, page: UInt32, width: Double, height: Double, scale: Double) throws  -> UInt64
+    
+    /**
      * Befehle für die Befehlspalette: Editor und Ansicht.
      */
     func commands()  -> [CommandItem]
     
     func key(key: KeyInput)  -> EventResult
+    
+    /**
+     * Unterlagen ohne Bild, die die App rendern muss. PNG liest der Kern selbst.
+     */
+    func missingUnderlayImages()  -> [UnderlayRef]
     
     /**
      * Zwei Finger: in 3D drehen, im Plan verschieben. Bewegung in Punkten.
@@ -1043,6 +1127,12 @@ public protocol ViewportProtocol: AnyObject, Sendable {
      * Maßstab der Planansicht (100 für 1:100). Der Zoom bleibt gleich groß auf dem Bildschirm.
      */
     func setPlanScale(scale: Double) 
+    
+    /**
+     * Bild einer Unterlage, von der App gerendert (PDF-Seite mit PDFKit oder ein Bild).
+     * RGBA mit 8 Bit je Kanal, Zeilen von oben.
+     */
+    func setUnderlayImage(source: String, page: UInt32, width: UInt32, height: UInt32, rgba: Data) 
     
     func setView(view: ViewKind) 
     
@@ -1132,6 +1222,25 @@ public convenience init(nsView: UInt64, widthPx: UInt32, heightPx: UInt32, scale
 
     
     /**
+     * Legt eine Unterlage im aktuellen Geschoss an, mittig in der Ansicht.
+     * `width` und `height` in Einheiten der Vorlage (PDF-Punkte oder Bildpunkte),
+     * `scale` in Metern je Einheit (vor dem Kalibrieren geschätzt).
+     */
+open func addUnderlay(source: String, page: UInt32, width: Double, height: Double, scale: Double)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_add_underlay(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(source),
+        FfiConverterUInt32.lower(page),
+        FfiConverterDouble.lower(width),
+        FfiConverterDouble.lower(height),
+        FfiConverterDouble.lower(scale),uniffiCallStatus
+    )
+})
+}
+    
+    /**
      * Befehle für die Befehlspalette: Editor und Ansicht.
      */
 open func commands() -> [CommandItem]  {
@@ -1149,6 +1258,18 @@ open func key(key: KeyInput) -> EventResult  {
     uniffi_lot_ffi_fn_method_viewport_key(
             self.uniffiCloneHandle(),
         FfiConverterTypeKeyInput_lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Unterlagen ohne Bild, die die App rendern muss. PNG liest der Kern selbst.
+     */
+open func missingUnderlayImages() -> [UnderlayRef]  {
+    return try!  FfiConverterSequenceTypeUnderlayRef.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_missing_underlay_images(
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
@@ -1292,6 +1413,23 @@ open func setPlanScale(scale: Double)  {try! rustCall() {
     uniffi_lot_ffi_fn_method_viewport_set_plan_scale(
             self.uniffiCloneHandle(),
         FfiConverterDouble.lower(scale),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Bild einer Unterlage, von der App gerendert (PDF-Seite mit PDFKit oder ein Bild).
+     * RGBA mit 8 Bit je Kanal, Zeilen von oben.
+     */
+open func setUnderlayImage(source: String, page: UInt32, width: UInt32, height: UInt32, rgba: Data)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_set_underlay_image(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(source),
+        FfiConverterUInt32.lower(page),
+        FfiConverterUInt32.lower(width),
+        FfiConverterUInt32.lower(height),
+        FfiConverterData.lower(rgba),uniffiCallStatus
     )
 }
 }
@@ -1893,6 +2031,63 @@ public func FfiConverterTypeStoreyAreaInfo_lower(_ value: StoreyAreaInfo) -> Rus
 
 
 /**
+ * Eine Unterlage, deren Bild die App liefern muss (PDF-Seite oder Bild).
+ */
+public struct UnderlayRef: Equatable, Hashable {
+    public var source: String
+    public var page: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(source: String, page: UInt32) {
+        self.source = source
+        self.page = page
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension UnderlayRef: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUnderlayRef: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UnderlayRef {
+        return
+            try UnderlayRef(
+                source: FfiConverterString.read(from: &buf), 
+                page: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: UnderlayRef, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.source, into: &buf)
+        FfiConverterUInt32.write(value.page, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUnderlayRef_lift(_ buf: RustBuffer) throws -> UnderlayRef {
+    return try FfiConverterTypeUnderlayRef.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUnderlayRef_lower(_ value: UnderlayRef) -> RustBuffer {
+    return FfiConverterTypeUnderlayRef.lower(value)
+}
+
+
+/**
  * Zustand für Werkzeugleiste und Statuszeile.
  */
 public struct ViewState: Equatable, Hashable {
@@ -2364,6 +2559,30 @@ public func FfiConverterTypeViewKind_lower(_ value: ViewKind) -> RustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = UInt32?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt32.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionDouble: FfiConverterRustBuffer {
     typealias SwiftType = Double?
 
@@ -2404,6 +2623,30 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
+    typealias SwiftType = Data?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterData.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterData.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -2583,6 +2826,31 @@ fileprivate struct FfiConverterSequenceTypeStoreyAreaInfo: FfiConverterRustBuffe
         return seq
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeUnderlayRef: FfiConverterRustBuffer {
+    typealias SwiftType = [UnderlayRef]
+
+    public static func write(_ value: [UnderlayRef], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeUnderlayRef.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UnderlayRef] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [UnderlayRef]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeUnderlayRef.read(from: &buf))
+        }
+        return seq
+    }
+}
 /**
  * Die Nutzungsgruppen nach DIN 277:2021-08, in der Reihenfolge der Norm.
  */
@@ -2612,10 +2880,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_func_space_usages() != 26934) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_add_attachment() != 53219) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_lotdocument_annotation_text() != 38817) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_annotation_text_height() != 27775) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_attachment() != 31675) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_can_redo() != 21256) {
@@ -2628,6 +2902,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_element_label() != 44890) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_element_phase() != 5178) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_name() != 35177) {
@@ -2660,10 +2937,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_undo() != 9472) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_viewport_add_underlay() != 28626) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_viewport_commands() != 3015) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_key() != 43844) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_missing_underlay_images() != 14459) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_orbit() != 27308) {
@@ -2700,6 +2983,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_set_plan_scale() != 46506) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_set_underlay_image() != 43434) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_set_view() != 40284) {

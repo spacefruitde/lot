@@ -58,6 +58,7 @@ final class AppModel {
     func attach(_ viewport: Viewport) {
         self.viewport = viewport
         stats.rebuildMs = viewport.setDocument(document: document)
+        loadMissingUnderlays()
         updateViewState()
     }
 
@@ -229,6 +230,7 @@ final class AppModel {
         documentGeneration += 1
         if let viewport {
             stats.rebuildMs = viewport.setDocument(document: document)
+            loadMissingUnderlays()
         }
         refresh()
         updateViewState()
