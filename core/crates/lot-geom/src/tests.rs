@@ -69,6 +69,7 @@ fn add_wall(
     p.elements.insert(
         id,
         Element::Wall(Wall {
+            phase: Default::default(),
             storey: STOREY,
             wall_type,
             start: Point2::new(a.0, a.1),
@@ -228,6 +229,7 @@ fn column_wins_over_wall() {
     p.elements.insert(
         id,
         Element::Column(Column {
+            phase: Default::default(),
             storey: STOREY,
             position: Point2::new(3.0, 0.0),
             profile: ColumnProfile::Rectangle { width: 0.3, depth: 0.3 },
@@ -427,6 +429,7 @@ fn opening_in_arc_is_cut_radially() {
     p.elements.insert(
         id,
         Element::Opening(lot_model::Opening {
+            phase: Default::default(),
             host: arc,
             offset: 1.0,
             width: 1.0,
@@ -566,6 +569,7 @@ fn two_spaces() -> (Project, ElementId) {
     p.elements.insert(
         id,
         Element::Opening(lot_model::Opening {
+            phase: Default::default(),
             host: split,
             offset: 1.0,
             width: 0.885,
@@ -598,6 +602,7 @@ fn column_in_space_is_cut_out() {
     p.elements.insert(
         id,
         Element::Column(Column {
+            phase: Default::default(),
             storey: STOREY,
             position: Point2::new(4.0, 2.0),
             profile: ColumnProfile::Rectangle { width: 0.3, depth: 0.3 },
@@ -692,6 +697,7 @@ fn slab_layers_stack_down_from_the_floor_level() {
     p.elements.insert(
         id,
         Element::Slab(lot_model::Slab {
+            phase: Default::default(),
             storey: STOREY,
             slab_type: ty,
             outline: vec![Point2::new(0.0, 0.0), Point2::new(4.0, 0.0), Point2::new(4.0, 3.0), Point2::new(0.0, 3.0)],

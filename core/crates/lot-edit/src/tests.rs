@@ -144,6 +144,7 @@ fn delete_removes_wall_with_openings() {
     let (mut doc, mut ed) = house();
     let inner = wall_with(&doc, Point2::new(3.0, 0.0), Point2::new(3.0, 4.0));
     doc.insert(lot_model::Element::Opening(Opening {
+        phase: Default::default(),
         host: inner,
         offset: 1.0,
         width: 1.0,
@@ -169,6 +170,7 @@ fn flip_keeps_openings_in_place() {
     let bottom = wall_with(&doc, Point2::new(6.0, 0.0), Point2::new(0.0, 0.0));
     let id = doc
         .insert(lot_model::Element::Opening(Opening {
+            phase: Default::default(),
             host: bottom,
             offset: 1.0,
             width: 1.5,
@@ -631,4 +633,22 @@ fn text_tool_places_and_selects_text_which_moves_with_the_selection() {
         }
         other => panic!("{other:?}"),
     }
+}
+
+#[test]
+fn set_phase_marks_selected_walls_and_undoes_in_one_step() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::WallTool);
+    for (x, y) in [(0.0, 0.0), (4.0, 0.0), (4.0, 3.0)] {
+        click(&mut doc, &mut ed, x, y);
+    }
+    ed.key(&mut doc, Key::Escape);
+    ed.run(&mut doc, &Command::SelectAll);
+    ed.run(&mut doc, &Command::SetPhase(lot_model::Phase::Demolished));
+    assert!(walls(&doc).iter().all(|w| w.phase == lot_model::Phase::Demolished));
+    assert!(doc.project().has_phases());
+    assert!(doc.undo().unwrap());
+    assert!(walls(&doc).iter().all(|w| w.phase == lot_model::Phase::New));
+    // Die Kennung ist lesbar für Befehlspalette und KI.
+    assert_eq!(Command::SetPhase(lot_model::Phase::Existing).id(), "SetPhase(Existing)");
 }

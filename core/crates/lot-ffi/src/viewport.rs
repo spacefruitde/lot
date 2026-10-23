@@ -419,7 +419,17 @@ fn rebuild(s: &mut State, model: bool) -> f64 {
 fn build_model(s: &mut State) {
     let Some(doc) = s.document.clone() else { return };
     let standard = OfficeStandard::default_standard();
-    if let Ok(geometry) = lot_geom::build(doc.lock().project()) {
+    // Bei Umbauten zeigt das 3D den Zustand nach dem Umbau.
+    let built = {
+        let guard = doc.lock();
+        let project = guard.project();
+        if project.has_phases() {
+            lot_geom::build(&project.phase_view(lot_model::PhaseFilter::Planned))
+        } else {
+            lot_geom::build(project)
+        }
+    };
+    if let Ok(geometry) = built {
         s.renderer.set_geometry(&geometry, &|m| standard.material(m).color);
         s.model_stale = false;
         // Beim ersten nicht leeren Modell die Kamera darauf einstellen.

@@ -339,6 +339,21 @@ impl LotDocument {
         doc.replace(id, lot_model::Element::Space(new)).map_err(LotError::from_display)
     }
 
+    /// Bauzustand eines Elements: 0 Bestand, 1 Abbruch, 2 Neubau; `None`, wenn es keinen hat.
+    pub fn element_phase(&self, element: u64) -> Option<u32> {
+        let doc = self.lock();
+        let mut e = doc.project().elements.get(&ElementId(element))?.clone();
+        // Nur Elemente, die einen Bauzustand haben.
+        if !e.set_phase(lot_model::Phase::New) {
+            return None;
+        }
+        Some(match doc.project().phase_of(ElementId(element)) {
+            lot_model::Phase::Existing => 0,
+            lot_model::Phase::Demolished => 1,
+            lot_model::Phase::New => 2,
+        })
+    }
+
     /// Inhalt eines 2D-Texts; `None`, wenn das Element kein Text ist.
     pub fn annotation_text(&self, element: u64) -> Option<String> {
         match self.lock().project().elements.get(&ElementId(element)) {

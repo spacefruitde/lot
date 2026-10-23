@@ -53,17 +53,20 @@ pub fn floor_plan(
     let Some(storey) = project.storey(view.storey) else { return Vec::new() };
     let style = standard.style_for(view.scale);
     let z_cut = storey.elevation + view.cut_height;
-    let cut = lot_geom::layer_regions(project, view.storey, z_cut);
+    // Im Umbauplan durchbrechen zugemauerte und neue Öffnungen in Bestand die Wand nicht.
+    let phased = project.has_phases().then(|| project.without_phase_openings());
+    let geo = phased.as_ref().unwrap_or(project);
+    let cut = lot_geom::layer_regions(geo, view.storey, z_cut);
     let cut_all = Area::union_all(cut.iter().map(|r| &r.area));
     let mut objects = Vec::new();
 
     // 1. Sichtbares unterhalb der Schnittebene.
-    let below: Vec<Area> = lot_geom::heights(project, view.storey)
+    let below: Vec<Area> = lot_geom::heights(geo, view.storey)
         .windows(2)
         .filter(|w| w[0] < z_cut && w[1] - w[0] > 1e-6)
         .map(|w| {
             let z = (w[0] + w[1].min(z_cut)) / 2.0;
-            Area::union_all(lot_geom::layer_regions(project, view.storey, z).iter().map(|r| &r.area))
+            Area::union_all(lot_geom::layer_regions(geo, view.storey, z).iter().map(|r| &r.area))
         })
         .collect();
     let below = Area::union_all(below.iter()).difference(&cut_all);
@@ -71,8 +74,8 @@ pub fn floor_plan(
         objects.push(closed(paper(&ring, viewport), style.pens.view));
     }
 
-    // 2. bis 4. Geschnittene Bauteile.
-    draw_cut(&mut objects, &cut, standard, style, viewport);
+    // 2. bis 4. Geschnittene Bauteile, im Umbauplan farbig.
+    draw_cut_for(&mut objects, project, &cut, Some((view.storey, z_cut)), standard, style, viewport);
 
     // 5. Türen und Fenster, Deckendurchbrüche.
     draw_openings(&mut objects, project, view.storey, z_cut, style, viewport);
@@ -197,6 +200,10 @@ fn draw_openings(
             [p.x, p.y]
         };
         for (_, o) in project.openings_in(wall_id) {
+            // Zugemauerte Öffnungen zeigt der Umbauplan als rote Fläche ohne Symbol.
+            if o.phase == lot_model::Phase::Demolished && project.has_phases() {
+                continue;
+            }
             let (o0, o1) = (bottom + o.sill_height, bottom + o.sill_height + o.height);
             let (a, b) = (o.offset, o.offset + o.width);
             if o0 > z_cut {
@@ -483,6 +490,69 @@ pub fn format_area(m2: f64) -> String {
 /// Geschnittene Bauteile, im Grundriss wie im Schnitt: je nach Detailgrad
 /// schwarz gefüllt (grob) oder mit Mustern und Materialgrenzen, darüber die
 /// Schnittkante um alles Geschnittene.
+/// Geschnittene Bauteile, im Umbauplan (es gibt Bestand oder Abbruch) farbig
+/// je Bauzustand statt mit Materialschraffur. `opening_cut` (Geschoss und Höhe)
+/// legt im Grundriss Öffnungen farbig an, die die Wand nicht durchbrechen:
+/// neue Öffnungen in Bestand gelb (Ausbruch), zugemauerte rot.
+pub(crate) fn draw_cut_for(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    cut: &[LayerRegion],
+    opening_cut: Option<(ElementId, f64)>,
+    standard: &OfficeStandard,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    if !project.has_phases() {
+        draw_cut(objects, cut, standard, style, viewport);
+        return;
+    }
+    let colors = &standard.phases;
+    let cut_all = Area::union_all(cut.iter().map(|r| &r.area));
+    for phase in [lot_model::Phase::Existing, lot_model::Phase::Demolished, lot_model::Phase::New] {
+        let area = Area::union_all(cut.iter().filter(|r| project.phase_of(r.element) == phase).map(|r| &r.area));
+        let rings: Vec<Vec<PaperPoint>> = area.rings().iter().map(|r| paper(r, viewport)).collect();
+        if !rings.is_empty() {
+            objects.push(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(colors.of(phase)) }));
+        }
+    }
+    if let Some((storey, z)) = opening_cut {
+        for (wall_id, wall) in project.walls_on(storey) {
+            let (Some(wall_type), Some((bottom, _))) = (project.wall_type(wall.wall_type), project.wall_extent(wall))
+            else {
+                continue;
+            };
+            let offsets = wall.layer_offsets(wall_type);
+            let (left, right) = (offsets[0].0, offsets[offsets.len() - 1].1);
+            for (id, o) in project.openings_in(wall_id) {
+                let spans = bottom + o.sill_height <= z && z < bottom + o.sill_height + o.height;
+                if project.opening_cuts_in_plan(id) || !spans {
+                    continue;
+                }
+                let phase =
+                    if o.phase == lot_model::Phase::New { lot_model::Phase::Demolished } else { lot_model::Phase::New };
+                let area =
+                    lot_geom::wall_section(wall, (o.offset, o.offset + o.width), (left, right)).intersection(&cut_all);
+                let rings: Vec<Vec<PaperPoint>> = area.rings().iter().map(|r| paper(r, viewport)).collect();
+                if !rings.is_empty() {
+                    objects.push(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(colors.of(phase)) }));
+                    for ring in area.rings() {
+                        objects.push(closed(paper(&ring, viewport), style.pens.layer));
+                    }
+                }
+            }
+        }
+    }
+    for area in material_areas(cut).values() {
+        for ring in area.rings() {
+            objects.push(closed(paper(&ring, viewport), style.pens.layer));
+        }
+    }
+    for ring in cut_all.rings() {
+        objects.push(closed(paper(&ring, viewport), style.pens.cut));
+    }
+}
+
 pub(crate) fn draw_cut(
     objects: &mut Vec<PlanObject>,
     cut: &[LayerRegion],
@@ -732,5 +802,56 @@ mod tests {
             .filter(|o| matches!(o, PlanObject::Line(Line { style: LineStyle::Dashed(_), .. })))
             .count();
         assert_eq!(dashed, 1);
+    }
+
+    fn fills(objects: &[PlanObject]) -> Vec<Color> {
+        objects
+            .iter()
+            .filter_map(|o| match o {
+                PlanObject::Area(PlanArea { fill: Fill::Solid(c), .. }) => Some(*c),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn existing_wall_with_new_opening_is_grey_with_yellow_breakthrough() {
+        let mut p = Project::sample();
+        let wall = p.walls().next().map(|(id, _)| id).unwrap();
+        if let Some(Element::Wall(w)) = p.elements.get_mut(&wall) {
+            w.phase = lot_model::Phase::Existing;
+        }
+        // Die Öffnung der Beispielwand reicht über die Schnittebene und ist neu.
+        let view = FloorPlanView { storey: ElementId(1), cut_height: DEFAULT_CUT_HEIGHT, scale: 100.0 };
+        let viewport = Viewport { scale: 100.0, origin: PaperPoint::new(0.0, 0.0) };
+        let standard = OfficeStandard::default_standard();
+        let colors = fills(&floor_plan(&p, view, standard, viewport));
+        assert!(colors.contains(&standard.phases.of(lot_model::Phase::Existing)), "{colors:?}");
+        assert!(colors.contains(&standard.phases.of(lot_model::Phase::Demolished)), "{colors:?}");
+        // Im Bestandsplan ist alles wie gewohnt schwarz-weiß, die neue Öffnung fehlt.
+        let existing = p.phase_view(lot_model::PhaseFilter::Existing);
+        assert!(!existing.has_phases());
+        assert_eq!(existing.elements.values().filter(|e| matches!(e, Element::Opening(_))).count(), 0);
+        let colors = fills(&floor_plan(&existing, view, standard, viewport));
+        assert!(!colors.contains(&standard.phases.of(lot_model::Phase::Existing)));
+    }
+
+    #[test]
+    fn demolished_wall_is_yellow_and_gone_after_the_conversion() {
+        let mut p = Project::sample();
+        let wall = p.walls().next().map(|(id, _)| id).unwrap();
+        if let Some(Element::Wall(w)) = p.elements.get_mut(&wall) {
+            w.phase = lot_model::Phase::Demolished;
+        }
+        let view = FloorPlanView { storey: ElementId(1), cut_height: DEFAULT_CUT_HEIGHT, scale: 100.0 };
+        let viewport = Viewport { scale: 100.0, origin: PaperPoint::new(0.0, 0.0) };
+        let standard = OfficeStandard::default_standard();
+        assert!(
+            fills(&floor_plan(&p, view, standard, viewport))
+                .contains(&standard.phases.of(lot_model::Phase::Demolished))
+        );
+        let planned = p.phase_view(lot_model::PhaseFilter::Planned);
+        assert!(planned.walls().next().is_none());
+        assert!(planned.elements.values().all(|e| !matches!(e, Element::Opening(_))));
     }
 }

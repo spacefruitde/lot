@@ -105,7 +105,8 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
 /// Ansicht des Modells als PNG, ohne Fenster gerechnet.
 fn render_3d(project: &lot_model::Project) -> Result<Vec<u8>> {
     let (width, height) = (1600, 1000);
-    let geometry = lot_geom::build(project)?;
+    // Bei Umbauten der Zustand nach dem Umbau.
+    let geometry = lot_geom::build(&project.phase_view(lot_model::PhaseFilter::Planned))?;
     let mut renderer = lot_render::Renderer::headless(width, height)?;
     let standard = lot_plan::standard::OfficeStandard::default_standard();
     renderer.set_geometry(&geometry, &|m| standard.material(m).color);

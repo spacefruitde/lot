@@ -197,6 +197,7 @@ impl Editor {
             Tool::Column => {
                 let p = snap::snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
                 let column = Column {
+                    phase: Default::default(),
                     storey: self.storey,
                     position: p,
                     profile: ColumnProfile::Rectangle { width: 0.3, depth: 0.3 },
@@ -554,6 +555,20 @@ impl Editor {
                 let a = *a;
                 self.change_selected(doc, "Bezugslinie ändern", |w| w.alignment = a)
             }
+            Command::SetPhase(phase) => {
+                let changes: Vec<(ElementId, Element)> = self
+                    .selection
+                    .iter()
+                    .filter_map(|id| {
+                        let mut e = doc.project().elements.get(id)?.clone();
+                        e.set_phase(*phase).then_some((*id, e))
+                    })
+                    .collect();
+                if changes.is_empty() {
+                    return Response::redraw();
+                }
+                Response::from_result(replace_all(doc, "Bauzustand ändern", changes))
+            }
             Command::SetStorey(id) => {
                 if doc.project().storey(ElementId(*id)).is_some() {
                     self.storey = ElementId(*id);
@@ -635,6 +650,9 @@ impl Editor {
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
             CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "⇧F", "Auswahl"),
+            CommandInfo::new(Command::SetPhase(lot_model::Phase::Existing), "Bauzustand: Bestand", "", "Auswahl"),
+            CommandInfo::new(Command::SetPhase(lot_model::Phase::Demolished), "Bauzustand: Abbruch", "", "Auswahl"),
+            CommandInfo::new(Command::SetPhase(lot_model::Phase::New), "Bauzustand: Neubau", "", "Auswahl"),
             CommandInfo::new(Command::Undo, "Widerrufen", "⌘Z", "Bearbeiten"),
             CommandInfo::new(Command::Redo, "Wiederholen", "⇧⌘Z", "Bearbeiten"),
         ];
@@ -676,6 +694,7 @@ impl Editor {
         {
             overlay.snap = Some(p);
             overlay.preview = Some(column_outline(&Column {
+                phase: Default::default(),
                 storey: self.storey,
                 position: p.point,
                 profile: ColumnProfile::Rectangle { width: 0.3, depth: 0.3 },
@@ -829,6 +848,7 @@ impl Editor {
 
     fn new_wall(&self, start: Point2, end: Point2) -> Option<Wall> {
         Some(Wall {
+            phase: Default::default(),
             storey: self.storey,
             wall_type: self.wall_type?,
             start,
@@ -953,7 +973,7 @@ impl Editor {
         } else {
             OpeningKind::Window
         };
-        Some(Opening { host, offset, width, height, sill_height: sill, kind })
+        Some(Opening { phase: Default::default(), host, offset, width, height, sill_height: sill, kind })
     }
 
     /// Maßketten außen an den gewählten geraden Wänden (Vorschlag): in 1,00 m
@@ -1041,6 +1061,7 @@ impl Editor {
             .map(|(i, ring)| Operation::Insert {
                 id: ElementId(first + i as u64),
                 element: Element::Slab(Slab {
+                    phase: Default::default(),
                     storey: self.storey,
                     slab_type,
                     outline: ring.into_iter().map(|p| Point2::new(p[0], p[1])).collect(),
@@ -1069,7 +1090,7 @@ impl Editor {
             };
         };
         let outline = vec![a, Point2::new(b.x, a.y), b, Point2::new(a.x, b.y)];
-        let opening = lot_model::SlabOpening { host, outline };
+        let opening = lot_model::SlabOpening { phase: Default::default(), host, outline };
         Response::from_result(doc.insert(Element::SlabOpening(opening)).map(|_| ()))
     }
 

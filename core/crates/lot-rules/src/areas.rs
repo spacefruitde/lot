@@ -218,6 +218,7 @@ mod tests {
             p.elements.insert(
                 id,
                 Element::Wall(Wall {
+                    phase: Default::default(),
                     storey,
                     wall_type,
                     start: Point2::new(a.0, a.1),
@@ -267,6 +268,7 @@ mod tests {
             p.elements.insert(
                 id,
                 Element::Column(Column {
+                    phase: Default::default(),
                     storey,
                     position: Point2::new(x, 2.0),
                     profile: ColumnProfile::Rectangle { width: size, depth: size },
@@ -340,6 +342,7 @@ mod roof_tests {
             p.elements.insert(
                 id,
                 Element::Wall(Wall {
+                    phase: Default::default(),
                     storey,
                     wall_type,
                     start: Point2::new(a.0, a.1),

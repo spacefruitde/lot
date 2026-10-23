@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use lot_geom::{Area, Band, LayerRegion, ModelGeometry, TriMesh};
 use lot_model::{Element, ElementId, LayerFunction, Project, SectionKind, SectionView};
 
-use crate::floor_plan::draw_cut;
+use crate::floor_plan::draw_cut_for;
 use crate::standard::{OfficeStandard, ScaleStyle};
 use crate::{Anchor, Color, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
 
@@ -136,7 +136,7 @@ pub fn section(
     }
 
     // 3. Schnittflächen über den Ansichtskanten.
-    draw_cut(&mut objects, &cut, standard, style, viewport);
+    draw_cut_for(&mut objects, project, &cut, None, standard, style, viewport);
 
     // 4. Gelände, außerhalb der geschnittenen Bauteile.
     if let Some((lo, hi)) = buffer.extent() {
@@ -666,6 +666,7 @@ mod tests {
         p.elements.insert(
             id,
             Element::Wall(Wall {
+                phase: Default::default(),
                 storey: ElementId(1),
                 wall_type: ElementId(2),
                 start: Point2::new(1.0, 2.0),

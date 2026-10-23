@@ -2,7 +2,7 @@
 //! „KI-Assistent“). Die Befehlspalette (8.04) zeigt sie, später ruft die KI
 //! dieselben Befehle auf.
 
-use lot_model::WallAlignment;
+use lot_model::{Phase, WallAlignment};
 use serde::{Deserialize, Serialize};
 
 /// Ein Befehl des Editors. Die Kennung ist seine RON-Schreibweise, etwa
@@ -36,6 +36,8 @@ pub enum Command {
     DetectSpaces,
     SetWallType(u64),
     SetAlignment(WallAlignment),
+    /// Bauzustand der gewählten Bauteile: Bestand, Abbruch oder Neubau.
+    SetPhase(Phase),
     SetStorey(u64),
     /// Neues Geschoss über dem obersten.
     AddStorey,

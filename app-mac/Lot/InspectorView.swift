@@ -29,6 +29,18 @@ struct InspectorView: View {
             } else {
                 ForEach(model.spaces, id: \.element) { SpaceSection(space: $0) }
                 ForEach(model.texts, id: \.element) { TextSection(info: $0) }
+                if let phase = model.selectionPhase {
+                    Section("Bauzustand") {
+                        Picker("Bauzustand", selection: Binding(get: { phase }, set: { model.setPhase($0) })) {
+                            if phase < 0 { Text("gemischt").tag(-1) }
+                            Text("Bestand").tag(0)
+                            Text("Abbruch").tag(1)
+                            Text("Neubau").tag(2)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
+                }
                 ForEach(groups, id: \.0) { element, parameters in
                     Section(model.label(for: element)) {
                         ForEach(parameters, id: \.kind) { ParameterRow(parameter: $0) }

@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use lot_model::{ElementId, Project};
+use lot_model::{ElementId, PhaseFilter, Project};
 use lot_plan::Sheet;
 use lot_plan::sheets::{CatalogCell, catalog_sheets, floor_plan_sheet};
 use lot_plan::standard::OfficeStandard;
@@ -22,7 +22,14 @@ pub enum Output {
     /// Das M0-Prüfblatt mit Kalibrierung und Grundriss.
     M0Sheet { name: String },
     /// Grundriss eines Geschosses.
-    FloorPlan { name: String, storey: u64, scale: f64 },
+    /// Grundriss eines Geschosses; `phase` wählt Umbauplan (farbig), Bestand oder Neuzustand.
+    FloorPlan {
+        name: String,
+        storey: u64,
+        scale: f64,
+        #[serde(default)]
+        phase: PhaseFilter,
+    },
     /// Katalog von Ausschnitten, etwa der Wandknoten.
     Catalog { name: String, storey: u64, scale: f64, title: String, cells: Vec<CatalogCell> },
     /// 3D-Ansicht als Bild, ohne Fenster gerechnet.
@@ -32,7 +39,13 @@ pub enum Output {
     /// Flächenaufstellung nach DIN 277 und WoFlV, als Blatt und als CSV.
     AreaTable { name: String },
     /// Schnitt oder Ansicht (Element `view` im Projekt).
-    Section { name: String, view: u64, scale: f64 },
+    Section {
+        name: String,
+        view: u64,
+        scale: f64,
+        #[serde(default)]
+        phase: PhaseFilter,
+    },
     /// Alle Planblätter des Projekts, eine Seite je Blatt.
     PlanSheets { name: String },
 }
@@ -67,25 +80,47 @@ pub fn sheets(project: &Project, output: &Output, source: &str) -> Vec<Sheet> {
     let standard = OfficeStandard::default_standard();
     match output {
         Output::M0Sheet { .. } => vec![lot_plan::m0::sheet(project, source)],
-        Output::FloorPlan { storey, scale, .. } => {
-            vec![floor_plan_sheet(project, ElementId(*storey), *scale, standard)]
+        Output::FloorPlan { storey, scale, phase, .. } => {
+            vec![floor_plan_sheet(&phase_project(project, *phase), ElementId(*storey), *scale, standard)]
         }
         Output::Catalog { storey, scale, title, cells, .. } => {
             catalog_sheets(project, ElementId(*storey), cells, *scale, standard, title)
         }
         Output::AreaTable { .. } => lot_plan::area_table::area_sheets(&project.name, &lot_rules::area_report(project)),
-        Output::Section { view, scale, .. } => match lot_geom::build(project) {
-            Ok(geometry) => {
-                vec![lot_plan::sheets::section_sheet(project, &geometry, ElementId(*view), *scale, standard)]
+        Output::Section { view, scale, phase, .. } => {
+            let project = phase_project(project, *phase);
+            match geometry(&project) {
+                Ok(geometry) => {
+                    vec![lot_plan::sheets::section_sheet(&project, &geometry, ElementId(*view), *scale, standard)]
+                }
+                Err(_) => Vec::new(),
             }
-            Err(_) => Vec::new(),
-        },
-        Output::PlanSheets { .. } => match lot_geom::build(project) {
+        }
+        Output::PlanSheets { .. } => match geometry(project) {
             Ok(geometry) => lot_plan::layout::plan_sheets(project, &geometry, standard),
             Err(_) => Vec::new(),
         },
         Output::View3d { .. } | Output::PlanView { .. } => Vec::new(),
     }
+}
+
+/// Das Projekt im gewählten Bauzustand; Bestand und Neuzustand stehen im Titel.
+pub fn phase_project(project: &Project, phase: PhaseFilter) -> Project {
+    let mut p = project.phase_view(phase);
+    if project.has_phases() {
+        match phase {
+            PhaseFilter::All => {}
+            PhaseFilter::Existing => p.name = format!("{} (Bestand)", project.name),
+            PhaseFilter::Planned => p.name = format!("{} (Neuzustand)", project.name),
+        }
+    }
+    p
+}
+
+/// 3D-Geometrie für Schnitte und Planblätter; im Umbauplan ohne die Öffnungen,
+/// die die Wand nicht durchbrechen (siehe `Project::without_phase_openings`).
+pub fn geometry(project: &Project) -> Result<lot_geom::ModelGeometry, lot_geom::GeomError> {
+    if project.has_phases() { lot_geom::build(&project.without_phase_openings()) } else { lot_geom::build(project) }
 }
 
 /// Dateinamen der Seiten: `name` bei einer Seite, sonst `name-1`, `name-2`, ...

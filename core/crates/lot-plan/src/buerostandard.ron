@@ -100,6 +100,9 @@ OfficeStandard(
             cut: Lines(angle: 45.0, spacing: 1.25),
         ),
     },
+    // Bestand, Abbruch, Neubau (2.05): Füllfarben im Umbauplan. VORSCHLAG M4,
+    // die Bauvorlagenverordnungen der Länder verlangen grau, gelb und rot.
+    phases: PhaseColors(existing: (170, 170, 170), demolished: (255, 221, 0), new: (226, 35, 26)),
     // Je Maßstabsbereich: Detailgrad und Stifte. Es gilt der erste Eintrag,
     // dessen `up_to` mindestens so groß ist wie die Maßstabszahl.
     scales: [

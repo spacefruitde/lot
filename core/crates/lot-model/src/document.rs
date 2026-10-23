@@ -547,6 +547,7 @@ mod tests {
         let mut d = doc();
         let err = d
             .insert(Element::Opening(Opening {
+                phase: Default::default(),
                 host: ElementId(2),
                 offset: 0.0,
                 width: 1.0,

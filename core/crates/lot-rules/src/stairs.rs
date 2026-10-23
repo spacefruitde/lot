@@ -240,6 +240,7 @@ mod tests {
         p.elements.insert(
             ElementId(900),
             Element::Stair(Stair {
+                phase: Default::default(),
                 storey,
                 start: Point2::new(0.5, 0.0),
                 direction: Point2::new(0.0, 1.0),
@@ -313,6 +314,7 @@ mod tests {
         p.elements.insert(
             ElementId(803),
             Element::Slab(lot_model::Slab {
+                phase: Default::default(),
                 storey: above,
                 slab_type: ElementId(802),
                 outline: vec![

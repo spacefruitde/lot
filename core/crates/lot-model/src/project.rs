@@ -219,6 +219,79 @@ impl Project {
         })
     }
 
+    /// Bauzustand eines Elements; Elemente ohne Bauzustand gelten als Neubau.
+    pub fn phase_of(&self, id: ElementId) -> crate::Phase {
+        match self.elements.get(&id) {
+            Some(Element::Wall(w)) => w.phase,
+            Some(Element::Opening(o)) => o.phase,
+            Some(Element::Column(c)) => c.phase,
+            Some(Element::Slab(s)) => s.phase,
+            Some(Element::SlabOpening(o)) => o.phase,
+            Some(Element::Stair(s)) => s.phase,
+            Some(Element::Railing(r)) => r.phase,
+            _ => crate::Phase::New,
+        }
+    }
+
+    /// Gibt es Bestand oder Abbruch? Dann werden Pläne farbig (2.05).
+    pub fn has_phases(&self) -> bool {
+        self.elements.keys().any(|id| !self.phase_of(*id).is_new())
+    }
+
+    /// Das Projekt in einem Bauzustand. `Existing`: der Bestand vor dem Umbau,
+    /// als gewöhnlicher Plan ohne Farben. `Planned`: Bestand und Neubau, ohne
+    /// Abbruch. `All`: unverändert.
+    pub fn phase_view(&self, filter: crate::PhaseFilter) -> Project {
+        let mut out = self.clone();
+        if filter == crate::PhaseFilter::All {
+            return out;
+        }
+        let gone: Vec<ElementId> =
+            self.elements.keys().copied().filter(|id| !self.phase_of(*id).shown_in(filter)).collect();
+        for id in &gone {
+            out.elements.remove(id);
+        }
+        // Öffnungen und Durchbrüche in entfernten Bauteilen fallen mit weg.
+        out.elements.retain(|_, e| match e {
+            Element::Opening(o) => !gone.contains(&o.host),
+            Element::SlabOpening(o) => !gone.contains(&o.host),
+            _ => true,
+        });
+        if filter == crate::PhaseFilter::Existing {
+            for e in out.elements.values_mut() {
+                e.set_phase(crate::Phase::New);
+            }
+        }
+        out
+    }
+
+    /// Für den Umbauplan: ohne die Öffnungen, die die Wand nicht durchbrechen,
+    /// weil sie zugemauert werden (Abbruch) oder erst neu in Bestand entstehen.
+    /// Ihre Fläche wird dort farbig angelegt.
+    pub fn without_phase_openings(&self) -> Project {
+        let mut out = self.clone();
+        out.elements.retain(|id, e| match e {
+            Element::Opening(_) => self.opening_cuts_in_plan(*id),
+            _ => true,
+        });
+        out
+    }
+
+    /// Ob eine Öffnung im Umbauplan die Wand durchbricht: ja, wenn sie zum
+    /// gleichen Bauzustand gehört wie ihre Wand, oder als Bestand in einer Wand
+    /// sitzt, die abgebrochen wird. Eine neue Öffnung in Bestand (Ausbruch) und
+    /// eine zugemauerte Öffnung durchbrechen sie nicht.
+    pub fn opening_cuts_in_plan(&self, id: ElementId) -> bool {
+        use crate::Phase::{Demolished, Existing};
+        match self.elements.get(&id) {
+            Some(Element::Opening(o)) => {
+                let host = self.phase_of(o.host);
+                o.phase == host || (host == Demolished && o.phase == Existing)
+            }
+            _ => true,
+        }
+    }
+
     /// Angaben für den Plankopf; leer, wenn das Projekt keine hat.
     pub fn info(&self) -> crate::ProjectInfo {
         self.elements
@@ -375,6 +448,7 @@ impl Project {
         p.elements.insert(
             ElementId(3),
             Element::Wall(Wall {
+                phase: Default::default(),
                 storey: ElementId(1),
                 wall_type: ElementId(2),
                 start: Point2::new(0.0, 0.0),
@@ -388,6 +462,7 @@ impl Project {
         p.elements.insert(
             ElementId(4),
             Element::Opening(Opening {
+                phase: Default::default(),
                 host: ElementId(3),
                 offset: 1.75,
                 width: 1.5,

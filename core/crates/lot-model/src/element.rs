@@ -99,6 +99,21 @@ impl Element {
         }
     }
 
+    /// Setzt den Bauzustand (2.05). `false`, wenn das Element keinen hat.
+    pub fn set_phase(&mut self, phase: Phase) -> bool {
+        match self {
+            Element::Wall(w) => w.phase = phase,
+            Element::Opening(o) => o.phase = phase,
+            Element::Column(c) => c.phase = phase,
+            Element::Slab(s) => s.phase = phase,
+            Element::SlabOpening(o) => o.phase = phase,
+            Element::Stair(s) => s.phase = phase,
+            Element::Railing(r) => r.phase = phase,
+            _ => return false,
+        }
+        true
+    }
+
     /// Wert eines Parameters, falls das Element ihn hat.
     pub fn param(&self, param: Param) -> Option<f64> {
         match (self, param) {
@@ -293,6 +308,9 @@ pub struct Wall {
     /// Sehne zwischen `start` und `end`, positiv nach links. 0 bei geraden Wänden.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub sagitta: f64,
+    /// Bestand, Abbruch oder Neubau (2.05).
+    #[serde(default, skip_serializing_if = "Phase::is_new")]
+    pub phase: Phase,
 }
 
 fn is_zero(v: &f64) -> bool {
@@ -469,6 +487,9 @@ pub struct Opening {
     pub sill_height: f64,
     #[serde(default, skip_serializing_if = "OpeningKind::is_plain")]
     pub kind: OpeningKind,
+    /// Bestand, Abbruch oder Neubau (2.05).
+    #[serde(default, skip_serializing_if = "Phase::is_new")]
+    pub phase: Phase,
 }
 
 /// Was in einer Öffnung sitzt.
@@ -553,6 +574,9 @@ pub struct Column {
     #[serde(default)]
     pub base_offset: f64,
     pub top: Top,
+    /// Bestand, Abbruch oder Neubau (2.05).
+    #[serde(default, skip_serializing_if = "Phase::is_new")]
+    pub phase: Phase,
 }
 
 /// Raum (IfcSpace). Gespeichert wird nur ein Punkt im Raum; die Fläche ergibt
@@ -715,6 +739,9 @@ pub struct Slab {
     pub top_offset: f64,
     #[serde(default)]
     pub kind: SlabKind,
+    /// Bestand, Abbruch oder Neubau (2.05).
+    #[serde(default, skip_serializing_if = "Phase::is_new")]
+    pub phase: Phase,
 }
 
 /// Durchbruch in einer Decke (IfcOpeningElement), etwa für eine Treppe oder einen Schacht.
@@ -724,6 +751,9 @@ pub struct SlabOpening {
     pub host: ElementId,
     /// Umriss in Metern, Richtung egal.
     pub outline: Vec<Point2>,
+    /// Bestand, Abbruch oder Neubau (2.05).
+    #[serde(default, skip_serializing_if = "Phase::is_new")]
+    pub phase: Phase,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -772,6 +802,45 @@ impl SectionView {
         };
         (n, (n.1, -n.0))
     }
+}
+
+/// Bauzustand eines Bauteils (2.05). Im Bauantrag nach Bauvorlagenverordnung
+/// farbig: Bestand grau, Abbruch gelb, Neubau rot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum Phase {
+    /// Bleibt, wie es ist.
+    Existing,
+    /// Bestand, der abgebrochen wird.
+    Demolished,
+    #[default]
+    New,
+}
+
+impl Phase {
+    pub fn is_new(&self) -> bool {
+        *self == Phase::New
+    }
+
+    /// Steht das Bauteil im Zustand `state`?
+    pub fn shown_in(self, state: PhaseFilter) -> bool {
+        match state {
+            PhaseFilter::All => true,
+            PhaseFilter::Existing => self != Phase::New,
+            PhaseFilter::Planned => self != Phase::Demolished,
+        }
+    }
+}
+
+/// Welcher Bauzustand gezeigt wird.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum PhaseFilter {
+    /// Alles, Bestand, Abbruch und Neubau farbig (Umbauplan).
+    #[default]
+    All,
+    /// Bestand vor dem Umbau, einschließlich dessen, was abgebrochen wird.
+    Existing,
+    /// Zustand nach dem Umbau: Bestand und Neubau.
+    Planned,
 }
 
 /// Angaben für den Plankopf, einmal je Projekt.
@@ -872,6 +941,7 @@ mod tests {
 
     fn arc_wall(sagitta: f64) -> Wall {
         Wall {
+            phase: Default::default(),
             storey: ElementId(1),
             wall_type: ElementId(2),
             start: Point2::new(0.0, 0.0),

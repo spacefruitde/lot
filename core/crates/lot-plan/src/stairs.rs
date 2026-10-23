@@ -449,6 +449,7 @@ mod tests {
         p.elements.insert(
             ElementId(900),
             Element::Stair(Stair {
+                phase: Default::default(),
                 storey: lower,
                 start: Point2::new(0.5, 0.0),
                 direction: Point2::new(0.0, 1.0),
@@ -465,6 +466,7 @@ mod tests {
         p.elements.insert(
             ElementId(901),
             Element::Railing(Railing {
+                phase: Default::default(),
                 storey: lower,
                 path: RailingPath::Flight { stair: ElementId(900), flight: 0, side: WallSide::Left },
                 height: 0.9,

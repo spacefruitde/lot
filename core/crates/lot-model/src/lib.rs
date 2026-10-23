@@ -20,9 +20,9 @@ pub use annotation::{Annotation, AnnotationShape, AnnotationView};
 pub use document::{Document, ModelError};
 pub use element::{
     BuildingClass, CircularArc, Column, ColumnProfile, DimRef, DimensionChain, Door, Element, ElementId, ElementKind,
-    GridLine, Handing, Layer, LayerFunction, Opening, OpeningKind, Param, PlacedView, PlanSheet, Point2, ProjectInfo,
-    SectionKind, SectionView, Slab, SlabKind, SlabOpening, SlabType, Space, SpaceUsage, Storey, Top, ViewContent, Wall,
-    WallAlignment, WallEnd, WallSide, WallType,
+    GridLine, Handing, Layer, LayerFunction, Opening, OpeningKind, Param, Phase, PhaseFilter, PlacedView, PlanSheet,
+    Point2, ProjectInfo, SectionKind, SectionView, Slab, SlabKind, SlabOpening, SlabType, Space, SpaceUsage, Storey,
+    Top, ViewContent, Wall, WallAlignment, WallEnd, WallSide, WallType,
 };
 pub use operation::Operation;
 pub use project::Project;
