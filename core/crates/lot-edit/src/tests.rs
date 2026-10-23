@@ -330,3 +330,84 @@ fn snaps_onto_the_arc() {
     let w = &walls(&doc)[0];
     assert!(w.locate(s.point).1.abs() < 1e-6 && (s.point.x - 1.0).abs() < 1e-6, "{:?}", s.point);
 }
+
+/// Zeichnet ein Rechteck 6 × 4 m und eine Trennwand bei x = 2,5.
+fn two_rooms(doc: &mut Document, ed: &mut Editor) {
+    ed.run(doc, &Command::WallTool);
+    for (x, y) in [(0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0), (0.0, 0.0)] {
+        click(doc, ed, x, y);
+    }
+    ed.key(doc, Key::Escape);
+    for (x, y) in [(2.5, 0.0), (2.5, 4.0)] {
+        click(doc, ed, x, y);
+    }
+    ed.key(doc, Key::Escape);
+}
+
+fn rooms(doc: &Document) -> Vec<lot_model::Room> {
+    doc.project().rooms_on(ElementId(1)).map(|(_, r)| r.clone()).collect()
+}
+
+#[test]
+fn room_tool_numbers_rooms_per_storey() {
+    let (mut doc, mut ed) = setup();
+    two_rooms(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::RoomTool);
+    click(&mut doc, &mut ed, 1.2, 2.0);
+    click(&mut doc, &mut ed, 4.0, 2.0);
+    let r = rooms(&doc);
+    assert_eq!(r.iter().map(|r| r.number.as_str()).collect::<Vec<_>>(), ["0.01", "0.02"]);
+    assert!(r.iter().all(|r| r.living_space));
+}
+
+#[test]
+fn detect_rooms_fills_every_enclosed_area_once() {
+    let (mut doc, mut ed) = setup();
+    two_rooms(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::RoomTool);
+    click(&mut doc, &mut ed, 1.2, 2.0);
+    let response = ed.run(&mut doc, &Command::DetectRooms);
+    assert!(response.model_changed);
+    let r = rooms(&doc);
+    assert_eq!(r.len(), 2);
+    assert_eq!(r[1].number, "0.02");
+    assert!(r[1].position.x > 2.6, "neuer Raum im rechten Bereich: {:?}", r[1].position);
+    // Ein zweites Mal gibt es nichts mehr zu tun, und ein Undo nimmt alle neuen Räume zurück.
+    assert!(ed.run(&mut doc, &Command::DetectRooms).error.is_some());
+    doc.undo().unwrap();
+    assert_eq!(rooms(&doc).len(), 1);
+}
+
+#[test]
+fn room_stamp_can_be_picked_and_moved() {
+    let (mut doc, mut ed) = setup();
+    two_rooms(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::RoomTool);
+    click(&mut doc, &mut ed, 4.0, 2.0);
+    ed.run(&mut doc, &Command::SelectTool);
+    // Klick neben den Stempel wählt den Raum, Ziehen verschiebt ihn.
+    ed.pointer_down(&mut doc, input(4.5, 2.2), 1);
+    assert_eq!(ed.selection.len(), 1);
+    ed.pointer_dragged(doc.project(), input(4.5, 3.2));
+    ed.pointer_up(&mut doc);
+    assert_eq!(rooms(&doc)[0].position, Point2::new(4.0, 3.0));
+    // Die Auswahl zeigt die Fläche des Raums.
+    let overlay = ed.overlay(doc.project());
+    let ring = &overlay.selected[0];
+    let xs: Vec<f64> = ring.iter().map(|p| p[0]).collect();
+    assert!(xs.iter().cloned().fold(f64::INFINITY, f64::min) > 2.5);
+}
+
+#[test]
+fn cellar_rooms_are_not_living_space() {
+    let (mut doc, mut ed) = setup();
+    doc.insert(lot_model::Element::Storey(lot_model::Storey { name: "KG".into(), elevation: -2.5, height: 2.5 }))
+        .unwrap();
+    let kg = doc.project().storeys()[0].0;
+    ed.run(&mut doc, &Command::SetStorey(kg.0));
+    ed.run(&mut doc, &Command::RoomTool);
+    click(&mut doc, &mut ed, 1.0, 1.0);
+    let r: Vec<_> = doc.project().rooms_on(kg).map(|(_, r)| r.clone()).collect();
+    assert_eq!(r[0].number, "-1.01");
+    assert!(!r[0].living_space);
+}

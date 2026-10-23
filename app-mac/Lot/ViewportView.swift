@@ -293,6 +293,7 @@ final class MetalViewportNSView: NSView {
             case "v": model?.run("SelectTool")
             case "a": model?.run("GridTool")
             case "s": model?.run("ColumnTool")
+            case "r": model?.run("RoomTool")
             case "f": model?.run("FlipWalls")
             case "0"..."9", ",", ".": deliver(viewport.key(key: .character(text: String(c))))
             default: super.keyDown(with: event)

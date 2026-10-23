@@ -19,6 +19,7 @@ lot-io = { version = "0.1.0", path = "../lot-io" }
 lot-model = { version = "0.1.0", path = "../lot-model" }
 lot-plan = { version = "0.1.0", path = "../lot-plan" }
 lot-render = { version = "0.1.0", path = "../lot-render" }
+lot-rules = { version = "0.1.0", path = "../lot-rules" }
 thiserror = "2.0.21"
 uniffi = "0.32"
 

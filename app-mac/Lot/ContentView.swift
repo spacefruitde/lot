@@ -59,6 +59,7 @@ struct ContentView: View {
             toolButton("Bogenwand", systemImage: "point.topleft.down.curvedto.point.bottomright.up", tool: "arc", command: "ArcWallTool", key: "B")
             toolButton("Achse", systemImage: "line.diagonal", tool: "grid", command: "GridTool", key: "A")
             toolButton("Stütze", systemImage: "square.fill", tool: "column", command: "ColumnTool", key: "S")
+            toolButton("Raum", systemImage: "square.dashed", tool: "room", command: "RoomTool", key: "R")
             commandMenu("Wandaufbau", systemImage: "square.stack.3d.up", group: "Wandaufbau")
             commandMenu("Geschoss", systemImage: "building.2", group: "Geschoss")
         }

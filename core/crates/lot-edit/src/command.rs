@@ -14,6 +14,9 @@ pub enum Command {
     ArcWallTool,
     GridTool,
     ColumnTool,
+    RoomTool,
+    /// Einen Raum in jeden umschlossenen Bereich ohne Raum setzen.
+    DetectRooms,
     SetWallType(u64),
     SetAlignment(WallAlignment),
     SetStorey(u64),

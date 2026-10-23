@@ -79,8 +79,25 @@ pub fn distance_to_wall(project: &Project, wall: &Wall, p: Point2) -> f64 {
     ds.hypot(dt)
 }
 
-/// Das Element unter dem Punkt: Stützen vor Wänden vor Achsen, jeweils das nächste.
+/// Halbe Breite und Höhe des Bereichs um einen Raumpunkt, in dem ein Klick den
+/// Raum wählt, in Metern (etwa die Größe des Raumstempels in 1:100).
+const ROOM_PICK: (f64, f64) = (0.9, 0.5);
+
+/// Das Element unter dem Punkt: Stützen vor Wänden vor Achsen vor Raumstempeln, jeweils das nächste.
 pub fn element_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    element_except_rooms(project, storey, p, tolerance).or_else(|| {
+        project
+            .rooms_on(storey)
+            .filter(|(_, r)| {
+                (p.x - r.position.x).abs() <= ROOM_PICK.0 + tolerance
+                    && (p.y - r.position.y).abs() <= ROOM_PICK.1 + tolerance
+            })
+            .min_by(|a, b| a.1.position.distance(p).total_cmp(&b.1.position.distance(p)))
+            .map(|(id, _)| id)
+    })
+}
+
+fn element_except_rooms(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
     let column = project
         .columns_on(storey)
         .map(|(id, c)| (id, column_distance(c, p)))
@@ -115,6 +132,17 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
     match project.elements.get(&id)? {
         Element::Wall(w) => Some(footprint(project, w)),
         Element::Column(c) => Some(column_outline(c)),
+        Element::Room(r) => {
+            // Die Fläche des Raums, bei offenen Räumen der Bereich des Stempels.
+            let finder = lot_geom::rooms::RoomFinder::new(project, r.storey);
+            let ring = finder.area_at([r.position.x, r.position.y]).and_then(|a| {
+                a.rings().into_iter().max_by(|x, y| lot_geom::signed_area(x).total_cmp(&lot_geom::signed_area(y)))
+            });
+            Some(ring.unwrap_or_else(|| {
+                let (x, y, w, h) = (r.position.x, r.position.y, ROOM_PICK.0, ROOM_PICK.1);
+                vec![[x - w, y - h], [x + w, y - h], [x + w, y + h], [x - w, y + h]]
+            }))
+        }
         Element::GridLine(g) => {
             let len = g.start.distance(g.end).max(1e-12);
             let (dx, dy) = ((g.end.x - g.start.x) / len, (g.end.y - g.start.y) / len);
@@ -164,6 +192,11 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
                 let mut n = c.clone();
                 n.position = shift(c.position);
                 changes.push((*id, Element::Column(n)));
+            }
+            Some(Element::Room(r)) => {
+                let mut n = r.clone();
+                n.position = shift(r.position);
+                changes.push((*id, Element::Room(n)));
             }
             Some(Element::GridLine(g)) => {
                 let mut n = g.clone();

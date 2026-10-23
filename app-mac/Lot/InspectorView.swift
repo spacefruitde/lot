@@ -7,12 +7,27 @@ struct InspectorView: View {
 
     var body: some View {
         Form {
-            if model.parameters.isEmpty {
+            if model.parameters.isEmpty && model.rooms.isEmpty {
                 Section {
-                    Text("Nichts gewählt. Eine Wand anklicken zeigt ihre Maße.")
+                    Text("Nichts gewählt. Eine Wand oder einen Raumstempel anklicken zeigt die Eigenschaften.")
                         .foregroundStyle(.secondary)
                 }
+                if model.storeyAreas.contains(where: { $0.net > 0 }) {
+                    Section("Flächen") {
+                        ForEach(model.storeyAreas, id: \.name) { s in
+                            LabeledContent(s.name) {
+                                VStack(alignment: .trailing) {
+                                    Text("NRF \(area(s.net)) · BGF \(area(s.gross))")
+                                    if s.living > 0 { Text("Wohnfläche \(area(s.living))") }
+                                }
+                                .font(.callout)
+                                .monospacedDigit()
+                            }
+                        }
+                    }
+                }
             } else {
+                ForEach(model.rooms, id: \.element) { RoomSection(room: $0) }
                 ForEach(groups, id: \.0) { element, parameters in
                     Section(model.label(for: element)) {
                         ForEach(parameters, id: \.kind) { ParameterRow(parameter: $0) }
@@ -28,7 +43,7 @@ struct InspectorView: View {
             }
             Section("Bedienung") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("W: Wand, A: Achse, S: Stütze, V: Auswählen, ⌘K: Befehle")
+                    Text("W: Wand, B: Bogenwand, A: Achse, S: Stütze, R: Raum, V: Auswählen, ⌘K: Befehle")
                     Text("Zeichnen: klicken, Länge tippen und ⏎, ⇧ rechtwinklig")
                     Text("Grundriss: zwei Finger verschieben, spreizen zoomt")
                     Text("3D: zwei Finger drehen, mit ⇧ verschieben")
@@ -48,6 +63,60 @@ struct InspectorView: View {
             by[p.element, default: []].append(p)
         }
         return order.map { ($0, by[$0] ?? []) }
+    }
+}
+
+/// Fläche im deutschen Format, „24,35 m²“.
+func area(_ m2: Double) -> String {
+    m2.formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "de_DE"))) + " m²"
+}
+
+/// Raumstempel und Flächen eines Raums. Texte werden mit Return, beim
+/// Verlassen des Feldes oder mit der nächsten Änderung im Raum übernommen.
+private struct RoomSection: View {
+    @Environment(AppModel.self) private var model
+    let room: RoomInfo
+    @State private var number = ""
+    @State private var name = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        Section(model.label(for: room.element)) {
+            TextField("Nummer", text: $number)
+                .focused($focused)
+                .onSubmit(commit)
+            TextField("Name", text: $name)
+                .focused($focused)
+                .onSubmit(commit)
+            Picker("Nutzung", selection: Binding(get: { room.usage }, set: { model.setRoom(room, number: number, name: name, usage: $0) })) {
+                ForEach(Array(AppModel.usages.enumerated()), id: \.offset) { index, usage in
+                    Text("\(usage.code) \(usage.title)").tag(UInt32(index))
+                }
+            }
+            Toggle(
+                "Zählt zur Wohnfläche",
+                isOn: Binding(get: { room.livingSpace }, set: { model.setRoom(room, number: number, name: name, livingSpace: $0) })
+            )
+            LabeledContent("Netto-Raumfläche", value: room.netArea.map(area) ?? "offen")
+            if let living = room.livingArea {
+                LabeledContent("Wohnfläche (WoFlV)", value: area(living))
+            }
+        }
+        .onAppear(perform: load)
+        .onChange(of: room.element) { load() }
+        .onChange(of: room.number) { number = room.number }
+        .onChange(of: room.name) { name = room.name }
+        .onChange(of: focused) { if !focused { commit() } }
+    }
+
+    private func load() {
+        number = room.number
+        name = room.name
+    }
+
+    private func commit() {
+        guard number != room.number || name != room.name else { return }
+        model.setRoom(room, number: number, name: name)
     }
 }
 

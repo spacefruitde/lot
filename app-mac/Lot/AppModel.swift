@@ -13,6 +13,12 @@ final class AppModel {
     private(set) var canRedo = false
     /// Parameter der gewählten Elemente.
     private(set) var parameters: [ParamValue] = []
+    /// Gewählte Räume mit Flächen.
+    private(set) var rooms: [RoomInfo] = []
+    /// Flächen je Geschoss, für die Übersicht im Inspektor.
+    private(set) var storeyAreas: [StoreyAreaInfo] = []
+    /// Nutzungsgruppen nach DIN 277.
+    static let usages = roomUsages()
     /// Werkzeug, Geschoss, Maßstab, Auswahl und Hinweis aus dem Kern.
     private(set) var viewState: ViewState?
     private(set) var commands: [CommandItem] = []
@@ -87,6 +93,7 @@ final class AppModel {
         viewState = state
         commands = viewport.commands()
         parameters = state.selection.isEmpty ? [] : document.parameters(ids: state.selection)
+        rooms = state.selection.isEmpty ? [] : document.rooms(ids: state.selection)
     }
 
     // MARK: Modell
@@ -94,6 +101,27 @@ final class AppModel {
     func set(_ value: Double, for parameter: ParamValue) {
         do {
             try document.setParam(element: parameter.element, kind: parameter.kind, value: value)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+        if let viewport {
+            stats.rebuildMs = viewport.refresh()
+        }
+        refresh()
+        updateViewState()
+        requestRedraw?()
+    }
+
+    /// Ändert Stempeltext, Nutzung oder Wohnflächen-Merkmal eines Raums.
+    func setRoom(_ room: RoomInfo, number: String? = nil, name: String? = nil, usage: UInt32? = nil, livingSpace: Bool? = nil) {
+        do {
+            try document.setRoom(
+                element: room.element,
+                number: number ?? room.number,
+                name: name ?? room.name,
+                usage: usage ?? room.usage,
+                livingSpace: livingSpace ?? room.livingSpace
+            )
         } catch {
             errorMessage = Self.message(for: error)
         }
@@ -183,6 +211,7 @@ final class AppModel {
     private func refresh() {
         canUndo = document.canUndo()
         canRedo = document.canRedo()
+        storeyAreas = document.storeyAreas()
     }
 
     static func message(for error: Error) -> String {

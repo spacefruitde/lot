@@ -59,6 +59,8 @@ struct LotApp: App {
                 Button("Bogenwand zeichnen") { model.run("ArcWallTool") }
                 Button("Achse zeichnen") { model.run("GridTool") }
                 Button("Stütze setzen") { model.run("ColumnTool") }
+                Button("Raum setzen") { model.run("RoomTool") }
+                Button("Räume erkennen") { model.run("DetectRooms") }
                 Divider()
                 Button("Alles auswählen") { model.run("SelectAll") }
                     .keyboardShortcut("a")
