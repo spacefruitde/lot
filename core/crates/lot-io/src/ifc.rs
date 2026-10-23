@@ -89,7 +89,9 @@ pub fn read_ifc(bytes: &[u8]) -> Result<(Vec<IfcPart>, usize), IoError> {
         let o = mesh.origin;
         let raw: Vec<[f64; 3]> = mesh
             .positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|p| [o[0] + p[0] as f64, o[1] + p[1] as f64, o[2] + p[2] as f64])
             .collect();
         // Gleiche Eckpunkte zusammenführen (IFClite legt sie je Fläche an), damit
@@ -108,7 +110,9 @@ pub fn read_ifc(bytes: &[u8]) -> Result<(Vec<IfcPart>, usize), IoError> {
             .collect();
         let triangles: Vec<[u32; 3]> = mesh
             .indices
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|t| [remap[t[0] as usize], remap[t[1] as usize], remap[t[2] as usize]])
             .filter(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2])
             .collect();
