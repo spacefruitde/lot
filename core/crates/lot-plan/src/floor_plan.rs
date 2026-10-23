@@ -108,6 +108,11 @@ pub fn floor_plan_layers(
         crate::stairs::draw_stairs(objects, project, view.storey, view.cut_height, style, viewport)
     });
 
+    // 5b. Aufzüge.
+    layer("A_Aufzuege", &mut |objects| {
+        crate::elevators::draw_elevators(objects, project, view.storey, style, viewport)
+    });
+
     // 6. Dach.
     layer("A_Dach", &mut |objects| draw_roof_lines(objects, project, view.storey, style, viewport));
 
@@ -121,9 +126,10 @@ pub fn floor_plan_layers(
         }
     });
 
-    // 8. Maßketten.
+    // 8. Maßketten, Rohbaumaße der Türen ohne Maßkette.
     layer("A_Bemassung", &mut |objects| {
-        crate::dimensions::draw_dimensions(objects, project, view.storey, style, viewport)
+        crate::dimensions::draw_dimensions(objects, project, view.storey, style, viewport);
+        crate::dimensions::draw_door_sizes(objects, project, view.storey, z_cut, style, viewport);
     });
 
     // 9. Raumstempel.
@@ -166,6 +172,10 @@ fn draw_space_tags(
     }
     let finder = lot_geom::spaces::SpaceFinder::new(planned.as_ref().unwrap_or(project), storey);
     for (_, space) in spaces {
+        // Im Aufzugsschacht steht die Beschriftung des Aufzugs.
+        if crate::elevators::labels_space(project, storey, space.position) {
+            continue;
+        }
         let area = finder.area_at([space.position.x, space.position.y]).map(|a| a.area());
         let mut lines: Vec<(String, f64)> = Vec::new();
         if !space.number.is_empty() {

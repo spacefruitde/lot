@@ -38,13 +38,32 @@ pub enum Output {
         /// Referenzmodelle (IFC) hellgrau unter dem Grundriss.
         #[serde(default)]
         references: bool,
+        /// Hinweise aus dem Prüfbericht im Grundriss (nicht für den Bauantrag).
+        #[serde(default)]
+        findings: bool,
     },
     /// Katalog von Ausschnitten, etwa der Wandknoten.
     Catalog { name: String, storey: u64, scale: f64, title: String, cells: Vec<CatalogCell> },
     /// 3D-Ansicht als Bild, ohne Fenster gerechnet.
     View3d { name: String },
-    /// Planansicht der App als Bild, ohne Fenster gerechnet.
-    PlanView { name: String, storey: u64, scale: f64 },
+    /// Planansicht der App als Bild, ohne Fenster gerechnet; mit `findings`
+    /// die Hinweise aus dem Prüfbericht.
+    PlanView {
+        name: String,
+        storey: u64,
+        scale: f64,
+        #[serde(default)]
+        findings: bool,
+    },
+    /// Tür- und Fensterliste (4.05) als Blatt und als CSV.
+    OpeningSchedule { name: String },
+    /// Prüfbericht (5.01 bis 5.05); `only` beschränkt auf Abschnitte, etwa
+    /// „Abstandsflächen“ für die Berechnung im Bauantrag.
+    CheckReport {
+        name: String,
+        #[serde(default)]
+        only: Vec<String>,
+    },
     /// Flächenaufstellung nach DIN 277 und WoFlV, als Blatt und als CSV; bei
     /// Umbauten im gewählten Bauzustand (sonst alles).
     AreaTable {
@@ -91,6 +110,8 @@ impl Output {
             | Output::AreaTable { name, .. }
             | Output::Section { name, .. }
             | Output::SitePlan { name, .. }
+            | Output::OpeningSchedule { name }
+            | Output::CheckReport { name, .. }
             | Output::PlanSheets { name, .. } => name,
         }
     }
@@ -111,7 +132,7 @@ pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &At
     let standard = OfficeStandard::default_standard();
     match output {
         Output::M0Sheet { .. } => vec![lot_plan::m0::sheet(project, source)],
-        Output::FloorPlan { storey, scale, phase, variant, references, .. } => {
+        Output::FloorPlan { storey, scale, phase, variant, references, findings, .. } => {
             let base = match variant {
                 Some((set, index)) => {
                     let mut p = project.with_variant(ElementId(*set), *index);
@@ -128,11 +149,18 @@ pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &At
             let references = if *references { lot_io::ifc::references(&project, attachments) } else { Vec::new() };
             let z = project.storey(ElementId(*storey)).map_or(0.0, |s| s.elevation)
                 + lot_plan::floor_plan::DEFAULT_CUT_HEIGHT;
-            vec![lot_plan::sheets::floor_plan_sheet_with(&project, ElementId(*storey), *scale, standard, |viewport| {
-                let mut below = Vec::new();
-                lot_plan::reference::draw_reference_cut(&mut below, &references, z, viewport);
-                below
-            })]
+            let mut sheet =
+                lot_plan::sheets::floor_plan_sheet_with(&project, ElementId(*storey), *scale, standard, |viewport| {
+                    let mut below = Vec::new();
+                    lot_plan::reference::draw_reference_cut(&mut below, &references, z, viewport);
+                    below
+                });
+            if *findings && let Ok(g) = geometry(&project, attachments) {
+                let report = lot_rules::check_project(&project, &g);
+                let viewport = lot_plan::sheets::floor_plan_viewport(&project, *scale, standard, &sheet);
+                lot_plan::findings::draw_findings(&mut sheet.objects, &report, ElementId(*storey), viewport);
+            }
+            vec![sheet]
         }
         Output::Catalog { storey, scale, title, cells, .. } => {
             catalog_sheets(project, ElementId(*storey), cells, *scale, standard, title)
@@ -165,6 +193,23 @@ pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &At
             Ok(geometry) => lot_plan::layout::plan_sheets(project, &geometry, standard),
             Err(_) => Vec::new(),
         },
+        Output::OpeningSchedule { .. } => {
+            let (rows, types) = lot_rules::opening_schedule(&project.variant_view());
+            lot_plan::table::schedule_sheets(&project.name, &rows, &types)
+        }
+        Output::CheckReport { only, .. } => {
+            let project = project.variant_view();
+            match geometry(&project, attachments) {
+                Ok(g) => {
+                    let mut report = lot_rules::check_project(&project, &g);
+                    if !only.is_empty() {
+                        report.sections.retain(|s| only.contains(&s.title));
+                    }
+                    lot_plan::table::report_sheets(&project.name, &report)
+                }
+                Err(_) => Vec::new(),
+            }
+        }
         Output::View3d { .. } | Output::PlanView { .. } => Vec::new(),
     }
 }

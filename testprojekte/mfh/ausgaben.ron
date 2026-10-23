@@ -1,10 +1,16 @@
 // Ausgaben von lot-cli render für dieses Testprojekt.
 [
+    PlanSheets(name: "bauantrag", cad: true),
     SitePlan(name: "lageplan", scale: 250.0),
     SitePlan(name: "lageplan-probe", scale: 250.0, variant: Some((45, 1))),
+    CheckReport(name: "pruefbericht"),
+    CheckReport(name: "berechnungen", only: ["Gebäudeklasse", "Abstandsflächen", "Maß der baulichen Nutzung"]),
+    AreaTable(name: "flaechen"),
+    OpeningSchedule(name: "tuer-fensterliste"),
     FloorPlan(name: "eg-100", storey: 1, scale: 100.0),
     FloorPlan(name: "1og-100", storey: 2, scale: 100.0),
-    FloorPlan(name: "3og-100", storey: 4, scale: 100.0),
+    FloorPlan(name: "3og-hinweise", storey: 4, scale: 100.0, findings: true),
+    FloorPlan(name: "eg-50", storey: 1, scale: 50.0),
     Section(name: "schnitt-a", view: 60, scale: 100.0),
     Section(name: "schnitt-b", view: 61, scale: 100.0),
     Section(name: "ansicht-sued", view: 62, scale: 100.0),
@@ -12,6 +18,6 @@
     Section(name: "ansicht-nord", view: 64, scale: 100.0),
     Section(name: "ansicht-west", view: 65, scale: 100.0),
     View3d(name: "mfh-3d"),
-    AreaTable(name: "flaechen"),
-    PlanSheets(name: "bauantrag"),
+    PlanView(name: "eg-planansicht", storey: 1, scale: 100.0),
+    PlanView(name: "3og-planansicht-hinweise", storey: 4, scale: 100.0, findings: true),
 ]

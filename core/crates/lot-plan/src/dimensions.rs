@@ -115,6 +115,69 @@ pub fn draw_dimensions(
     }
 }
 
+/// Rohbaumaße von Türen und Durchgängen, die keine Maßkette erfasst, als
+/// „Breite/Höhe“ neben der Öffnung auf der Seite ohne Aufschlag. Der Bauantrag
+/// verlangt die Öffnungsmaße der Türen (MBauVorlV § 8 Abs. 2 Nr. 2 b).
+pub fn draw_door_sizes(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    storey: ElementId,
+    z_cut: f64,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let mm = viewport.scale / 1000.0;
+    let dimensioned: std::collections::BTreeSet<ElementId> = project
+        .dimensions_on(storey)
+        .flat_map(|(_, d)| lot_geom::dimensions::resolve(project, d))
+        .filter_map(|p| p.opening)
+        .collect();
+    for (wall_id, wall) in project.walls_on(storey) {
+        let (Some(wall_type), Some((bottom, top))) = (project.wall_type(wall.wall_type), project.wall_extent(wall))
+        else {
+            continue;
+        };
+        if !(bottom <= z_cut && z_cut < top) {
+            continue;
+        }
+        let offsets = wall.layer_offsets(wall_type);
+        let (left, right) = (offsets[0].0, offsets[offsets.len() - 1].1);
+        for (id, o) in project.openings_in(wall_id) {
+            if dimensioned.contains(&id) || matches!(o.kind, lot_model::OpeningKind::Window) {
+                continue;
+            }
+            if bottom + o.sill_height > z_cut || bottom + o.sill_height + o.height <= z_cut {
+                continue;
+            }
+            // Auf der Seite ohne Aufschlag; bei Durchgängen links der Wand.
+            let side = match o.kind {
+                lot_model::OpeningKind::Door(d) => d.opens_to.other(),
+                _ => lot_model::WallSide::Left,
+            };
+            let height = style.dimension_text;
+            let (face, out) = match side {
+                lot_model::WallSide::Left => (left, 1.0),
+                lot_model::WallSide::Right => (right, -1.0),
+            };
+            let s = o.offset + o.width / 2.0;
+            let gap = (TEXT_GAP + 0.5 * height) * mm;
+            let p = wall.point_at(s, face + out * gap);
+            let (tx, ty) = wall.tangent_at(s);
+            let mut angle = ty.atan2(tx).to_degrees();
+            if angle > 90.0 + 1e-9 || angle <= -90.0 + 1e-9 {
+                angle = if angle > 0.0 { angle - 180.0 } else { angle + 180.0 };
+            }
+            objects.push(PlanObject::Text(Text {
+                position: viewport.to_paper(p.x, p.y),
+                text: format!("{}/{}", format_dimension(o.width), format_dimension(o.height)),
+                height_mm: height,
+                anchor: Anchor::Center,
+                rotation: angle,
+            }));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -9,6 +9,8 @@ pub mod annotations;
 pub mod area_table;
 pub mod clip;
 pub mod dimensions;
+pub mod elevators;
+pub mod findings;
 pub mod floor_plan;
 pub mod layout;
 pub mod m0;
@@ -18,6 +20,7 @@ pub mod sheets;
 pub mod site_plan;
 pub mod stairs;
 pub mod standard;
+pub mod table;
 
 /// Punkt auf dem Blatt in Millimetern.
 #[derive(Debug, Clone, Copy, PartialEq)]

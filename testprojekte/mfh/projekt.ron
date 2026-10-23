@@ -86,7 +86,7 @@ Project(
         1004: Wall(storey: 1, wall_type: 10, start: (x: 24.0, y: 0.0), end: (x: 0.0, y: 0.0), alignment: Exterior, top: Storey(offset: 0.0)),
         1005: Wall(storey: 1, wall_type: 13, start: (x: 0.0, y: 6.535), end: (x: 24.0, y: 6.535), top: Storey(offset: 0.0)), // tragende Mittelwand
         1006: Wall(storey: 1, wall_type: 14, start: (x: 12.0, y: 0.0), end: (x: 12.0, y: 6.535), top: Storey(offset: 0.0)), // Wohnungstrennwand
-        1007: Wall(storey: 1, wall_type: 13, start: (x: 9.75, y: 7.595), end: (x: 9.75, y: 12.0), top: Storey(offset: 0.0)), // Treppenraum West
+        1007: Wall(storey: 1, wall_type: 13, start: (x: 9.75, y: 6.535), end: (x: 9.75, y: 12.0), top: Storey(offset: 0.0)), // Treppenraum West
         1008: Wall(storey: 1, wall_type: 13, start: (x: 9.75, y: 7.595), end: (x: 11.65, y: 7.595), top: Storey(offset: 0.0)), // Aufzugsschacht Süd
         1009: Wall(storey: 1, wall_type: 13, start: (x: 9.75, y: 9.625), end: (x: 11.65, y: 9.625), top: Storey(offset: 0.0)), // Aufzugsschacht Nord
         1010: Wall(storey: 1, wall_type: 13, start: (x: 11.65, y: 9.625), end: (x: 11.65, y: 6.535), top: Storey(offset: 0.0)), // Aufzugsschacht Ost
@@ -95,8 +95,8 @@ Project(
         1013: Wall(storey: 1, wall_type: 12, start: (x: 4.3, y: 7.96), end: (x: 4.3, y: 12.0), top: Storey(offset: 0.0)),
         1014: Wall(storey: 1, wall_type: 12, start: (x: 7.5, y: 7.96), end: (x: 7.5, y: 12.0), top: Storey(offset: 0.0)),
         1015: Wall(storey: 1, wall_type: 12, start: (x: 1.6, y: 6.535), end: (x: 1.6, y: 7.96), top: Storey(offset: 0.0)),
-        1016: Wall(storey: 1, wall_type: 12, start: (x: 6.075, y: 0.0), end: (x: 6.075, y: 6.535), top: Storey(offset: 0.0)),
-        1017: Wall(storey: 1, wall_type: 12, start: (x: 9.075, y: 0.0), end: (x: 9.075, y: 6.535), top: Storey(offset: 0.0)),
+        1016: Wall(storey: 1, wall_type: 12, start: (x: 5.475, y: 0.0), end: (x: 5.475, y: 6.535), top: Storey(offset: 0.0)),
+        1017: Wall(storey: 1, wall_type: 12, start: (x: 8.4, y: 0.0), end: (x: 8.4, y: 6.535), top: Storey(offset: 0.0)),
         1018: Wall(storey: 1, wall_type: 11, start: (x: 16.5, y: 7.96), end: (x: 24.0, y: 7.96), top: Storey(offset: 0.0)),
         1019: Wall(storey: 1, wall_type: 12, start: (x: 16.5, y: 7.96), end: (x: 16.5, y: 12.0), top: Storey(offset: 0.0)),
         1020: Wall(storey: 1, wall_type: 12, start: (x: 19.5, y: 7.96), end: (x: 19.5, y: 12.0), top: Storey(offset: 0.0)),
@@ -107,25 +107,26 @@ Project(
         1102: Opening(host: 1004, offset: 3.34, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen Ost
         1103: Opening(host: 1004, offset: 6.04, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind Ost
         1104: Opening(host: 1004, offset: 9.34, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind Ost
-        1105: Opening(host: 1004, offset: 12.74, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
-        1106: Opening(host: 1004, offset: 15.74, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
-        1107: Opening(host: 1004, offset: 18.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
-        1108: Opening(host: 1004, offset: 20.49, width: 2.01, height: 2.26, sill_height: 0.0, kind: Window), // Fenstertür Wohnen West
+        1105: Opening(host: 1004, offset: 13.24, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
+        1106: Opening(host: 1004, offset: 16.44, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
+        1107: Opening(host: 1004, offset: 19.04, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
+        1108: Opening(host: 1004, offset: 21.09, width: 2.01, height: 2.26, sill_height: 0.0, kind: Window), // Fenstertür Wohnen West
         1110: Opening(host: 1001, offset: 2.4, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
         1111: Opening(host: 1001, offset: 9.2, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen West
         1112: Opening(host: 1002, offset: 1.6, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen West
         1113: Opening(host: 1002, offset: 5.4, width: 1.01, height: 1.01, sill_height: 1.135, kind: Window), // Bad West
         1114: Opening(host: 1002, offset: 12.4, width: 1.26, height: 2.26, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Hauseingangstür
+        1119: Opening(host: 1002, offset: 10.3, width: 1.01, height: 1.385, sill_height: 0.885, kind: Window), // Treppenraum
         1115: Opening(host: 1002, offset: 17.5, width: 1.01, height: 1.01, sill_height: 1.135, kind: Window), // Bad Ost
         1116: Opening(host: 1002, offset: 21.0, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen Ost
         1117: Opening(host: 1003, offset: 1.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen Ost
         1118: Opening(host: 1003, offset: 8.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen Ost
-        1120: Opening(host: 1007, offset: 2.605, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Wohnungseingang West
+        1120: Opening(host: 1007, offset: 3.665, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Wohnungseingang West
         1121: Opening(host: 1011, offset: 3.665, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Wohnungseingang Ost
         1122: Opening(host: 1009, offset: 0.45, width: 1.0, height: 2.1, sill_height: 0.0), // Aufzugstür
-        1123: Opening(host: 1005, offset: 4.5, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Wohnen West
-        1124: Opening(host: 1005, offset: 7.2, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
-        1125: Opening(host: 1005, offset: 10.0, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
+        1123: Opening(host: 1005, offset: 3.8, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Wohnen West
+        1124: Opening(host: 1005, offset: 6.3, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
+        1125: Opening(host: 1005, offset: 8.55, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
         1126: Opening(host: 1005, offset: 14.6, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Kind Ost
         1127: Opening(host: 1005, offset: 16.8, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Kind Ost
         1128: Opening(host: 1005, offset: 19.6, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Wohnen Ost
@@ -135,22 +136,23 @@ Project(
         1132: Opening(host: 1018, offset: 0.9, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Bad Ost, schlägt nach außen auf
         1133: Opening(host: 1018, offset: 3.9, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Schlafen Ost
         1134: Opening(host: 1021, offset: 0.215, width: 0.885, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinRight)), // Abstellraum Ost
-        1201: Space(storey: 1, position: (x: 3.2, y: 3.4), number: "0.01", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 01"),
-        1202: Space(storey: 1, position: (x: 7.575, y: 3.4), number: "0.02", name: "Kind", usage: Living, unit: "W 01"),
-        1203: Space(storey: 1, position: (x: 10.5, y: 3.4), number: "0.03", name: "Kind", usage: Living, unit: "W 01"),
+        1201: Space(storey: 1, position: (x: 2.9, y: 3.4), number: "0.01", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 01"),
+        1202: Space(storey: 1, position: (x: 6.9, y: 3.4), number: "0.02", name: "Kind", usage: Living, unit: "W 01"),
+        1203: Space(storey: 1, position: (x: 10.2, y: 3.4), number: "0.03", name: "Kind", usage: Living, unit: "W 01"),
         1204: Space(storey: 1, position: (x: 2.3, y: 9.85), number: "0.04", name: "Schlafen", usage: Living, unit: "W 01"),
         1205: Space(storey: 1, position: (x: 5.9, y: 9.85), number: "0.05", name: "Bad", usage: Other, unit: "W 01"),
         1206: Space(storey: 1, position: (x: 8.6, y: 9.8), number: "0.06", name: "Flur", usage: Circulation, unit: "W 01"),
-        1207: Space(storey: 1, position: (x: 0.95, y: 7.25), number: "0.07", name: "Abstellraum", usage: Storage, unit: "W 01"),
+        1207: Space(storey: 1, position: (x: 0.95, y: 7.25), number: "0.07", name: "Abst.", usage: Storage, unit: "W 01"),
         1211: Space(storey: 1, position: (x: 14.0, y: 3.4), number: "0.11", name: "Kind", usage: Living, unit: "W 02"),
         1212: Space(storey: 1, position: (x: 17.3, y: 3.4), number: "0.12", name: "Kind", usage: Living, unit: "W 02"),
         1213: Space(storey: 1, position: (x: 21.2, y: 3.4), number: "0.13", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 02"),
         1214: Space(storey: 1, position: (x: 15.4, y: 9.8), number: "0.14", name: "Flur", usage: Circulation, unit: "W 02"),
         1215: Space(storey: 1, position: (x: 18.0, y: 9.85), number: "0.15", name: "Bad", usage: Other, unit: "W 02"),
         1216: Space(storey: 1, position: (x: 21.6, y: 9.85), number: "0.16", name: "Schlafen", usage: Living, unit: "W 02"),
-        1217: Space(storey: 1, position: (x: 23.0, y: 7.25), number: "0.17", name: "Abstellraum", usage: Storage, unit: "W 02"),
+        1217: Space(storey: 1, position: (x: 23.0, y: 7.25), number: "0.17", name: "Abst.", usage: Storage, unit: "W 02"),
         1220: Space(storey: 1, position: (x: 12.0, y: 10.7), number: "0.20", name: "Treppenhaus", usage: Circulation, living_space: false),
         1221: Space(storey: 1, position: (x: 10.7, y: 8.6), number: "0.21", name: "Aufzug", usage: Circulation, living_space: false),
+        1222: Space(storey: 1, position: (x: 10.7, y: 7.05), number: "0.22", name: "Schacht", usage: Technical, living_space: false),
         1300: Slab(storey: 1, slab_type: 21, outline: [(x: 0.17, y: 0.17), (x: 23.83, y: 0.17), (x: 23.83, y: 11.83), (x: 0.17, y: 11.83)], kind: Base),
         1310: Stair(storey: 1, start: (x: 12.365, y: 9.74), direction: (x: 0.0, y: -1.0), width: 1.2, tread: 0.27, flights: [(risers: 8, landing: BackLeft), (risers: 8)]), // zweiläufig mit Halbpodest
         1311: Railing(storey: 1, path: Flight(stair: 1310, flight: 0, side: Left), height: 0.9),
@@ -158,7 +160,7 @@ Project(
         1313: Railing(storey: 1, path: Flight(stair: 1310, flight: 1, side: Right), height: 0.9),
         1401: DimensionChain(storey: 1, position: (x: -1.0, y: 0.0), direction: (x: 0.0, y: 1.0), refs: [WallEnd(wall: 1001, end: Start, side: Left), Jamb(opening: 1110, end: Start, side: Left), Jamb(opening: 1110, end: End, side: Left), Jamb(opening: 1111, end: Start, side: Left), Jamb(opening: 1111, end: End, side: Left), WallEnd(wall: 1001, end: End, side: Left)]),
         1402: DimensionChain(storey: 1, position: (x: -1.7, y: 0.0), direction: (x: 0.0, y: 1.0), refs: [WallEnd(wall: 1001, end: Start, side: Left), WallEnd(wall: 1001, end: End, side: Left)]),
-        1403: DimensionChain(storey: 1, position: (x: 0.0, y: 13.0), direction: (x: 1.0, y: 0.0), refs: [WallEnd(wall: 1002, end: Start, side: Left), Jamb(opening: 1112, end: Start, side: Left), Jamb(opening: 1112, end: End, side: Left), Jamb(opening: 1113, end: Start, side: Left), Jamb(opening: 1113, end: End, side: Left), Jamb(opening: 1114, end: Start, side: Left), Jamb(opening: 1114, end: End, side: Left), Jamb(opening: 1115, end: Start, side: Left), Jamb(opening: 1115, end: End, side: Left), Jamb(opening: 1116, end: Start, side: Left), Jamb(opening: 1116, end: End, side: Left), WallEnd(wall: 1002, end: End, side: Left)]),
+        1403: DimensionChain(storey: 1, position: (x: 0.0, y: 13.0), direction: (x: 1.0, y: 0.0), refs: [WallEnd(wall: 1002, end: Start, side: Left), Jamb(opening: 1112, end: Start, side: Left), Jamb(opening: 1112, end: End, side: Left), Jamb(opening: 1113, end: Start, side: Left), Jamb(opening: 1113, end: End, side: Left), Jamb(opening: 1119, end: Start, side: Left), Jamb(opening: 1119, end: End, side: Left), Jamb(opening: 1114, end: Start, side: Left), Jamb(opening: 1114, end: End, side: Left), Jamb(opening: 1115, end: Start, side: Left), Jamb(opening: 1115, end: End, side: Left), Jamb(opening: 1116, end: Start, side: Left), Jamb(opening: 1116, end: End, side: Left), WallEnd(wall: 1002, end: End, side: Left)]),
         1404: DimensionChain(storey: 1, position: (x: 0.0, y: 13.7), direction: (x: 1.0, y: 0.0), refs: [WallEnd(wall: 1002, end: Start, side: Left), WallEnd(wall: 1002, end: End, side: Left)]),
         1405: DimensionChain(storey: 1, position: (x: 25.0, y: 12.0), direction: (x: 0.0, y: -1.0), refs: [WallEnd(wall: 1003, end: Start, side: Left), Jamb(opening: 1117, end: Start, side: Left), Jamb(opening: 1117, end: End, side: Left), Jamb(opening: 1118, end: Start, side: Left), Jamb(opening: 1118, end: End, side: Left), WallEnd(wall: 1003, end: End, side: Left)]),
         1406: DimensionChain(storey: 1, position: (x: 25.7, y: 12.0), direction: (x: 0.0, y: -1.0), refs: [WallEnd(wall: 1003, end: Start, side: Left), WallEnd(wall: 1003, end: End, side: Left)]),
@@ -171,7 +173,7 @@ Project(
         2004: Wall(storey: 2, wall_type: 10, start: (x: 24.0, y: 0.0), end: (x: 0.0, y: 0.0), alignment: Exterior, top: Storey(offset: 0.0)),
         2005: Wall(storey: 2, wall_type: 13, start: (x: 0.0, y: 6.535), end: (x: 24.0, y: 6.535), top: Storey(offset: 0.0)), // tragende Mittelwand
         2006: Wall(storey: 2, wall_type: 14, start: (x: 12.0, y: 0.0), end: (x: 12.0, y: 6.535), top: Storey(offset: 0.0)), // Wohnungstrennwand
-        2007: Wall(storey: 2, wall_type: 13, start: (x: 9.75, y: 7.595), end: (x: 9.75, y: 12.0), top: Storey(offset: 0.0)), // Treppenraum West
+        2007: Wall(storey: 2, wall_type: 13, start: (x: 9.75, y: 6.535), end: (x: 9.75, y: 12.0), top: Storey(offset: 0.0)), // Treppenraum West
         2008: Wall(storey: 2, wall_type: 13, start: (x: 9.75, y: 7.595), end: (x: 11.65, y: 7.595), top: Storey(offset: 0.0)), // Aufzugsschacht Süd
         2009: Wall(storey: 2, wall_type: 13, start: (x: 9.75, y: 9.625), end: (x: 11.65, y: 9.625), top: Storey(offset: 0.0)), // Aufzugsschacht Nord
         2010: Wall(storey: 2, wall_type: 13, start: (x: 11.65, y: 9.625), end: (x: 11.65, y: 6.535), top: Storey(offset: 0.0)), // Aufzugsschacht Ost
@@ -180,8 +182,8 @@ Project(
         2013: Wall(storey: 2, wall_type: 12, start: (x: 4.3, y: 7.96), end: (x: 4.3, y: 12.0), top: Storey(offset: 0.0)),
         2014: Wall(storey: 2, wall_type: 12, start: (x: 7.5, y: 7.96), end: (x: 7.5, y: 12.0), top: Storey(offset: 0.0)),
         2015: Wall(storey: 2, wall_type: 12, start: (x: 1.6, y: 6.535), end: (x: 1.6, y: 7.96), top: Storey(offset: 0.0)),
-        2016: Wall(storey: 2, wall_type: 12, start: (x: 6.075, y: 0.0), end: (x: 6.075, y: 6.535), top: Storey(offset: 0.0)),
-        2017: Wall(storey: 2, wall_type: 12, start: (x: 9.075, y: 0.0), end: (x: 9.075, y: 6.535), top: Storey(offset: 0.0)),
+        2016: Wall(storey: 2, wall_type: 12, start: (x: 5.475, y: 0.0), end: (x: 5.475, y: 6.535), top: Storey(offset: 0.0)),
+        2017: Wall(storey: 2, wall_type: 12, start: (x: 8.4, y: 0.0), end: (x: 8.4, y: 6.535), top: Storey(offset: 0.0)),
         2018: Wall(storey: 2, wall_type: 11, start: (x: 16.5, y: 7.96), end: (x: 24.0, y: 7.96), top: Storey(offset: 0.0)),
         2019: Wall(storey: 2, wall_type: 12, start: (x: 16.5, y: 7.96), end: (x: 16.5, y: 12.0), top: Storey(offset: 0.0)),
         2020: Wall(storey: 2, wall_type: 12, start: (x: 19.5, y: 7.96), end: (x: 19.5, y: 12.0), top: Storey(offset: 0.0)),
@@ -192,10 +194,10 @@ Project(
         2102: Opening(host: 2004, offset: 3.34, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen Ost
         2103: Opening(host: 2004, offset: 6.04, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind Ost
         2104: Opening(host: 2004, offset: 9.34, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind Ost
-        2105: Opening(host: 2004, offset: 12.74, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
-        2106: Opening(host: 2004, offset: 15.74, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
-        2107: Opening(host: 2004, offset: 18.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
-        2108: Opening(host: 2004, offset: 20.49, width: 2.01, height: 2.26, sill_height: 0.0, kind: Window), // Fenstertür Wohnen West
+        2105: Opening(host: 2004, offset: 13.24, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
+        2106: Opening(host: 2004, offset: 16.44, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
+        2107: Opening(host: 2004, offset: 19.04, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
+        2108: Opening(host: 2004, offset: 21.09, width: 2.01, height: 2.26, sill_height: 0.0, kind: Window), // Fenstertür Wohnen West
         2110: Opening(host: 2001, offset: 2.4, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
         2111: Opening(host: 2001, offset: 9.2, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen West
         2112: Opening(host: 2002, offset: 1.6, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen West
@@ -205,12 +207,12 @@ Project(
         2116: Opening(host: 2002, offset: 21.0, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen Ost
         2117: Opening(host: 2003, offset: 1.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen Ost
         2118: Opening(host: 2003, offset: 8.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen Ost
-        2120: Opening(host: 2007, offset: 2.605, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Wohnungseingang West
+        2120: Opening(host: 2007, offset: 3.665, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Wohnungseingang West
         2121: Opening(host: 2011, offset: 3.665, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Wohnungseingang Ost
         2122: Opening(host: 2009, offset: 0.45, width: 1.0, height: 2.1, sill_height: 0.0), // Aufzugstür
-        2123: Opening(host: 2005, offset: 4.5, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Wohnen West
-        2124: Opening(host: 2005, offset: 7.2, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
-        2125: Opening(host: 2005, offset: 10.0, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
+        2123: Opening(host: 2005, offset: 3.8, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Wohnen West
+        2124: Opening(host: 2005, offset: 6.3, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
+        2125: Opening(host: 2005, offset: 8.55, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
         2126: Opening(host: 2005, offset: 14.6, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Kind Ost
         2127: Opening(host: 2005, offset: 16.8, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Kind Ost
         2128: Opening(host: 2005, offset: 19.6, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Wohnen Ost
@@ -220,22 +222,23 @@ Project(
         2132: Opening(host: 2018, offset: 0.9, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Bad Ost, schlägt nach außen auf
         2133: Opening(host: 2018, offset: 3.9, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Schlafen Ost
         2134: Opening(host: 2021, offset: 0.215, width: 0.885, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinRight)), // Abstellraum Ost
-        2201: Space(storey: 2, position: (x: 3.2, y: 3.4), number: "1.01", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 03"),
-        2202: Space(storey: 2, position: (x: 7.575, y: 3.4), number: "1.02", name: "Kind", usage: Living, unit: "W 03"),
-        2203: Space(storey: 2, position: (x: 10.5, y: 3.4), number: "1.03", name: "Kind", usage: Living, unit: "W 03"),
+        2201: Space(storey: 2, position: (x: 2.9, y: 3.4), number: "1.01", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 03"),
+        2202: Space(storey: 2, position: (x: 6.9, y: 3.4), number: "1.02", name: "Kind", usage: Living, unit: "W 03"),
+        2203: Space(storey: 2, position: (x: 10.2, y: 3.4), number: "1.03", name: "Kind", usage: Living, unit: "W 03"),
         2204: Space(storey: 2, position: (x: 2.3, y: 9.85), number: "1.04", name: "Schlafen", usage: Living, unit: "W 03"),
         2205: Space(storey: 2, position: (x: 5.9, y: 9.85), number: "1.05", name: "Bad", usage: Other, unit: "W 03"),
         2206: Space(storey: 2, position: (x: 8.6, y: 9.8), number: "1.06", name: "Flur", usage: Circulation, unit: "W 03"),
-        2207: Space(storey: 2, position: (x: 0.95, y: 7.25), number: "1.07", name: "Abstellraum", usage: Storage, unit: "W 03"),
+        2207: Space(storey: 2, position: (x: 0.95, y: 7.25), number: "1.07", name: "Abst.", usage: Storage, unit: "W 03"),
         2211: Space(storey: 2, position: (x: 14.0, y: 3.4), number: "1.11", name: "Kind", usage: Living, unit: "W 04"),
         2212: Space(storey: 2, position: (x: 17.3, y: 3.4), number: "1.12", name: "Kind", usage: Living, unit: "W 04"),
         2213: Space(storey: 2, position: (x: 21.2, y: 3.4), number: "1.13", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 04"),
         2214: Space(storey: 2, position: (x: 15.4, y: 9.8), number: "1.14", name: "Flur", usage: Circulation, unit: "W 04"),
         2215: Space(storey: 2, position: (x: 18.0, y: 9.85), number: "1.15", name: "Bad", usage: Other, unit: "W 04"),
         2216: Space(storey: 2, position: (x: 21.6, y: 9.85), number: "1.16", name: "Schlafen", usage: Living, unit: "W 04"),
-        2217: Space(storey: 2, position: (x: 23.0, y: 7.25), number: "1.17", name: "Abstellraum", usage: Storage, unit: "W 04"),
+        2217: Space(storey: 2, position: (x: 23.0, y: 7.25), number: "1.17", name: "Abst.", usage: Storage, unit: "W 04"),
         2220: Space(storey: 2, position: (x: 12.0, y: 10.7), number: "1.20", name: "Treppenhaus", usage: Circulation, living_space: false),
         2221: Space(storey: 2, position: (x: 10.7, y: 8.6), number: "1.21", name: "Aufzug", usage: Circulation, living_space: false),
+        2222: Space(storey: 2, position: (x: 10.7, y: 7.05), number: "1.22", name: "Schacht", usage: Technical, living_space: false),
         2300: Slab(storey: 2, slab_type: 20, outline: [(x: 0.17, y: 0.17), (x: 23.83, y: 0.17), (x: 23.83, y: 11.83), (x: 0.17, y: 11.83)]),
         2301: SlabOpening(host: 2300, outline: [(x: 11.765, y: 6.65), (x: 14.165, y: 6.65), (x: 14.165, y: 9.74), (x: 11.765, y: 9.74)]), // Treppenloch
         2302: SlabOpening(host: 2300, outline: [(x: 9.865, y: 7.71), (x: 11.535, y: 7.71), (x: 11.535, y: 9.51), (x: 9.865, y: 9.51)]), // Aufzugsschacht
@@ -258,7 +261,7 @@ Project(
         3004: Wall(storey: 3, wall_type: 10, start: (x: 24.0, y: 0.0), end: (x: 0.0, y: 0.0), alignment: Exterior, top: Storey(offset: 0.0)),
         3005: Wall(storey: 3, wall_type: 13, start: (x: 0.0, y: 6.535), end: (x: 24.0, y: 6.535), top: Storey(offset: 0.0)), // tragende Mittelwand
         3006: Wall(storey: 3, wall_type: 14, start: (x: 12.0, y: 0.0), end: (x: 12.0, y: 6.535), top: Storey(offset: 0.0)), // Wohnungstrennwand
-        3007: Wall(storey: 3, wall_type: 13, start: (x: 9.75, y: 7.595), end: (x: 9.75, y: 12.0), top: Storey(offset: 0.0)), // Treppenraum West
+        3007: Wall(storey: 3, wall_type: 13, start: (x: 9.75, y: 6.535), end: (x: 9.75, y: 12.0), top: Storey(offset: 0.0)), // Treppenraum West
         3008: Wall(storey: 3, wall_type: 13, start: (x: 9.75, y: 7.595), end: (x: 11.65, y: 7.595), top: Storey(offset: 0.0)), // Aufzugsschacht Süd
         3009: Wall(storey: 3, wall_type: 13, start: (x: 9.75, y: 9.625), end: (x: 11.65, y: 9.625), top: Storey(offset: 0.0)), // Aufzugsschacht Nord
         3010: Wall(storey: 3, wall_type: 13, start: (x: 11.65, y: 9.625), end: (x: 11.65, y: 6.535), top: Storey(offset: 0.0)), // Aufzugsschacht Ost
@@ -267,8 +270,8 @@ Project(
         3013: Wall(storey: 3, wall_type: 12, start: (x: 4.3, y: 7.96), end: (x: 4.3, y: 12.0), top: Storey(offset: 0.0)),
         3014: Wall(storey: 3, wall_type: 12, start: (x: 7.5, y: 7.96), end: (x: 7.5, y: 12.0), top: Storey(offset: 0.0)),
         3015: Wall(storey: 3, wall_type: 12, start: (x: 1.6, y: 6.535), end: (x: 1.6, y: 7.96), top: Storey(offset: 0.0)),
-        3016: Wall(storey: 3, wall_type: 12, start: (x: 6.075, y: 0.0), end: (x: 6.075, y: 6.535), top: Storey(offset: 0.0)),
-        3017: Wall(storey: 3, wall_type: 12, start: (x: 9.075, y: 0.0), end: (x: 9.075, y: 6.535), top: Storey(offset: 0.0)),
+        3016: Wall(storey: 3, wall_type: 12, start: (x: 5.475, y: 0.0), end: (x: 5.475, y: 6.535), top: Storey(offset: 0.0)),
+        3017: Wall(storey: 3, wall_type: 12, start: (x: 8.4, y: 0.0), end: (x: 8.4, y: 6.535), top: Storey(offset: 0.0)),
         3018: Wall(storey: 3, wall_type: 11, start: (x: 16.5, y: 7.96), end: (x: 24.0, y: 7.96), top: Storey(offset: 0.0)),
         3019: Wall(storey: 3, wall_type: 12, start: (x: 16.5, y: 7.96), end: (x: 16.5, y: 12.0), top: Storey(offset: 0.0)),
         3020: Wall(storey: 3, wall_type: 12, start: (x: 19.5, y: 7.96), end: (x: 19.5, y: 12.0), top: Storey(offset: 0.0)),
@@ -279,10 +282,10 @@ Project(
         3102: Opening(host: 3004, offset: 3.34, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen Ost
         3103: Opening(host: 3004, offset: 6.04, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind Ost
         3104: Opening(host: 3004, offset: 9.34, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind Ost
-        3105: Opening(host: 3004, offset: 12.74, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
-        3106: Opening(host: 3004, offset: 15.74, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
-        3107: Opening(host: 3004, offset: 18.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
-        3108: Opening(host: 3004, offset: 20.49, width: 2.01, height: 2.26, sill_height: 0.0, kind: Window), // Fenstertür Wohnen West
+        3105: Opening(host: 3004, offset: 13.24, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
+        3106: Opening(host: 3004, offset: 16.44, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
+        3107: Opening(host: 3004, offset: 19.04, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
+        3108: Opening(host: 3004, offset: 21.09, width: 2.01, height: 2.26, sill_height: 0.0, kind: Window), // Fenstertür Wohnen West
         3110: Opening(host: 3001, offset: 2.4, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
         3111: Opening(host: 3001, offset: 9.2, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen West
         3112: Opening(host: 3002, offset: 1.6, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen West
@@ -292,12 +295,12 @@ Project(
         3116: Opening(host: 3002, offset: 21.0, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen Ost
         3117: Opening(host: 3003, offset: 1.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen Ost
         3118: Opening(host: 3003, offset: 8.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen Ost
-        3120: Opening(host: 3007, offset: 2.605, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Wohnungseingang West
+        3120: Opening(host: 3007, offset: 3.665, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Wohnungseingang West
         3121: Opening(host: 3011, offset: 3.665, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Wohnungseingang Ost
         3122: Opening(host: 3009, offset: 0.45, width: 1.0, height: 2.1, sill_height: 0.0), // Aufzugstür
-        3123: Opening(host: 3005, offset: 4.5, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Wohnen West
-        3124: Opening(host: 3005, offset: 7.2, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
-        3125: Opening(host: 3005, offset: 10.0, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
+        3123: Opening(host: 3005, offset: 3.8, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Wohnen West
+        3124: Opening(host: 3005, offset: 6.3, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
+        3125: Opening(host: 3005, offset: 8.55, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
         3126: Opening(host: 3005, offset: 14.6, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Kind Ost
         3127: Opening(host: 3005, offset: 16.8, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Kind Ost
         3128: Opening(host: 3005, offset: 19.6, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Wohnen Ost
@@ -307,22 +310,23 @@ Project(
         3132: Opening(host: 3018, offset: 0.9, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Bad Ost, schlägt nach außen auf
         3133: Opening(host: 3018, offset: 3.9, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Schlafen Ost
         3134: Opening(host: 3021, offset: 0.215, width: 0.885, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinRight)), // Abstellraum Ost
-        3201: Space(storey: 3, position: (x: 3.2, y: 3.4), number: "2.01", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 05"),
-        3202: Space(storey: 3, position: (x: 7.575, y: 3.4), number: "2.02", name: "Kind", usage: Living, unit: "W 05"),
-        3203: Space(storey: 3, position: (x: 10.5, y: 3.4), number: "2.03", name: "Kind", usage: Living, unit: "W 05"),
+        3201: Space(storey: 3, position: (x: 2.9, y: 3.4), number: "2.01", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 05"),
+        3202: Space(storey: 3, position: (x: 6.9, y: 3.4), number: "2.02", name: "Kind", usage: Living, unit: "W 05"),
+        3203: Space(storey: 3, position: (x: 10.2, y: 3.4), number: "2.03", name: "Kind", usage: Living, unit: "W 05"),
         3204: Space(storey: 3, position: (x: 2.3, y: 9.85), number: "2.04", name: "Schlafen", usage: Living, unit: "W 05"),
         3205: Space(storey: 3, position: (x: 5.9, y: 9.85), number: "2.05", name: "Bad", usage: Other, unit: "W 05"),
         3206: Space(storey: 3, position: (x: 8.6, y: 9.8), number: "2.06", name: "Flur", usage: Circulation, unit: "W 05"),
-        3207: Space(storey: 3, position: (x: 0.95, y: 7.25), number: "2.07", name: "Abstellraum", usage: Storage, unit: "W 05"),
+        3207: Space(storey: 3, position: (x: 0.95, y: 7.25), number: "2.07", name: "Abst.", usage: Storage, unit: "W 05"),
         3211: Space(storey: 3, position: (x: 14.0, y: 3.4), number: "2.11", name: "Kind", usage: Living, unit: "W 06"),
         3212: Space(storey: 3, position: (x: 17.3, y: 3.4), number: "2.12", name: "Kind", usage: Living, unit: "W 06"),
         3213: Space(storey: 3, position: (x: 21.2, y: 3.4), number: "2.13", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 06"),
         3214: Space(storey: 3, position: (x: 15.4, y: 9.8), number: "2.14", name: "Flur", usage: Circulation, unit: "W 06"),
         3215: Space(storey: 3, position: (x: 18.0, y: 9.85), number: "2.15", name: "Bad", usage: Other, unit: "W 06"),
         3216: Space(storey: 3, position: (x: 21.6, y: 9.85), number: "2.16", name: "Schlafen", usage: Living, unit: "W 06"),
-        3217: Space(storey: 3, position: (x: 23.0, y: 7.25), number: "2.17", name: "Abstellraum", usage: Storage, unit: "W 06"),
+        3217: Space(storey: 3, position: (x: 23.0, y: 7.25), number: "2.17", name: "Abst.", usage: Storage, unit: "W 06"),
         3220: Space(storey: 3, position: (x: 12.0, y: 10.7), number: "2.20", name: "Treppenhaus", usage: Circulation, living_space: false),
         3221: Space(storey: 3, position: (x: 10.7, y: 8.6), number: "2.21", name: "Aufzug", usage: Circulation, living_space: false),
+        3222: Space(storey: 3, position: (x: 10.7, y: 7.05), number: "2.22", name: "Schacht", usage: Technical, living_space: false),
         3300: Slab(storey: 3, slab_type: 20, outline: [(x: 0.17, y: 0.17), (x: 23.83, y: 0.17), (x: 23.83, y: 11.83), (x: 0.17, y: 11.83)]),
         3301: SlabOpening(host: 3300, outline: [(x: 11.765, y: 6.65), (x: 14.165, y: 6.65), (x: 14.165, y: 9.74), (x: 11.765, y: 9.74)]), // Treppenloch
         3302: SlabOpening(host: 3300, outline: [(x: 9.865, y: 7.71), (x: 11.535, y: 7.71), (x: 11.535, y: 9.51), (x: 9.865, y: 9.51)]), // Aufzugsschacht
@@ -345,7 +349,7 @@ Project(
         4004: Wall(storey: 4, wall_type: 10, start: (x: 24.0, y: 0.0), end: (x: 0.0, y: 0.0), alignment: Exterior, top: Height(3.4)),
         4005: Wall(storey: 4, wall_type: 13, start: (x: 0.0, y: 6.535), end: (x: 24.0, y: 6.535), top: Roof(offset: 0.0)), // tragende Mittelwand
         4006: Wall(storey: 4, wall_type: 14, start: (x: 12.0, y: 0.0), end: (x: 12.0, y: 6.535), top: Roof(offset: 0.0)), // Wohnungstrennwand
-        4007: Wall(storey: 4, wall_type: 13, start: (x: 9.75, y: 7.595), end: (x: 9.75, y: 12.0), top: Roof(offset: 0.0)), // Treppenraum West
+        4007: Wall(storey: 4, wall_type: 13, start: (x: 9.75, y: 6.535), end: (x: 9.75, y: 12.0), top: Roof(offset: 0.0)), // Treppenraum West
         4008: Wall(storey: 4, wall_type: 13, start: (x: 9.75, y: 7.595), end: (x: 11.65, y: 7.595), top: Roof(offset: 0.0)), // Aufzugsschacht Süd
         4009: Wall(storey: 4, wall_type: 13, start: (x: 9.75, y: 9.625), end: (x: 11.65, y: 9.625), top: Roof(offset: 0.0)), // Aufzugsschacht Nord
         4010: Wall(storey: 4, wall_type: 13, start: (x: 11.65, y: 9.625), end: (x: 11.65, y: 6.535), top: Roof(offset: 0.0)), // Aufzugsschacht Ost
@@ -354,8 +358,8 @@ Project(
         4013: Wall(storey: 4, wall_type: 12, start: (x: 4.3, y: 7.96), end: (x: 4.3, y: 12.0), top: Roof(offset: 0.0)),
         4014: Wall(storey: 4, wall_type: 12, start: (x: 7.5, y: 7.96), end: (x: 7.5, y: 12.0), top: Roof(offset: 0.0)),
         4015: Wall(storey: 4, wall_type: 12, start: (x: 1.6, y: 6.535), end: (x: 1.6, y: 7.96), top: Roof(offset: 0.0)),
-        4016: Wall(storey: 4, wall_type: 12, start: (x: 6.075, y: 0.0), end: (x: 6.075, y: 6.535), top: Roof(offset: 0.0)),
-        4017: Wall(storey: 4, wall_type: 12, start: (x: 9.075, y: 0.0), end: (x: 9.075, y: 6.535), top: Roof(offset: 0.0)),
+        4016: Wall(storey: 4, wall_type: 12, start: (x: 5.475, y: 0.0), end: (x: 5.475, y: 6.535), top: Roof(offset: 0.0)),
+        4017: Wall(storey: 4, wall_type: 12, start: (x: 8.4, y: 0.0), end: (x: 8.4, y: 6.535), top: Roof(offset: 0.0)),
         4018: Wall(storey: 4, wall_type: 11, start: (x: 16.5, y: 7.96), end: (x: 24.0, y: 7.96), top: Roof(offset: 0.0)),
         4019: Wall(storey: 4, wall_type: 12, start: (x: 16.5, y: 7.96), end: (x: 16.5, y: 12.0), top: Roof(offset: 0.0)),
         4020: Wall(storey: 4, wall_type: 12, start: (x: 19.5, y: 7.96), end: (x: 19.5, y: 12.0), top: Roof(offset: 0.0)),
@@ -366,10 +370,10 @@ Project(
         4102: Opening(host: 4004, offset: 3.34, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen Ost
         4103: Opening(host: 4004, offset: 6.04, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind Ost
         4104: Opening(host: 4004, offset: 9.34, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind Ost
-        4105: Opening(host: 4004, offset: 12.74, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
-        4106: Opening(host: 4004, offset: 15.74, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
-        4107: Opening(host: 4004, offset: 18.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
-        4108: Opening(host: 4004, offset: 20.49, width: 2.01, height: 2.26, sill_height: 0.0, kind: Window), // Fenstertür Wohnen West
+        4105: Opening(host: 4004, offset: 13.24, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
+        4106: Opening(host: 4004, offset: 16.44, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Kind West
+        4107: Opening(host: 4004, offset: 19.04, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
+        4108: Opening(host: 4004, offset: 21.09, width: 2.01, height: 2.26, sill_height: 0.0, kind: Window), // Fenstertür Wohnen West
         4110: Opening(host: 4001, offset: 2.4, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
         4111: Opening(host: 4001, offset: 9.2, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen West
         4112: Opening(host: 4002, offset: 1.6, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen West
@@ -379,12 +383,12 @@ Project(
         4116: Opening(host: 4002, offset: 21.0, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen Ost
         4117: Opening(host: 4003, offset: 1.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Schlafen Ost
         4118: Opening(host: 4003, offset: 8.54, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen Ost
-        4120: Opening(host: 4007, offset: 2.605, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Wohnungseingang West
+        4120: Opening(host: 4007, offset: 3.665, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Wohnungseingang West
         4121: Opening(host: 4011, offset: 3.665, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Wohnungseingang Ost
         4122: Opening(host: 4009, offset: 0.45, width: 1.0, height: 2.1, sill_height: 0.0), // Aufzugstür
-        4123: Opening(host: 4005, offset: 4.5, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Wohnen West
-        4124: Opening(host: 4005, offset: 7.2, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
-        4125: Opening(host: 4005, offset: 10.0, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
+        4123: Opening(host: 4005, offset: 3.8, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Wohnen West
+        4124: Opening(host: 4005, offset: 6.3, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
+        4125: Opening(host: 4005, offset: 8.55, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Kind West
         4126: Opening(host: 4005, offset: 14.6, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Kind Ost
         4127: Opening(host: 4005, offset: 16.8, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Kind Ost
         4128: Opening(host: 4005, offset: 19.6, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Wohnen Ost
@@ -394,22 +398,23 @@ Project(
         4132: Opening(host: 4018, offset: 0.9, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Bad Ost, schlägt nach außen auf
         4133: Opening(host: 4018, offset: 3.9, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft)), // Schlafen Ost
         4134: Opening(host: 4021, offset: 0.215, width: 0.885, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinRight)), // Abstellraum Ost
-        4201: Space(storey: 4, position: (x: 3.2, y: 3.4), number: "3.01", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 07"),
-        4202: Space(storey: 4, position: (x: 7.575, y: 3.4), number: "3.02", name: "Kind", usage: Living, unit: "W 07"),
-        4203: Space(storey: 4, position: (x: 10.5, y: 3.4), number: "3.03", name: "Kind", usage: Living, unit: "W 07"),
+        4201: Space(storey: 4, position: (x: 2.9, y: 3.4), number: "3.01", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 07"),
+        4202: Space(storey: 4, position: (x: 6.9, y: 3.4), number: "3.02", name: "Kind", usage: Living, unit: "W 07"),
+        4203: Space(storey: 4, position: (x: 10.2, y: 3.4), number: "3.03", name: "Kind", usage: Living, unit: "W 07"),
         4204: Space(storey: 4, position: (x: 2.3, y: 9.85), number: "3.04", name: "Schlafen", usage: Living, unit: "W 07"),
         4205: Space(storey: 4, position: (x: 5.9, y: 9.85), number: "3.05", name: "Bad", usage: Other, unit: "W 07"),
         4206: Space(storey: 4, position: (x: 8.6, y: 9.8), number: "3.06", name: "Flur", usage: Circulation, unit: "W 07"),
-        4207: Space(storey: 4, position: (x: 0.95, y: 7.25), number: "3.07", name: "Abstellraum", usage: Storage, unit: "W 07"),
+        4207: Space(storey: 4, position: (x: 0.95, y: 7.25), number: "3.07", name: "Abst.", usage: Storage, unit: "W 07"),
         4211: Space(storey: 4, position: (x: 14.0, y: 3.4), number: "3.11", name: "Kind", usage: Living, unit: "W 08"),
         4212: Space(storey: 4, position: (x: 17.3, y: 3.4), number: "3.12", name: "Kind", usage: Living, unit: "W 08"),
         4213: Space(storey: 4, position: (x: 21.2, y: 3.4), number: "3.13", name: "Wohnen, Essen, Kochen", usage: Living, unit: "W 08"),
         4214: Space(storey: 4, position: (x: 15.4, y: 9.8), number: "3.14", name: "Flur", usage: Circulation, unit: "W 08"),
         4215: Space(storey: 4, position: (x: 18.0, y: 9.85), number: "3.15", name: "Bad", usage: Other, unit: "W 08"),
         4216: Space(storey: 4, position: (x: 21.6, y: 9.85), number: "3.16", name: "Schlafen", usage: Living, unit: "W 08"),
-        4217: Space(storey: 4, position: (x: 23.0, y: 7.25), number: "3.17", name: "Abstellraum", usage: Storage, unit: "W 08"),
+        4217: Space(storey: 4, position: (x: 23.0, y: 7.25), number: "3.17", name: "Abst.", usage: Storage, unit: "W 08"),
         4220: Space(storey: 4, position: (x: 12.0, y: 10.7), number: "3.20", name: "Treppenhaus", usage: Circulation, living_space: false),
         4221: Space(storey: 4, position: (x: 10.7, y: 8.6), number: "3.21", name: "Aufzug", usage: Circulation, living_space: false),
+        4222: Space(storey: 4, position: (x: 10.7, y: 7.05), number: "3.22", name: "Schacht", usage: Technical, living_space: false),
         4300: Slab(storey: 4, slab_type: 20, outline: [(x: 0.17, y: 0.17), (x: 23.83, y: 0.17), (x: 23.83, y: 11.83), (x: 0.17, y: 11.83)]),
         4301: SlabOpening(host: 4300, outline: [(x: 11.765, y: 6.65), (x: 14.165, y: 6.65), (x: 14.165, y: 9.74), (x: 11.765, y: 9.74)]), // Treppenloch
         4302: SlabOpening(host: 4300, outline: [(x: 9.865, y: 7.71), (x: 11.535, y: 7.71), (x: 11.535, y: 9.51), (x: 9.865, y: 9.51)]), // Aufzugsschacht

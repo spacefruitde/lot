@@ -51,13 +51,7 @@ pub fn floor_plan_sheet_with(
     };
     frame(&mut sheet);
 
-    let center_model = [(extent.0[0] + extent.1[0]) / 2.0, (extent.0[1] + extent.1[1]) / 2.0];
-    let center_paper = PaperPoint::new(width / 2.0, (height + FOOTER) / 2.0);
-    let f = 1000.0 / scale;
-    let viewport = Viewport {
-        scale,
-        origin: PaperPoint::new(center_paper.x - center_model[0] * f, center_paper.y - center_model[1] * f),
-    };
+    let viewport = centered(extent, scale, width, height);
     let view = FloorPlanView { storey, cut_height: DEFAULT_CUT_HEIGHT, scale };
     sheet.objects.extend(below(viewport));
     sheet.objects.extend(floor_plan(project, view, standard, viewport));
@@ -72,6 +66,23 @@ pub fn floor_plan_sheet_with(
         ),
     );
     sheet
+}
+
+/// Viewport, der den Modellausschnitt `extent` mittig über die Fußzeile legt.
+fn centered(extent: ([f64; 2], [f64; 2]), scale: f64, width: f64, height: f64) -> Viewport {
+    let center_model = [(extent.0[0] + extent.1[0]) / 2.0, (extent.0[1] + extent.1[1]) / 2.0];
+    let center_paper = PaperPoint::new(width / 2.0, (height + FOOTER) / 2.0);
+    let f = 1000.0 / scale;
+    Viewport {
+        scale,
+        origin: PaperPoint::new(center_paper.x - center_model[0] * f, center_paper.y - center_model[1] * f),
+    }
+}
+
+/// Der Viewport eines Blatts aus [`floor_plan_sheet`], um weiteres darüberzulegen.
+pub fn floor_plan_viewport(project: &Project, scale: f64, _standard: &OfficeStandard, sheet: &Sheet) -> Viewport {
+    let extent = lot_geom::plan_extent(project).unwrap_or(([0.0, 0.0], [10.0, 10.0]));
+    centered(extent, scale, sheet.width_mm, sheet.height_mm)
 }
 
 /// Schnitt oder Ansicht auf dem kleinsten Blatt, auf das sie passt.

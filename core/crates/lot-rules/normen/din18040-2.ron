@@ -1,0 +1,37 @@
+// DIN 18040-2:2011-09 „Barrierefreies Bauen - Planungsgrundlagen - Teil 2:
+// Wohnungen“, Mindestmaße als Daten (5.03).
+//
+// VORSCHLAG für M5, von Ben gegen die Norm zu prüfen (Prüfpaket M5): Werte und
+// Abschnitte nach meinem Kenntnisstand. „R“ steht für uneingeschränkt mit dem
+// Rollstuhl nutzbar; geprüft wird zunächst „barrierefrei nutzbar“.
+AccessibleNorm(
+    source: "DIN 18040-2:2011-09",
+    // Abzug vom Rohbaumaß bis zur lichten Durchgangsbreite (Zarge, Türblatt):
+    // Rohbaumaß 1,01 m ergibt 0,90 m. Kein Normwert, Annahme für Lot.
+    door_deduction: 0.11,
+    // Abzug vom Rohbaumaß bis zum lichten Öffnungsmaß eines Fensterflügels.
+    // Kein Normwert, Annahme für Lot.
+    window_deduction: 0.12,
+    // 4.3.3.2: Türen im Gebäude (Hauseingang, Treppenhaus, Wohnungseingang).
+    door_common: 0.90,
+    door_common_source: "4.3.3.2",
+    // 5.3.1: Türen innerhalb der Wohnung (R: 0,90 m).
+    door_dwelling: 0.80,
+    door_dwelling_source: "5.3.1",
+    // 4.3.2: Flure und sonstige Verkehrsflächen mindestens 1,20 m breit.
+    corridor: 1.2,
+    corridor_source: "4.3.2",
+    // 5.3.2: Bewegungsflächen in Wohnräumen, Küche, Bad und Flur 1,20 x 1,20 m (R: 1,50 x 1,50 m).
+    turning: 1.2,
+    turning_source: "5.3.2",
+    // 4.3.5: Fahrkorb mindestens 1,10 x 1,40 m, Tür 0,90 m, davor 1,50 x 1,50 m frei.
+    cabin_width: 1.1,
+    cabin_depth: 1.4,
+    elevator_door: 0.9,
+    elevator_front: 1.5,
+    elevator_source: "4.3.5",
+    // 4.3.6: Handläufe an beiden Seiten von Treppen.
+    handrails_source: "4.3.6",
+    // 5.5: Drehflügeltüren von Sanitärräumen schlagen nicht nach innen auf.
+    bathroom_door_source: "5.5",
+)

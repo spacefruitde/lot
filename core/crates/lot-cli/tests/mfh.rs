@@ -130,3 +130,17 @@ fn submission_sheets_are_complete() {
     assert!(!info.client.is_empty() && !info.architect.is_empty() && !info.parcel.is_empty());
     assert!(info.datum.is_some());
 }
+
+#[test]
+fn check_report_passes() {
+    let p = mfh().variant_view();
+    let geometry = lot_geom::build(&p).unwrap();
+    let report = lot_rules::check_project(&p, &geometry);
+    for s in &report.sections {
+        println!("## {} ({})", s.title, s.basis);
+        for f in &s.findings {
+            println!("  [{}] {} ({})", f.status.label(), f.text, f.source);
+        }
+    }
+    assert_eq!(report.count(lot_rules::Status::Fail), 0);
+}
