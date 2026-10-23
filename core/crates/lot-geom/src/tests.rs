@@ -426,7 +426,14 @@ fn opening_in_arc_is_cut_radially() {
     let id = p.next_id();
     p.elements.insert(
         id,
-        Element::Opening(lot_model::Opening { host: arc, offset: 1.0, width: 1.0, height: 2.0, sill_height: 0.0 }),
+        Element::Opening(lot_model::Opening {
+            host: arc,
+            offset: 1.0,
+            width: 1.0,
+            height: 2.0,
+            sill_height: 0.0,
+            kind: lot_model::OpeningKind::Plain,
+        }),
     );
     let r = regions(&p);
     let expected = (arc_length(&p, arc) - 1.0) * 0.205;
@@ -543,4 +550,158 @@ fn every_arc_layer_is_one_piece() {
             }
         }
     }
+}
+
+/// Rechteck 6 × 4 m aus tragenden Innenwänden (20,5 cm, Achse mittig), geteilt
+/// durch eine Trennwand bei x = 2 mit Tür. Gibt die Trennwand zurück.
+fn two_spaces() -> (Project, ElementId) {
+    let mut p = project();
+    for (a, b) in
+        [((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 4.0)), ((6.0, 4.0), (0.0, 4.0)), ((0.0, 4.0), (0.0, 0.0))]
+    {
+        add_wall(&mut p, INNEN, a, b, WallAlignment::Center);
+    }
+    let split = add_wall(&mut p, TRENN, (2.0, 0.0), (2.0, 4.0), WallAlignment::Center);
+    let id = p.next_id();
+    p.elements.insert(
+        id,
+        Element::Opening(lot_model::Opening {
+            host: split,
+            offset: 1.0,
+            width: 0.885,
+            height: 2.135,
+            sill_height: 0.0,
+            kind: lot_model::OpeningKind::Plain,
+        }),
+    );
+    (p, split)
+}
+
+#[test]
+fn walls_enclose_spaces_and_doors_do_not_connect_them() {
+    let (p, _) = two_spaces();
+    let finder = spaces::SpaceFinder::new(&p, STOREY);
+    assert_eq!(finder.enclosed.len(), 2);
+    // Lichte Maße an der fertigen Oberfläche: Innenwand 20,5 cm, Trennwand 14,5 cm.
+    let left = finder.area_at([1.0, 2.0]).unwrap().area();
+    let right = finder.area_at([4.0, 2.0]).unwrap().area();
+    let height = 4.0 - 0.205;
+    assert!((left - (2.0 - 0.1025 - 0.0725) * height).abs() < 1e-6, "links {left}");
+    assert!((right - (4.0 - 0.1025 - 0.0725) * height).abs() < 1e-6, "rechts {right}");
+    assert!(finder.area_at([7.0, 2.0]).is_none(), "außen ist kein Raum");
+}
+
+#[test]
+fn column_in_space_is_cut_out() {
+    let (mut p, _) = two_spaces();
+    let id = p.next_id();
+    p.elements.insert(
+        id,
+        Element::Column(Column {
+            storey: STOREY,
+            position: Point2::new(4.0, 2.0),
+            profile: ColumnProfile::Rectangle { width: 0.3, depth: 0.3 },
+            rotation: 0.0,
+            material: "stahlbeton".into(),
+            base_offset: 0.0,
+            top: Top::Storey { offset: 0.0 },
+        }),
+    );
+    let finder = spaces::SpaceFinder::new(&p, STOREY);
+    let right = finder.area_at([3.0, 1.0]).unwrap().area();
+    assert!((right - ((4.0 - 0.175) * 3.795 - 0.09)).abs() < 1e-6, "{right}");
+    // Der Punkt auf der Stütze liegt in keinem Raum.
+    assert!(finder.area_at([4.0, 2.0]).is_none());
+}
+
+#[test]
+fn open_walls_enclose_nothing() {
+    let mut p = project();
+    for (a, b) in [((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 4.0)), ((0.0, 4.0), (0.0, 0.0))] {
+        add_wall(&mut p, INNEN, a, b, WallAlignment::Center);
+    }
+    assert!(spaces::SpaceFinder::new(&p, STOREY).enclosed.is_empty());
+}
+
+#[test]
+fn interior_point_lies_inside_an_l_shape() {
+    let l = Area::from_ring(&[[0.0, 0.0], [4.0, 0.0], [4.0, 1.0], [1.0, 1.0], [1.0, 4.0], [0.0, 4.0]]);
+    let p = spaces::interior_point(&l).unwrap();
+    assert!(l.contains(p), "{p:?}");
+}
+
+#[test]
+fn dimension_corners_follow_the_l_corner() {
+    // L-Ecke aus tragenden Innenwänden (20,5 cm, Achse mittig): Wand a nach Osten,
+    // Wand b von deren Ende nach Norden. Rechts von a liegt außen.
+    let mut p = project();
+    let a = add_wall(&mut p, INNEN, (0.0, 0.0), (4.0, 0.0), WallAlignment::Center);
+    add_wall(&mut p, INNEN, (4.0, 0.0), (4.0, 3.0), WallAlignment::Center);
+    let dim = |side| lot_model::DimensionChain {
+        storey: STOREY,
+        position: Point2::new(0.0, -1.0),
+        direction: Point2::new(1.0, 0.0),
+        refs: vec![
+            lot_model::DimRef::WallEnd { wall: a, end: lot_model::WallEnd::Start, side },
+            lot_model::DimRef::WallEnd { wall: a, end: lot_model::WallEnd::End, side },
+        ],
+    };
+    // Außen (rechts): bis zur Außenfläche von b bei x = 4,1025.
+    let outer = dimensions::resolve(&p, &dim(lot_model::WallSide::Right));
+    assert!((outer[1].along - 4.1025).abs() < 1e-9, "{outer:?}");
+    // Innen (links): bis zur Innenfläche von b bei x = 3,8975.
+    let inner = dimensions::resolve(&p, &dim(lot_model::WallSide::Left));
+    assert!((inner[1].along - 3.8975).abs() < 1e-9, "{inner:?}");
+    // Das freie Anfangsende bleibt, wo es ist.
+    assert!(inner[0].along.abs() < 1e-9);
+}
+
+#[test]
+fn slab_outline_lies_on_the_outer_face_of_the_structure() {
+    // Rechteck 8 × 6 m aus WDVS-Außenwänden, Bezugslinie außen, im Uhrzeigersinn:
+    // Außenputz 1,5 cm und Dämmung 16 cm liegen außerhalb der Tragschicht.
+    let mut p = project();
+    for (a, b) in
+        [((0.0, 0.0), (0.0, 6.0)), ((0.0, 6.0), (8.0, 6.0)), ((8.0, 6.0), (8.0, 0.0)), ((8.0, 0.0), (0.0, 0.0))]
+    {
+        add_wall(&mut p, WDVS, a, b, WallAlignment::Exterior);
+    }
+    let rings = slabs::slab_outlines(&p, STOREY);
+    assert_eq!(rings.len(), 1);
+    let area = Area::from_ring(&rings[0]);
+    let (lo, hi) = area.bounds().unwrap();
+    assert!((lo[0] - 0.175).abs() < 1e-6 && (hi[0] - 7.825).abs() < 1e-6, "{lo:?} {hi:?}");
+    assert!((area.area() - 7.65 * 5.65).abs() < 1e-6);
+}
+
+#[test]
+fn slab_layers_stack_down_from_the_floor_level() {
+    let mut p = project();
+    let ty = p.next_id();
+    p.elements.insert(
+        ty,
+        Element::SlabType(lot_model::SlabType {
+            name: "Decke".into(),
+            layers: vec![
+                layer("estrich", 0.05, LayerFunction::Finish),
+                layer("stahlbeton", 0.2, LayerFunction::Structure),
+            ],
+        }),
+    );
+    let id = p.next_id();
+    p.elements.insert(
+        id,
+        Element::Slab(lot_model::Slab {
+            storey: STOREY,
+            slab_type: ty,
+            outline: vec![Point2::new(0.0, 0.0), Point2::new(4.0, 0.0), Point2::new(4.0, 3.0), Point2::new(0.0, 3.0)],
+            top_offset: 0.0,
+            kind: lot_model::SlabKind::Floor,
+        }),
+    );
+    let g = build(&p).unwrap();
+    let layers: Vec<_> = g.elements.iter().filter(|e| e.id == id).collect();
+    assert_eq!(layers.len(), 2);
+    let (lo, hi) = layers[1].mesh.bounds().unwrap();
+    assert!((hi[2] + 0.05).abs() < 1e-9 && (lo[2] + 0.25).abs() < 1e-9, "Rohdecke von -0,25 bis -0,05: {lo:?} {hi:?}");
 }

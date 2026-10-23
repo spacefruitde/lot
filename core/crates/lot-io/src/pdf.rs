@@ -90,6 +90,12 @@ fn draw_page(document: &mut Document, sheet: &Sheet, font: &Font) -> Result<(), 
                 let font_size = plan_font().size_for_cap_height(text.height_mm) * PT_PER_MM;
                 let start = PaperPoint::new(plan_font().start_x(text), text.position.y);
                 let (x, y) = pt(&start);
+                let rotated = text.rotation != 0.0;
+                if rotated {
+                    // PDF zählt hier y nach unten, eine Drehung gegen den Uhrzeigersinn ist negativ.
+                    let (ox, oy) = pt(&text.position);
+                    surface.push_transform(&krilla::geom::Transform::from_rotate_at(-text.rotation as f32, ox, oy));
+                }
                 surface.set_stroke(None);
                 surface.set_fill(Some(Fill::default()));
                 surface.draw_text(
@@ -100,6 +106,9 @@ fn draw_page(document: &mut Document, sheet: &Sheet, font: &Font) -> Result<(), 
                     false,
                     TextDirection::Auto,
                 );
+                if rotated {
+                    surface.pop();
+                }
             }
         }
     }

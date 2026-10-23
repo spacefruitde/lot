@@ -68,6 +68,10 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
             }
             continue;
         }
+        if let Output::AreaTable { name } = &output {
+            let csv = lot_plan::area_table::area_csv(&lot_rules::area_report(&project));
+            write(&out.join(format!("{name}.csv")), csv.as_bytes())?;
+        }
         let pages = sheets(&project, &output, &source);
         write(&out.join(format!("{}.pdf", output.name())), &lot_io::pdf::to_pdf_pages(&pages)?)?;
         for (sheet, page) in pages.iter().zip(page_names(output.name(), pages.len())) {

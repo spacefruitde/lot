@@ -79,8 +79,94 @@ pub fn distance_to_wall(project: &Project, wall: &Wall, p: Point2) -> f64 {
     ds.hypot(dt)
 }
 
-/// Das Element unter dem Punkt: Stützen vor Wänden vor Achsen, jeweils das nächste.
+/// Halbe Breite und Höhe des Bereichs um einen Raumpunkt, in dem ein Klick den
+/// Raum wählt, in Metern (etwa die Größe des Raumstempels in 1:100).
+const ROOM_PICK: (f64, f64) = (0.9, 0.5);
+
+/// Das Element unter dem Punkt: Stützen vor Wänden vor Achsen vor Raumstempeln, jeweils das nächste.
 pub fn element_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    element_except_spaces(project, storey, p, tolerance).or_else(|| {
+        project
+            .spaces_on(storey)
+            .filter(|(_, r)| {
+                (p.x - r.position.x).abs() <= ROOM_PICK.0 + tolerance
+                    && (p.y - r.position.y).abs() <= ROOM_PICK.1 + tolerance
+            })
+            .min_by(|a, b| a.1.position.distance(p).total_cmp(&b.1.position.distance(p)))
+            .map(|(id, _)| id)
+    })
+}
+
+/// Umriss einer Öffnung in ihrer Wand, über die ganze Wanddicke.
+pub fn opening_outline(project: &Project, o: &lot_model::Opening) -> Option<Vec<[f64; 2]>> {
+    let wall = project.wall(o.host)?;
+    let (left, right) = faces(project, wall);
+    lot_geom::wall_section(wall, (o.offset, o.offset + o.width), (left, right)).rings().into_iter().next()
+}
+
+/// Die Öffnung unter dem Punkt, falls er in einer Öffnung einer Wand des Geschosses liegt.
+fn opening_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    project.walls_on(storey).find_map(|(wall_id, wall)| {
+        let (s, t) = wall.locate(p);
+        let (left, right) = faces(project, wall);
+        if t > left + tolerance || t < right - tolerance {
+            return None;
+        }
+        project
+            .openings_in(wall_id)
+            .find(|(_, o)| s >= o.offset - tolerance / 2.0 && s <= o.offset + o.width + tolerance / 2.0)
+            .map(|(id, _)| id)
+    })
+}
+
+fn element_except_spaces(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    opening_at(project, storey, p, tolerance).or_else(|| other_elements(project, storey, p, tolerance))
+}
+
+/// Die Maßkette, deren Maßlinie am Punkt liegt.
+fn dimension_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    project
+        .dimensions_on(storey)
+        .filter_map(|(id, d)| {
+            let (a, b) = dimension_extent(project, d)?;
+            Some((id, segment_distance(a, b, p)))
+        })
+        .filter(|(_, dist)| *dist <= tolerance)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
+/// Anfang und Ende der Maßlinie.
+fn dimension_extent(project: &Project, d: &lot_model::DimensionChain) -> Option<(Point2, Point2)> {
+    let points = lot_geom::dimensions::resolve(project, d);
+    let (first, last) = (points.first()?, points.last()?);
+    let dir = lot_geom::dimensions::direction(d);
+    let at = |s: f64| Point2::new(d.position.x + dir[0] * s, d.position.y + dir[1] * s);
+    Some((at(first.along), at(last.along)))
+}
+
+fn other_elements(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    dimension_at(project, storey, p, tolerance)
+        .or_else(|| walls_columns_grids(project, storey, p, tolerance))
+        .or_else(|| slab_opening_at(project, storey, p, tolerance))
+}
+
+/// Der Deckendurchbruch des Geschosses, dessen Rand am Punkt liegt.
+fn slab_opening_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    project
+        .slabs_on(storey)
+        .flat_map(|(slab, _)| project.slab_openings_in(slab))
+        .filter_map(|(id, o)| {
+            let n = o.outline.len();
+            let d =
+                (0..n).map(|i| segment_distance(o.outline[i], o.outline[(i + 1) % n], p)).fold(f64::INFINITY, f64::min);
+            (d <= tolerance).then_some((id, d))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
+fn walls_columns_grids(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
     let column = project
         .columns_on(storey)
         .map(|(id, c)| (id, column_distance(c, p)))
@@ -115,6 +201,25 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
     match project.elements.get(&id)? {
         Element::Wall(w) => Some(footprint(project, w)),
         Element::Column(c) => Some(column_outline(c)),
+        Element::Opening(o) => opening_outline(project, o),
+        Element::SlabOpening(o) => Some(o.outline.iter().map(|p| [p.x, p.y]).collect()),
+        Element::DimensionChain(d) => {
+            let (a, b) = dimension_extent(project, d)?;
+            let len = a.distance(b).max(1e-9);
+            let (nx, ny) = (-(b.y - a.y) / len * 0.05, (b.x - a.x) / len * 0.05);
+            Some(vec![[a.x - nx, a.y - ny], [b.x - nx, b.y - ny], [b.x + nx, b.y + ny], [a.x + nx, a.y + ny]])
+        }
+        Element::Space(r) => {
+            // Die Fläche des Raums, bei offenen Räumen der Bereich des Stempels.
+            let finder = lot_geom::spaces::SpaceFinder::new(project, r.storey);
+            let ring = finder.area_at([r.position.x, r.position.y]).and_then(|a| {
+                a.rings().into_iter().max_by(|x, y| lot_geom::signed_area(x).total_cmp(&lot_geom::signed_area(y)))
+            });
+            Some(ring.unwrap_or_else(|| {
+                let (x, y, w, h) = (r.position.x, r.position.y, ROOM_PICK.0, ROOM_PICK.1);
+                vec![[x - w, y - h], [x + w, y - h], [x + w, y + h], [x - w, y + h]]
+            }))
+        }
         Element::GridLine(g) => {
             let len = g.start.distance(g.end).max(1e-12);
             let (dx, dy) = ((g.end.x - g.start.x) / len, (g.end.y - g.start.y) / len);
@@ -164,6 +269,36 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
                 let mut n = c.clone();
                 n.position = shift(c.position);
                 changes.push((*id, Element::Column(n)));
+            }
+            Some(Element::Space(r)) => {
+                let mut n = r.clone();
+                n.position = shift(r.position);
+                changes.push((*id, Element::Space(n)));
+            }
+            Some(Element::SlabOpening(o)) => {
+                let mut n = o.clone();
+                n.outline = o.outline.iter().map(|p| shift(*p)).collect();
+                changes.push((*id, Element::SlabOpening(n)));
+            }
+            Some(Element::Slab(s)) => {
+                let mut n = s.clone();
+                n.outline = s.outline.iter().map(|p| shift(*p)).collect();
+                changes.push((*id, Element::Slab(n)));
+            }
+            Some(Element::DimensionChain(d)) => {
+                let mut n = d.clone();
+                n.position = shift(d.position);
+                changes.push((*id, Element::DimensionChain(n)));
+            }
+            // Öffnungen gleiten entlang ihrer Wand; mit der Wand bewegen sie sich ohnehin.
+            Some(Element::Opening(o)) if !walls.contains(&o.host) => {
+                let Some(wall) = project.wall(o.host) else { continue };
+                let (tx, ty) = wall.tangent_at(o.offset + o.width / 2.0);
+                let along = delta.0 * tx + delta.1 * ty;
+                let mut n = o.clone();
+                n.offset = ((o.offset + along) / 0.01).round() * 0.01;
+                n.offset = n.offset.clamp(0.0, (wall.length() - o.width).max(0.0));
+                changes.push((*id, Element::Opening(n)));
             }
             Some(Element::GridLine(g)) => {
                 let mut n = g.clone();

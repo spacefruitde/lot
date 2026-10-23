@@ -111,6 +111,15 @@ impl LayerRegion {
 
 /// Schichtflächen aller Wände und Stützen eines Geschosses in der absoluten Höhe `z`.
 pub fn layer_regions(project: &Project, storey: ElementId, z: f64) -> Vec<LayerRegion> {
+    regions_at(project, storey, z, true)
+}
+
+/// Wie [`layer_regions`], aber ohne Öffnungen: der volle Wandquerschnitt.
+pub fn solid_regions(project: &Project, storey: ElementId, z: f64) -> Vec<LayerRegion> {
+    regions_at(project, storey, z, false)
+}
+
+fn regions_at(project: &Project, storey: ElementId, z: f64, with_openings: bool) -> Vec<LayerRegion> {
     let walls: Vec<WallInfo> = project
         .walls_on(storey)
         .filter_map(|(id, w)| {
@@ -191,7 +200,7 @@ pub fn layer_regions(project: &Project, storey: ElementId, z: f64) -> Vec<LayerR
     }
 
     // Öffnungen in Schnitthöhe.
-    for (id, wall, left_face, right_face) in present {
+    for (id, wall, left_face, right_face) in present.into_iter().filter(|_| with_openings) {
         let Some((bottom, _)) = project.wall_extent(wall) else { continue };
         for (_, o) in project.openings_in(id) {
             let (o0, o1) = (bottom + o.sill_height, bottom + o.sill_height + o.height);

@@ -53,7 +53,7 @@ pub fn floor_plan_sheet(project: &Project, storey: ElementId, scale: f64, standa
         &mut sheet,
         &format!("{}  ·  Grundriss {storey_name}  ·  M 1:{}  ·  {format}", project.name, scale),
         &format!(
-            "Schnitthöhe +{} m über OKFF. Darstellung nach Bürostandard, Vorschlag M1.",
+            "Schnitthöhe +{} m über OKFF. Darstellung nach Bürostandard, Vorschlag.",
             format_de(DEFAULT_CUT_HEIGHT, 2)
         ),
     );
@@ -128,7 +128,8 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
     let mut walls: Vec<ElementId> = Vec::new();
     for (id, e) in &project.elements {
         let keep = match e {
-            Element::Storey(_) | Element::WallType(_) => true,
+            Element::Storey(_) | Element::WallType(_) | Element::SlabType(_) => true,
+            Element::Slab(_) | Element::SlabOpening(_) => false,
             Element::Wall(w) => {
                 let k = inside(w.start.x, w.start.y) || inside(w.end.x, w.end.y);
                 if k {
@@ -137,6 +138,8 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
                 k
             }
             Element::Column(c) => inside(c.position.x, c.position.y),
+            Element::Space(r) => inside(r.position.x, r.position.y),
+            Element::DimensionChain(d) => inside(d.position.x, d.position.y),
             Element::GridLine(g) => inside(g.start.x, g.start.y) && inside(g.end.x, g.end.y),
             Element::Opening(_) => false,
         };

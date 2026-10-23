@@ -76,6 +76,50 @@ impl Project {
         })
     }
 
+    pub fn slabs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Slab)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Slab(s) if s.storey == storey => Some((*id, s)),
+            _ => None,
+        })
+    }
+
+    /// Durchbrüche in der Decke `slab`.
+    pub fn slab_openings_in(&self, slab: ElementId) -> impl Iterator<Item = (ElementId, &crate::SlabOpening)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::SlabOpening(o) if o.host == slab => Some((*id, o)),
+            _ => None,
+        })
+    }
+
+    pub fn slab_type(&self, id: ElementId) -> Option<&crate::SlabType> {
+        match self.elements.get(&id) {
+            Some(Element::SlabType(t)) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// Alle Deckenaufbauten, nach Kennung.
+    pub fn slab_types(&self) -> impl Iterator<Item = (ElementId, &crate::SlabType)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::SlabType(t) => Some((*id, t)),
+            _ => None,
+        })
+    }
+
+    pub fn dimensions_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::DimensionChain)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::DimensionChain(d) if d.storey == storey => Some((*id, d)),
+            _ => None,
+        })
+    }
+
+    pub fn spaces_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Space)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Space(r) if r.storey == storey => Some((*id, r)),
+            _ => None,
+        })
+    }
+
     pub fn grid_lines(&self) -> impl Iterator<Item = (ElementId, &crate::GridLine)> {
         self.elements.iter().filter_map(|(id, e)| match e {
             Element::GridLine(g) => Some((*id, g)),
@@ -157,6 +201,29 @@ impl Project {
         for (i, (name, layers)) in types.into_iter().enumerate() {
             p.elements.insert(ElementId(10 + i as u64), Element::WallType(WallType { name: name.into(), layers }));
         }
+        let slabs = [
+            (
+                "Geschossdecke StB 20",
+                vec![
+                    layer("estrich", 0.05, Finish),
+                    layer("daemmung", 0.03, Insulation),
+                    layer("stahlbeton", 0.2, Structure),
+                    layer("putz", 0.015, Finish),
+                ],
+            ),
+            (
+                "Bodenplatte StB 25",
+                vec![
+                    layer("estrich", 0.06, Finish),
+                    layer("daemmung_hart", 0.1, Insulation),
+                    layer("stahlbeton", 0.25, Structure),
+                ],
+            ),
+        ];
+        for (i, (name, layers)) in slabs.into_iter().enumerate() {
+            p.elements
+                .insert(ElementId(20 + i as u64), Element::SlabType(crate::SlabType { name: name.into(), layers }));
+        }
         p
     }
 
@@ -199,7 +266,14 @@ impl Project {
         );
         p.elements.insert(
             ElementId(4),
-            Element::Opening(Opening { host: ElementId(3), offset: 1.75, width: 1.5, height: 1.3, sill_height: 0.9 }),
+            Element::Opening(Opening {
+                host: ElementId(3),
+                offset: 1.75,
+                width: 1.5,
+                height: 1.3,
+                sill_height: 0.9,
+                kind: crate::OpeningKind::Plain,
+            }),
         );
         p
     }

@@ -15,8 +15,9 @@ mod project;
 
 pub use document::{Document, ModelError};
 pub use element::{
-    CircularArc, Column, ColumnProfile, Element, ElementId, ElementKind, GridLine, Layer, LayerFunction, Opening,
-    Param, Point2, Storey, Top, Wall, WallAlignment, WallType,
+    CircularArc, Column, ColumnProfile, DimRef, DimensionChain, Door, Element, ElementId, ElementKind, GridLine,
+    Handing, Layer, LayerFunction, Opening, OpeningKind, Param, Point2, Slab, SlabKind, SlabOpening, SlabType, Space,
+    SpaceUsage, Storey, Top, Wall, WallAlignment, WallEnd, WallSide, WallType,
 };
 pub use operation::Operation;
 pub use project::Project;

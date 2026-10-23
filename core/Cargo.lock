@@ -889,6 +889,7 @@ dependencies = [
  "lot-model",
  "lot-plan",
  "lot-render",
+ "lot-rules",
  "png",
  "ron",
  "serde",
@@ -898,6 +899,7 @@ dependencies = [
 name = "lot-edit"
 version = "0.1.0"
 dependencies = [
+ "lot-geom",
  "lot-model",
  "ron",
  "serde",
@@ -913,6 +915,7 @@ dependencies = [
  "lot-model",
  "lot-plan",
  "lot-render",
+ "lot-rules",
  "tempfile",
  "thiserror",
  "uniffi",
@@ -958,6 +961,7 @@ version = "0.1.0"
 dependencies = [
  "lot-geom",
  "lot-model",
+ "lot-rules",
  "ron",
  "serde",
 ]
@@ -982,6 +986,10 @@ dependencies = [
 [[package]]
 name = "lot-rules"
 version = "0.1.0"
+dependencies = [
+ "lot-geom",
+ "lot-model",
+]
 
 [[package]]
 name = "lyon_geom"

@@ -85,6 +85,24 @@ impl Area {
             .collect()
     }
 
+    /// Ob der Punkt in der Fläche liegt (gerade/ungerade über alle Ringe).
+    pub fn contains(&self, p: [f64; 2]) -> bool {
+        let q = to_point(p);
+        let (x, y) = (q.x as f64, q.y as f64);
+        let mut inside = false;
+        for path in &self.0 {
+            let n = path.len();
+            for i in 0..n {
+                let (a, b) = (&path[i], &path[(i + 1) % n]);
+                let (ax, ay, bx, by) = (a.x as f64, a.y as f64, b.x as f64, b.y as f64);
+                if (ay > y) != (by > y) && x < ax + (y - ay) * (bx - ax) / (by - ay) {
+                    inside = !inside;
+                }
+            }
+        }
+        inside
+    }
+
     /// Gleiche Form, auch wenn Ringe in anderer Reihenfolge oder mit anderem
     /// Anfangspunkt vorliegen.
     pub fn same_shape(&self, other: &Area) -> bool {

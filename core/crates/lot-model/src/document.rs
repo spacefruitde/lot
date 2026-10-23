@@ -249,9 +249,68 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                 if o.offset < 0.0 || o.offset + o.width > wall.length() + TOLERANCE {
                     return Err(invalid("Die Öffnung ragt seitlich aus der Wand"));
                 }
+                let overlaps = project.openings_in(o.host).any(|(other_id, other)| {
+                    other_id != *id
+                        && o.offset < other.offset + other.width - TOLERANCE
+                        && other.offset < o.offset + o.width - TOLERANCE
+                });
+                if overlaps {
+                    return Err(invalid("Die Öffnung überschneidet sich mit einer anderen in derselben Wand"));
+                }
                 let (bottom, top) = project.wall_extent(wall).unwrap_or((0.0, 0.0));
                 if o.sill_height < 0.0 || o.sill_height + o.height > top - bottom + TOLERANCE {
                     return Err(invalid("Die Öffnung ragt oben oder unten aus der Wand"));
+                }
+            }
+            Element::SlabType(t) => {
+                if t.layers.is_empty() || t.layers.iter().any(|l| l.thickness < 0.001) {
+                    return Err(invalid(format!(
+                        "Deckenaufbau {}: Jede Schicht muss mindestens 1 mm dick sein",
+                        t.name
+                    )));
+                }
+            }
+            Element::Slab(s) => {
+                if project.storey(s.storey).is_none() {
+                    return Err(invalid("Decke: Das Geschoss fehlt"));
+                }
+                if project.slab_type(s.slab_type).is_none() {
+                    return Err(invalid("Decke: Der Deckenaufbau fehlt"));
+                }
+                let n = s.outline.len();
+                let area: f64 = (0..n)
+                    .map(|i| {
+                        let (a, b) = (s.outline[i], s.outline[(i + 1) % n]);
+                        a.x * b.y - b.x * a.y
+                    })
+                    .sum::<f64>()
+                    / 2.0;
+                if n < 3 || area.abs() < 0.01 {
+                    return Err(invalid("Eine Decke braucht einen Umriss mit mindestens 0,01 m²"));
+                }
+            }
+            Element::SlabOpening(o) => {
+                if !matches!(project.elements.get(&o.host), Some(Element::Slab(_))) {
+                    return Err(invalid("Der Durchbruch sitzt nicht in einer Decke"));
+                }
+                if o.outline.len() < 3 {
+                    return Err(invalid("Ein Durchbruch braucht mindestens drei Eckpunkte"));
+                }
+            }
+            Element::DimensionChain(d) => {
+                if project.storey(d.storey).is_none() {
+                    return Err(invalid("Maßkette: Das Geschoss fehlt"));
+                }
+                if d.direction.x.hypot(d.direction.y) < 1e-9 {
+                    return Err(invalid("Maßkette: Die Richtung fehlt"));
+                }
+            }
+            Element::Space(r) => {
+                if project.storey(r.storey).is_none() {
+                    return Err(invalid(format!("Raum {}: Das Geschoss fehlt", r.name)));
+                }
+                if r.name.trim().is_empty() {
+                    return Err(invalid("Ein Raum braucht einen Namen"));
                 }
             }
             Element::Column(c) => {
@@ -372,6 +431,7 @@ mod tests {
                 width: 1.0,
                 height: 1.0,
                 sill_height: 0.0,
+                kind: crate::OpeningKind::Plain,
             }))
             .unwrap_err();
         assert!(matches!(err, ModelError::Invalid(_)));

@@ -324,6 +324,10 @@ impl Viewport {
                         Tool::ArcWall => "arc",
                         Tool::Grid => "grid",
                         Tool::Column => "column",
+                        Tool::Space => "space",
+                        Tool::Door => "door",
+                        Tool::Window => "window",
+                        Tool::SlabOpening => "slabOpening",
                     }
                     .to_string(),
                 )

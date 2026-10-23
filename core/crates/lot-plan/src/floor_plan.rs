@@ -7,7 +7,12 @@
 //! 2. Muster der geschnittenen Schichten, je nach Detailgrad
 //! 3. Grenzen zwischen Schichten aus verschiedenem Material
 //! 4. Umriss aller geschnittenen Bauteile (Schnittkante)
-//! 5. Achsen mit Achskreisen
+//! 5. Türen und Fenster: Türblatt und Aufschlag, Fensterrahmen; Öffnungen
+//!    über der Schnittebene gestrichelt. Deckendurchbrüche im Boden mit
+//!    Diagonalkreuz, in der Decke darüber gestrichelt
+//! 6. Achsen mit Achskreisen
+//! 7. Maßketten
+//! 8. Raumstempel: Nummer, Name, Netto-Raumfläche
 //!
 //! Gleiches Material benachbarter Schichten und Wände wird zu einer Fläche
 //! vereinigt, damit an Anschlüssen keine Fugen erscheinen.
@@ -15,7 +20,7 @@
 use std::collections::BTreeMap;
 
 use lot_geom::{Area, LayerRegion};
-use lot_model::{ElementId, LayerFunction, Project};
+use lot_model::{ElementId, LayerFunction, OpeningKind, Project, WallSide};
 
 use crate::clip::clip_polyline;
 use crate::standard::{CutPattern, Detail, OfficeStandard, ScaleStyle};
@@ -81,11 +86,250 @@ pub fn floor_plan(
         objects.push(closed(paper(&ring, viewport), style.pens.cut));
     }
 
-    // 5. Achsen.
+    // 5. Türen und Fenster, Deckendurchbrüche.
+    draw_openings(&mut objects, project, view.storey, z_cut, style, viewport);
+    draw_slab_openings(&mut objects, project, view.storey, style, viewport);
+
+    // 6. Achsen.
     for (_, grid) in project.grid_lines() {
         draw_grid_line(&mut objects, grid, style, viewport);
     }
+
+    // 7. Maßketten.
+    crate::dimensions::draw_dimensions(&mut objects, project, view.storey, style, viewport);
+
+    // 8. Raumstempel.
+    draw_space_tags(&mut objects, project, view.storey, style, viewport);
     objects
+}
+
+/// Raumstempel (3.06), Vorschlag: Nummer klein über dem Namen, darunter die
+/// Netto-Raumfläche nach DIN 277:2021-08. Ein Raum ohne geschlossene Wände
+/// zeigt „Fläche offen“.
+fn draw_space_tags(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    storey: ElementId,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let spaces: Vec<_> = project.spaces_on(storey).collect();
+    if spaces.is_empty() {
+        return;
+    }
+    let finder = lot_geom::spaces::SpaceFinder::new(project, storey);
+    for (_, space) in spaces {
+        let area = finder.area_at([space.position.x, space.position.y]).map(|a| a.area());
+        let mut lines: Vec<(String, f64)> = Vec::new();
+        if !space.number.is_empty() {
+            lines.push((space.number.clone(), style.space_text));
+        }
+        lines.push((space.name.clone(), style.space_name));
+        lines.push((area.map_or_else(|| "Fläche offen".to_string(), format_area), style.space_text));
+        // Zeilenabstand das 1,6-fache der Schrifthöhe, der Block steht mittig auf dem Raumpunkt.
+        let total: f64 = lines.iter().map(|(_, h)| h * 1.6).sum::<f64>() - lines.last().map_or(0.0, |(_, h)| h * 0.6);
+        let center = viewport.to_paper(space.position.x, space.position.y);
+        let mut top = center.y + total / 2.0;
+        for (text, height) in lines {
+            top -= height;
+            objects.push(PlanObject::Text(Text {
+                position: PaperPoint::new(center.x, top),
+                text,
+                height_mm: height,
+                anchor: Anchor::Center,
+                rotation: 0.0,
+            }));
+            top -= height * 0.6;
+        }
+    }
+}
+
+/// Bautiefe des Fensterrahmens, in Metern. Vorschlag, Ben prüft.
+const WINDOW_FRAME: f64 = 0.07;
+/// Dicke des Türblatts in 1:50, in Metern.
+const DOOR_LEAF: f64 = 0.04;
+/// Strichlänge und Lücke verdeckter Kanten, in mm auf dem Blatt.
+const HIDDEN_DASH: [f64; 2] = [2.0, 1.0];
+
+/// Türen und Fenster (1.06), Vorschlag nach DIN 1356-1:1995-02:
+///
+/// - Tür: Türblatt rechtwinklig zur Wand an den Bändern, Aufschlag als
+///   Viertelkreis; in 1:50 das Türblatt mit Dicke.
+/// - Fenster: in 1:200 eine Linie, in 1:100 der Rahmen, in 1:50 Rahmen und
+///   Glaslinie. Der Rahmen sitzt an der Außenkante der Tragschicht, wenn außen
+///   gedämmt ist, sonst in der Mitte der Tragschicht.
+/// - Öffnungen ganz über der Schnittebene (Oberlichter): Umriss gestrichelt.
+fn draw_openings(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    storey: ElementId,
+    z_cut: f64,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let line = |points: Vec<[f64; 2]>, width: f64, dashed: bool| {
+        PlanObject::Line(Line {
+            points: points.iter().map(|p| viewport.to_paper(p[0], p[1])).collect(),
+            closed: false,
+            pen: Pen::mm(width),
+            style: if dashed { LineStyle::Dashed(HIDDEN_DASH.to_vec()) } else { LineStyle::Solid },
+            color: Gray::BLACK,
+        })
+    };
+    for (wall_id, wall) in project.walls_on(storey) {
+        let (Some(wall_type), Some((bottom, top))) = (project.wall_type(wall.wall_type), project.wall_extent(wall))
+        else {
+            continue;
+        };
+        if !(bottom <= z_cut && z_cut < top) {
+            continue;
+        }
+        let offsets = wall.layer_offsets(wall_type);
+        let (left, right) = (offsets[0].0, offsets[offsets.len() - 1].1);
+        let at = |s: f64, t: f64| {
+            let p = wall.point_at(s, t);
+            [p.x, p.y]
+        };
+        for (_, o) in project.openings_in(wall_id) {
+            let (o0, o1) = (bottom + o.sill_height, bottom + o.sill_height + o.height);
+            let (a, b) = (o.offset, o.offset + o.width);
+            if o0 > z_cut {
+                // Über der Schnittebene: Umriss gestrichelt.
+                let ring = vec![at(a, left), at(b, left), at(b, right), at(a, right), at(a, left)];
+                objects.push(line(ring, style.pens.hidden, true));
+                continue;
+            }
+            if o1 <= z_cut {
+                continue;
+            }
+            match o.kind {
+                OpeningKind::Plain => {}
+                OpeningKind::Door(door) => {
+                    let (face, sign) = match door.opens_to {
+                        WallSide::Left => (left, 1.0),
+                        WallSide::Right => (right, -1.0),
+                    };
+                    let (hinge_s, free_s) = if door.hinge_at_end() { (b, a) } else { (a, b) };
+                    let hinge = at(hinge_s, face);
+                    let free = at(free_s, face);
+                    let (tx, ty) = wall.tangent_at(hinge_s);
+                    let normal = [-ty * sign, tx * sign];
+                    let radius = o.width;
+                    let tip = [hinge[0] + normal[0] * radius, hinge[1] + normal[1] * radius];
+                    if style.detail == Detail::Fine {
+                        // Türblatt mit Dicke, zur freien Seite hin.
+                        let toward = [(free[0] - hinge[0]) / radius, (free[1] - hinge[1]) / radius];
+                        let d = [toward[0] * DOOR_LEAF, toward[1] * DOOR_LEAF];
+                        let leaf =
+                            vec![hinge, tip, [tip[0] + d[0], tip[1] + d[1]], [hinge[0] + d[0], hinge[1] + d[1]], hinge];
+                        objects.push(line(leaf, style.pens.view, false));
+                    } else {
+                        objects.push(line(vec![hinge, tip], style.pens.view, false));
+                    }
+                    // Aufschlag: Viertelkreis von der Spitze des Türblatts zur Gegenseite.
+                    let start = (tip[1] - hinge[1]).atan2(tip[0] - hinge[0]);
+                    let end = (free[1] - hinge[1]).atan2(free[0] - hinge[0]);
+                    let mut sweep = end - start;
+                    while sweep > std::f64::consts::PI {
+                        sweep -= std::f64::consts::TAU;
+                    }
+                    while sweep < -std::f64::consts::PI {
+                        sweep += std::f64::consts::TAU;
+                    }
+                    let arc: Vec<[f64; 2]> = (0..=24)
+                        .map(|i| {
+                            let angle = start + sweep * i as f64 / 24.0;
+                            [hinge[0] + radius * angle.cos(), hinge[1] + radius * angle.sin()]
+                        })
+                        .collect();
+                    objects.push(line(arc, style.pens.hatch, false));
+                }
+                OpeningKind::Window => {
+                    let (f_out, f_in) = window_frame(wall_type, &offsets);
+                    let mid = (f_out + f_in) / 2.0;
+                    match style.detail {
+                        Detail::Coarse => objects.push(line(vec![at(a, mid), at(b, mid)], style.pens.view, false)),
+                        Detail::Medium | Detail::Fine => {
+                            let frame = vec![at(a, f_out), at(b, f_out), at(b, f_in), at(a, f_in), at(a, f_out)];
+                            objects.push(line(frame, style.pens.view, false));
+                            if style.detail == Detail::Fine {
+                                objects.push(line(vec![at(a, mid), at(b, mid)], style.pens.hatch, false));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Deckendurchbrüche (1.11), Vorschlag nach DIN 1356-1: in der Decke unter den
+/// Füßen (Oberkante auf OKFF dieses Geschosses) Umriss mit Diagonalkreuz, in
+/// der Decke darüber (OKFF des nächsten Geschosses) Umriss gestrichelt.
+fn draw_slab_openings(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    storey: ElementId,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let storeys = project.storeys();
+    let above = storeys.iter().position(|(id, _)| *id == storey).and_then(|i| storeys.get(i + 1)).map(|(id, _)| *id);
+    let line = |points: Vec<[f64; 2]>, width: f64, dashed: bool, closed: bool| {
+        PlanObject::Line(Line {
+            points: points.iter().map(|p| viewport.to_paper(p[0], p[1])).collect(),
+            closed,
+            pen: Pen::mm(width),
+            style: if dashed { LineStyle::Dashed(HIDDEN_DASH.to_vec()) } else { LineStyle::Solid },
+            color: Gray::BLACK,
+        })
+    };
+    for (slab_id, slab) in project.elements.iter().filter_map(|(id, e)| match e {
+        lot_model::Element::Slab(s) => Some((*id, s)),
+        _ => None,
+    }) {
+        let own = slab.storey == storey;
+        if !own && Some(slab.storey) != above {
+            continue;
+        }
+        for (_, o) in project.slab_openings_in(slab_id) {
+            let ring: Vec<[f64; 2]> = o.outline.iter().map(|p| [p.x, p.y]).collect();
+            if own {
+                objects.push(line(ring.clone(), style.pens.view, false, true));
+                // Diagonalkreuz über die Ecken des umschließenden Rechtecks der ersten vier Punkte.
+                if ring.len() >= 4 {
+                    objects.push(line(vec![ring[0], ring[2]], style.pens.hatch, false, false));
+                    objects.push(line(vec![ring[1], ring[3]], style.pens.hatch, false, false));
+                }
+            } else {
+                objects.push(line(ring, style.pens.hidden, true, true));
+            }
+        }
+    }
+}
+
+/// Lage des Fensterrahmens quer zur Wand: (außen, innen) als Abstand von der Bezugslinie.
+fn window_frame(wall_type: &lot_model::WallType, offsets: &[(f64, f64)]) -> (f64, f64) {
+    let structure = wall_type.layers.iter().position(|l| l.function == LayerFunction::Structure);
+    match structure {
+        Some(k) if wall_type.layers[..k].iter().any(|l| l.function == LayerFunction::Insulation) => {
+            // Außen gedämmt: Rahmen innen an der Außenkante der Tragschicht.
+            (offsets[k].0, offsets[k].0 - WINDOW_FRAME)
+        }
+        Some(k) => {
+            let mid = (offsets[k].0 + offsets[k].1) / 2.0;
+            (mid + WINDOW_FRAME / 2.0, mid - WINDOW_FRAME / 2.0)
+        }
+        None => {
+            let mid = (offsets[0].0 + offsets[offsets.len() - 1].1) / 2.0;
+            (mid + WINDOW_FRAME / 2.0, mid - WINDOW_FRAME / 2.0)
+        }
+    }
+}
+
+/// Fläche im deutschen Format, „24,35 m²“.
+pub fn format_area(m2: f64) -> String {
+    format!("{} m²", crate::format_de(m2, 2))
 }
 
 /// Muster der geschnittenen Schichten.
@@ -237,6 +481,7 @@ fn draw_grid_line(objects: &mut Vec<PlanObject>, grid: &lot_model::GridLine, sty
         text: grid.label.clone(),
         height_mm: height,
         anchor: Anchor::Center,
+        rotation: 0.0,
     }));
 }
 
@@ -246,4 +491,68 @@ fn paper(ring: &[[f64; 2]], viewport: Viewport) -> Vec<PaperPoint> {
 
 fn closed(points: Vec<PaperPoint>, width: f64) -> PlanObject {
     PlanObject::Line(Line { points, closed: true, pen: Pen::mm(width), style: LineStyle::Solid, color: Gray::BLACK })
+}
+
+#[cfg(test)]
+mod tests {
+    use lot_model::{Door, Element, ElementId, Handing, OpeningKind, Project, WallSide};
+
+    use super::*;
+
+    /// Beispielwand (5 m nach Osten, 30 cm) mit einer Tür statt des Fensters.
+    fn door_project(door: Door) -> Project {
+        let mut p = Project::sample();
+        if let Some(Element::Opening(o)) = p.elements.get_mut(&ElementId(4)) {
+            o.sill_height = 0.0;
+            o.height = 2.0;
+            o.width = 1.0;
+            o.offset = 2.0;
+            o.kind = OpeningKind::Door(door);
+        }
+        p
+    }
+
+    fn lines(p: &Project) -> Vec<Vec<PaperPoint>> {
+        let view = FloorPlanView { storey: ElementId(1), cut_height: DEFAULT_CUT_HEIGHT, scale: 100.0 };
+        let viewport = Viewport { scale: 100.0, origin: PaperPoint::new(0.0, 0.0) };
+        floor_plan(p, view, OfficeStandard::default_standard(), viewport)
+            .into_iter()
+            .filter_map(|o| match o {
+                PlanObject::Line(l) => Some(l.points),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn door_swings_to_its_side_from_its_hinge() {
+        // Aufschlag nach Norden (links), DIN links: Bänder am östlichen Ende bei x = 3 m.
+        let p = door_project(Door { opens_to: WallSide::Left, hinge: Handing::DinLeft });
+        let all = lines(&p);
+        // Türblatt: von (3,0; 0,15) nach Norden, 1 m lang (10 mm auf dem Blatt).
+        let leaf = all.iter().find(|l| l.len() == 2 && (l[0].x - 30.0).abs() < 1e-6 && (l[0].y - 1.5).abs() < 1e-6);
+        let leaf = leaf.expect("Türblatt fehlt");
+        assert!((leaf[1].x - 30.0).abs() < 1e-6 && (leaf[1].y - 11.5).abs() < 1e-6, "{leaf:?}");
+        // Aufschlag: Viertelkreis um die Bänder mit Radius 10 mm, endet an der Gegenseite bei x = 2 m.
+        let arc = all.iter().find(|l| l.len() == 25).expect("Aufschlag fehlt");
+        assert!(arc.iter().all(|q| ((q.x - 30.0).hypot(q.y - 1.5) - 10.0).abs() < 1e-6));
+        assert!((arc[24].x - 20.0).abs() < 1e-6 && (arc[24].y - 1.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn window_above_cut_is_dashed() {
+        let mut p = Project::sample();
+        if let Some(Element::Opening(o)) = p.elements.get_mut(&ElementId(4)) {
+            o.sill_height = 1.6;
+            o.height = 0.6;
+            o.kind = OpeningKind::Window;
+        }
+        let view = FloorPlanView { storey: ElementId(1), cut_height: DEFAULT_CUT_HEIGHT, scale: 100.0 };
+        let viewport = Viewport { scale: 100.0, origin: PaperPoint::new(0.0, 0.0) };
+        let dashed = floor_plan(&p, view, OfficeStandard::default_standard(), viewport)
+            .into_iter()
+            .filter(|o| matches!(o, PlanObject::Line(Line { style: LineStyle::Dashed(_), .. })))
+            .count();
+        assert_eq!(dashed, 1);
+    }
 }

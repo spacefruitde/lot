@@ -59,6 +59,13 @@ struct LotApp: App {
                 Button("Bogenwand zeichnen") { model.run("ArcWallTool") }
                 Button("Achse zeichnen") { model.run("GridTool") }
                 Button("Stütze setzen") { model.run("ColumnTool") }
+                Button("Tür setzen") { model.run("DoorTool") }
+                Button("Fenster setzen") { model.run("WindowTool") }
+                Button("Raum setzen") { model.run("SpaceTool") }
+                Button("Räume erkennen") { model.run("DetectSpaces") }
+                Button("Gewählte Wände bemaßen") { model.run("DimensionWalls") }
+                Button("Decke aus Wänden") { model.run("SlabFromWalls") }
+                Button("Deckendurchbruch zeichnen") { model.run("SlabOpeningTool") }
                 Divider()
                 Button("Alles auswählen") { model.run("SelectAll") }
                     .keyboardShortcut("a")

@@ -606,6 +606,11 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func canUndo()  -> Bool
     
     /**
+     * Die Türen unter den Elementen `ids`.
+     */
+    func doors(ids: [UInt64])  -> [DoorInfo]
+    
+    /**
      * Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36“.
      */
     func elementLabel(element: UInt64)  -> String
@@ -622,6 +627,21 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func save(path: String) throws 
     
     func setParam(element: UInt64, kind: ParamKind, value: Double) throws 
+    
+    /**
+     * Ändert Nummer, Name, Nutzung und Wohnflächen-Merkmal eines Raums, als eine Operation.
+     */
+    func setSpace(element: UInt64, number: String, name: String, usage: UInt32, livingSpace: Bool) throws 
+    
+    /**
+     * Raumdaten der gewählten Elemente, die Räume sind.
+     */
+    func spaces(ids: [UInt64])  -> [SpaceInfo]
+    
+    /**
+     * Flächen je Geschoss (NRF, BGF, Wohnfläche).
+     */
+    func storeyAreas()  -> [StoreyAreaInfo]
     
     func undo() throws  -> Bool
     
@@ -741,6 +761,19 @@ open func canUndo() -> Bool  {
 }
     
     /**
+     * Die Türen unter den Elementen `ids`.
+     */
+open func doors(ids: [UInt64]) -> [DoorInfo]  {
+    return try!  FfiConverterSequenceTypeDoorInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_doors(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
+}
+    
+    /**
      * Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36“.
      */
 open func elementLabel(element: UInt64) -> String  {
@@ -802,6 +835,47 @@ open func setParam(element: UInt64, kind: ParamKind, value: Double)throws   {try
         FfiConverterDouble.lower(value),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * Ändert Nummer, Name, Nutzung und Wohnflächen-Merkmal eines Raums, als eine Operation.
+     */
+open func setSpace(element: UInt64, number: String, name: String, usage: UInt32, livingSpace: Bool)throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_set_space(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),
+        FfiConverterString.lower(number),
+        FfiConverterString.lower(name),
+        FfiConverterUInt32.lower(usage),
+        FfiConverterBool.lower(livingSpace),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Raumdaten der gewählten Elemente, die Räume sind.
+     */
+open func spaces(ids: [UInt64]) -> [SpaceInfo]  {
+    return try!  FfiConverterSequenceTypeSpaceInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_spaces(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Flächen je Geschoss (NRF, BGF, Wohnfläche).
+     */
+open func storeyAreas() -> [StoreyAreaInfo]  {
+    return try!  FfiConverterSequenceTypeStoreyAreaInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_storey_areas(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
 }
     
 open func undo()throws  -> Bool  {
@@ -1328,6 +1402,79 @@ public func FfiConverterTypeCommandItem_lower(_ value: CommandItem) -> RustBuffe
 
 
 /**
+ * Tür mit Anschlag und Aufschlag, für den Inspektor.
+ */
+public struct DoorInfo: Equatable, Hashable {
+    public var element: UInt64
+    /**
+     * DIN links nach DIN 107, sonst DIN rechts.
+     */
+    public var dinLeft: Bool
+    /**
+     * Schlägt zur linken Seite der Wand auf (in Zeichenrichtung).
+     */
+    public var opensLeft: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, 
+        /**
+         * DIN links nach DIN 107, sonst DIN rechts.
+         */dinLeft: Bool, 
+        /**
+         * Schlägt zur linken Seite der Wand auf (in Zeichenrichtung).
+         */opensLeft: Bool) {
+        self.element = element
+        self.dinLeft = dinLeft
+        self.opensLeft = opensLeft
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension DoorInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDoorInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DoorInfo {
+        return
+            try DoorInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                dinLeft: FfiConverterBool.read(from: &buf), 
+                opensLeft: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DoorInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterBool.write(value.dinLeft, into: &buf)
+        FfiConverterBool.write(value.opensLeft, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDoorInfo_lift(_ buf: RustBuffer) throws -> DoorInfo {
+    return try FfiConverterTypeDoorInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDoorInfo_lower(_ value: DoorInfo) -> RustBuffer {
+    return FfiConverterTypeDoorInfo.lower(value)
+}
+
+
+/**
  * Ergebnis eines Ereignisses für die App.
  */
 public struct EventResult: Equatable, Hashable {
@@ -1464,6 +1611,229 @@ public func FfiConverterTypeParamValue_lift(_ buf: RustBuffer) throws -> ParamVa
 #endif
 public func FfiConverterTypeParamValue_lower(_ value: ParamValue) -> RustBuffer {
     return FfiConverterTypeParamValue.lower(value)
+}
+
+
+/**
+ * Raum mit Stempeltext und Flächen, für den Inspektor.
+ */
+public struct SpaceInfo: Equatable, Hashable {
+    public var element: UInt64
+    public var number: String
+    public var name: String
+    /**
+     * Index in [`space_usages`].
+     */
+    public var usage: UInt32
+    /**
+     * Zählt zur Wohnfläche nach WoFlV.
+     */
+    public var livingSpace: Bool
+    /**
+     * Netto-Raumfläche nach DIN 277 in m², fehlt bei offenen Räumen.
+     */
+    public var netArea: Double?
+    /**
+     * Wohnfläche nach WoFlV in m².
+     */
+    public var livingArea: Double?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, number: String, name: String, 
+        /**
+         * Index in [`space_usages`].
+         */usage: UInt32, 
+        /**
+         * Zählt zur Wohnfläche nach WoFlV.
+         */livingSpace: Bool, 
+        /**
+         * Netto-Raumfläche nach DIN 277 in m², fehlt bei offenen Räumen.
+         */netArea: Double?, 
+        /**
+         * Wohnfläche nach WoFlV in m².
+         */livingArea: Double?) {
+        self.element = element
+        self.number = number
+        self.name = name
+        self.usage = usage
+        self.livingSpace = livingSpace
+        self.netArea = netArea
+        self.livingArea = livingArea
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension SpaceInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSpaceInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SpaceInfo {
+        return
+            try SpaceInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                number: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                usage: FfiConverterUInt32.read(from: &buf), 
+                livingSpace: FfiConverterBool.read(from: &buf), 
+                netArea: FfiConverterOptionDouble.read(from: &buf), 
+                livingArea: FfiConverterOptionDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SpaceInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterString.write(value.number, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterUInt32.write(value.usage, into: &buf)
+        FfiConverterBool.write(value.livingSpace, into: &buf)
+        FfiConverterOptionDouble.write(value.netArea, into: &buf)
+        FfiConverterOptionDouble.write(value.livingArea, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSpaceInfo_lift(_ buf: RustBuffer) throws -> SpaceInfo {
+    return try FfiConverterTypeSpaceInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSpaceInfo_lower(_ value: SpaceInfo) -> RustBuffer {
+    return FfiConverterTypeSpaceInfo.lower(value)
+}
+
+
+/**
+ * Nutzungsgruppe nach DIN 277 zur Auswahl.
+ */
+public struct SpaceUsageItem: Equatable, Hashable {
+    public var code: String
+    public var title: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(code: String, title: String) {
+        self.code = code
+        self.title = title
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension SpaceUsageItem: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSpaceUsageItem: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SpaceUsageItem {
+        return
+            try SpaceUsageItem(
+                code: FfiConverterString.read(from: &buf), 
+                title: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SpaceUsageItem, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.code, into: &buf)
+        FfiConverterString.write(value.title, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSpaceUsageItem_lift(_ buf: RustBuffer) throws -> SpaceUsageItem {
+    return try FfiConverterTypeSpaceUsageItem.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSpaceUsageItem_lower(_ value: SpaceUsageItem) -> RustBuffer {
+    return FfiConverterTypeSpaceUsageItem.lower(value)
+}
+
+
+/**
+ * Flächen eines Geschosses in m².
+ */
+public struct StoreyAreaInfo: Equatable, Hashable {
+    public var name: String
+    public var net: Double
+    public var gross: Double
+    public var living: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, net: Double, gross: Double, living: Double) {
+        self.name = name
+        self.net = net
+        self.gross = gross
+        self.living = living
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StoreyAreaInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStoreyAreaInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StoreyAreaInfo {
+        return
+            try StoreyAreaInfo(
+                name: FfiConverterString.read(from: &buf), 
+                net: FfiConverterDouble.read(from: &buf), 
+                gross: FfiConverterDouble.read(from: &buf), 
+                living: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StoreyAreaInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterDouble.write(value.net, into: &buf)
+        FfiConverterDouble.write(value.gross, into: &buf)
+        FfiConverterDouble.write(value.living, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStoreyAreaInfo_lift(_ buf: RustBuffer) throws -> StoreyAreaInfo {
+    return try FfiConverterTypeStoreyAreaInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStoreyAreaInfo_lower(_ value: StoreyAreaInfo) -> RustBuffer {
+    return FfiConverterTypeStoreyAreaInfo.lower(value)
 }
 
 
@@ -1925,6 +2295,30 @@ public func FfiConverterTypeViewKind_lower(_ value: ViewKind) -> RustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionDouble: FfiConverterRustBuffer {
+    typealias SwiftType = Double?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterDouble.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterDouble.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
     typealias SwiftType = String?
 
@@ -1999,6 +2393,31 @@ fileprivate struct FfiConverterSequenceTypeCommandItem: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDoorInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [DoorInfo]
+
+    public static func write(_ value: [DoorInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDoorInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DoorInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DoorInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDoorInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeParamValue: FfiConverterRustBuffer {
     typealias SwiftType = [ParamValue]
 
@@ -2021,6 +2440,91 @@ fileprivate struct FfiConverterSequenceTypeParamValue: FfiConverterRustBuffer {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSpaceInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [SpaceInfo]
+
+    public static func write(_ value: [SpaceInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSpaceInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SpaceInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SpaceInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSpaceInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSpaceUsageItem: FfiConverterRustBuffer {
+    typealias SwiftType = [SpaceUsageItem]
+
+    public static func write(_ value: [SpaceUsageItem], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSpaceUsageItem.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SpaceUsageItem] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SpaceUsageItem]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSpaceUsageItem.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeStoreyAreaInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [StoreyAreaInfo]
+
+    public static func write(_ value: [StoreyAreaInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeStoreyAreaInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [StoreyAreaInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [StoreyAreaInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeStoreyAreaInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+/**
+ * Die Nutzungsgruppen nach DIN 277:2021-08, in der Reihenfolge der Norm.
+ */
+public func spaceUsages() -> [SpaceUsageItem]  {
+    return try!  FfiConverterSequenceTypeSpaceUsageItem.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_space_usages(uniffiCallStatus
+    )
+})
+}
+
 private enum InitializationResult {
     case ok
     case contractVersionMismatch
@@ -2036,10 +2540,16 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_lot_ffi_checksum_func_space_usages() != 26934) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_lotdocument_can_redo() != 21256) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_can_undo() != 5022) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_doors() != 14145) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_element_label() != 44890) {
@@ -2058,6 +2568,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_set_param() != 46565) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_set_space() != 41848) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_spaces() != 30951) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_storey_areas() != 34722) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_undo() != 9472) {

@@ -32,6 +32,11 @@ pub enum Element {
     Wall(Wall),
     Opening(Opening),
     Column(Column),
+    Space(Space),
+    DimensionChain(DimensionChain),
+    SlabType(SlabType),
+    Slab(Slab),
+    SlabOpening(SlabOpening),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -43,6 +48,11 @@ pub enum ElementKind {
     Wall,
     Opening,
     Column,
+    Space,
+    DimensionChain,
+    SlabType,
+    Slab,
+    SlabOpening,
 }
 
 impl Element {
@@ -54,6 +64,11 @@ impl Element {
             Element::Wall(_) => ElementKind::Wall,
             Element::Opening(_) => ElementKind::Opening,
             Element::Column(_) => ElementKind::Column,
+            Element::Space(_) => ElementKind::Space,
+            Element::DimensionChain(_) => ElementKind::DimensionChain,
+            Element::SlabType(_) => ElementKind::SlabType,
+            Element::Slab(_) => ElementKind::Slab,
+            Element::SlabOpening(_) => ElementKind::SlabOpening,
         }
     }
 
@@ -398,8 +413,8 @@ impl Wall {
     }
 }
 
-/// Öffnung in einer Wand (IfcOpeningElement). Rechteckig, ohne Rahmen,
-/// Laibung oder Anschlag; Türen und Fenster folgen in M2.
+/// Öffnung in einer Wand (IfcOpeningElement), rechteckig. Maße sind
+/// Rohbaumaße; eine Tür oder ein Fenster füllt die Öffnung (IfcDoor, IfcWindow).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Opening {
     /// Die Wand, in der die Öffnung sitzt.
@@ -410,6 +425,75 @@ pub struct Opening {
     pub height: f64,
     /// Brüstungshöhe über Unterkante Wand.
     pub sill_height: f64,
+    #[serde(default, skip_serializing_if = "OpeningKind::is_plain")]
+    pub kind: OpeningKind,
+}
+
+/// Was in einer Öffnung sitzt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum OpeningKind {
+    /// Nichts: Durchgang oder Durchbruch.
+    #[default]
+    Plain,
+    Door(Door),
+    Window,
+}
+
+impl OpeningKind {
+    pub fn is_plain(&self) -> bool {
+        *self == OpeningKind::Plain
+    }
+}
+
+/// Drehflügeltür.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Door {
+    /// Seite der Wand, zu der die Tür aufschlägt, bezogen auf die Zeichenrichtung der Wand.
+    pub opens_to: WallSide,
+    /// Anschlag nach DIN 107:1974-04: von der Seite gesehen, zu der die Tür
+    /// aufschlägt, sitzen die Bänder links (DIN links) oder rechts (DIN rechts).
+    pub hinge: Handing,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WallSide {
+    Left,
+    Right,
+}
+
+impl WallSide {
+    pub fn other(self) -> Self {
+        match self {
+            WallSide::Left => WallSide::Right,
+            WallSide::Right => WallSide::Left,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Handing {
+    DinLeft,
+    DinRight,
+}
+
+impl Handing {
+    pub fn other(self) -> Self {
+        match self {
+            Handing::DinLeft => Handing::DinRight,
+            Handing::DinRight => Handing::DinLeft,
+        }
+    }
+}
+
+impl Door {
+    /// Ob die Bänder am Ende der Öffnung sitzen, das in Zeichenrichtung der Wand
+    /// hinten liegt (bei `offset + width`), sonst vorne (bei `offset`).
+    ///
+    /// Wer auf der linken Seite der Wand steht und auf sie blickt, hat die
+    /// Zeichenrichtung zur Linken; auf der rechten Seite zur Rechten.
+    pub fn hinge_at_end(&self) -> bool {
+        matches!((self.opens_to, self.hinge), (WallSide::Left, Handing::DinLeft) | (WallSide::Right, Handing::DinRight))
+    }
 }
 
 /// Stütze (IfcColumn).
@@ -427,6 +511,186 @@ pub struct Column {
     #[serde(default)]
     pub base_offset: f64,
     pub top: Top,
+}
+
+/// Raum (IfcSpace). Gespeichert wird nur ein Punkt im Raum; die Fläche ergibt
+/// sich aus den umgebenden Wänden (CLAUDE.md, Regel 6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Space {
+    pub storey: ElementId,
+    /// Ein Punkt im Raum, zugleich Lage des Raumstempels.
+    pub position: Point2,
+    /// Raumnummer, etwa „0.01“.
+    #[serde(default)]
+    pub number: String,
+    pub name: String,
+    #[serde(default)]
+    pub usage: SpaceUsage,
+    /// Ob der Raum zur Wohnfläche zählt. Zubehörräume wie Keller, Heizungs- und
+    /// Abstellräume außerhalb der Wohnung zählen nicht (WoFlV vom 25.11.2003, § 2 Abs. 3).
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub living_space: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_true(v: &bool) -> bool {
+    *v
+}
+
+/// Nutzungsgruppe nach DIN 277:2021-08. Die Netto-Raumfläche (NRF) teilt sich
+/// in Nutzungsfläche (NUF 1 bis 7), Technikfläche (TF) und Verkehrsfläche (VF).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum SpaceUsage {
+    /// NUF 1 Wohnen und Aufenthalt
+    #[default]
+    Living,
+    /// NUF 2 Büroarbeit
+    Office,
+    /// NUF 3 Produktion, Hand- und Maschinenarbeit, Forschung und Entwicklung
+    Production,
+    /// NUF 4 Lagern, Verteilen und Verkaufen
+    Storage,
+    /// NUF 5 Bildung, Unterricht und Kultur
+    Education,
+    /// NUF 6 Heilen und Pflegen
+    Care,
+    /// NUF 7 Sonstige Nutzungen (etwa Sanitärräume, Abstellräume)
+    Other,
+    /// TF Technikfläche
+    Technical,
+    /// VF Verkehrsfläche
+    Circulation,
+}
+
+impl SpaceUsage {
+    pub const ALL: [SpaceUsage; 9] = [
+        SpaceUsage::Living,
+        SpaceUsage::Office,
+        SpaceUsage::Production,
+        SpaceUsage::Storage,
+        SpaceUsage::Education,
+        SpaceUsage::Care,
+        SpaceUsage::Other,
+        SpaceUsage::Technical,
+        SpaceUsage::Circulation,
+    ];
+
+    /// Kurzzeichen nach DIN 277:2021-08, etwa „NUF 1“ oder „VF“.
+    pub fn code(self) -> &'static str {
+        match self {
+            SpaceUsage::Living => "NUF 1",
+            SpaceUsage::Office => "NUF 2",
+            SpaceUsage::Production => "NUF 3",
+            SpaceUsage::Storage => "NUF 4",
+            SpaceUsage::Education => "NUF 5",
+            SpaceUsage::Care => "NUF 6",
+            SpaceUsage::Other => "NUF 7",
+            SpaceUsage::Technical => "TF",
+            SpaceUsage::Circulation => "VF",
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            SpaceUsage::Living => "Wohnen und Aufenthalt",
+            SpaceUsage::Office => "Büroarbeit",
+            SpaceUsage::Production => "Produktion, Hand- und Maschinenarbeit, Forschung",
+            SpaceUsage::Storage => "Lagern, Verteilen und Verkaufen",
+            SpaceUsage::Education => "Bildung, Unterricht und Kultur",
+            SpaceUsage::Care => "Heilen und Pflegen",
+            SpaceUsage::Other => "Sonstige Nutzungen",
+            SpaceUsage::Technical => "Technikfläche",
+            SpaceUsage::Circulation => "Verkehrsfläche",
+        }
+    }
+
+    /// Ob die Fläche zur Nutzungsfläche (NUF) gehört.
+    pub fn is_usable(self) -> bool {
+        !matches!(self, SpaceUsage::Technical | SpaceUsage::Circulation)
+    }
+}
+
+/// Maßkette (3.05). Gespeichert werden die Bezüge, nicht die Maße: Ändert sich
+/// eine Wand oder Öffnung, ändert sich die Kette mit (assoziativ).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DimensionChain {
+    pub storey: ElementId,
+    /// Ein Punkt auf der Maßlinie.
+    pub position: Point2,
+    /// Richtung der Maßlinie; muss nicht normiert sein.
+    pub direction: Point2,
+    /// Gemessen wird zwischen den Bezügen, in der Reihenfolge entlang der Maßlinie.
+    pub refs: Vec<DimRef>,
+}
+
+/// Ein Bezugspunkt einer Maßkette.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum DimRef {
+    /// Wandende auf einer Wandseite; an einer L-Ecke die äußere Ecke beider Wände.
+    WallEnd { wall: ElementId, end: WallEnd, side: WallSide },
+    /// Laibung einer Öffnung auf einer Wandseite. `End` ist die Laibung bei `offset + width`.
+    Jamb { opening: ElementId, end: WallEnd, side: WallSide },
+    /// Fläche einer Wand, für Maße quer zur Wand.
+    WallFace { wall: ElementId, side: WallSide },
+    /// Achse.
+    Grid(ElementId),
+    /// Fester Punkt.
+    Point(Point2),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WallEnd {
+    Start,
+    End,
+}
+
+/// Deckenaufbau (IfcSlabType): Schichten von oben nach unten, etwa Estrich,
+/// Trittschalldämmung, Rohdecke, Putz.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SlabType {
+    pub name: String,
+    pub layers: Vec<Layer>,
+}
+
+impl SlabType {
+    pub fn thickness(&self) -> f64 {
+        self.layers.iter().map(|l| l.thickness).sum()
+    }
+}
+
+/// Decke oder Bodenplatte (IfcSlab). Die Oberkante liegt auf OKFF des
+/// Geschosses plus `top_offset`, die Schichten reichen nach unten.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Slab {
+    pub storey: ElementId,
+    pub slab_type: ElementId,
+    /// Umriss in Metern, Richtung egal.
+    pub outline: Vec<Point2>,
+    #[serde(default)]
+    pub top_offset: f64,
+    #[serde(default)]
+    pub kind: SlabKind,
+}
+
+/// Durchbruch in einer Decke (IfcOpeningElement), etwa für eine Treppe oder einen Schacht.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SlabOpening {
+    /// Die Decke, in der der Durchbruch sitzt.
+    pub host: ElementId,
+    /// Umriss in Metern, Richtung egal.
+    pub outline: Vec<Point2>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum SlabKind {
+    /// Geschossdecke
+    #[default]
+    Floor,
+    /// Bodenplatte des untersten Geschosses
+    Base,
 }
 
 /// Querschnitt einer Stütze.
@@ -520,5 +784,16 @@ mod tests {
         assert!((w.arc().unwrap().sweep - sweep).abs() < 1e-12);
         assert!((w.sagitta - 1.5).abs() < 1e-12);
         assert!(close(w.start, Point2::new(0.0, 0.0)));
+    }
+
+    #[test]
+    fn din_handing_depends_on_the_opening_side() {
+        // Wand nach Osten gezeichnet, links ist Norden. Wer von Norden auf die Wand
+        // blickt, hat Osten (das Ende der Öffnung) zur Linken.
+        let door = |opens_to, hinge| Door { opens_to, hinge };
+        assert!(door(WallSide::Left, Handing::DinLeft).hinge_at_end());
+        assert!(!door(WallSide::Left, Handing::DinRight).hinge_at_end());
+        assert!(!door(WallSide::Right, Handing::DinLeft).hinge_at_end());
+        assert!(door(WallSide::Right, Handing::DinRight).hinge_at_end());
     }
 }

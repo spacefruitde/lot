@@ -14,6 +14,20 @@ pub enum Command {
     ArcWallTool,
     GridTool,
     ColumnTool,
+    SpaceTool,
+    DoorTool,
+    WindowTool,
+    SlabOpeningTool,
+    /// Gewählte Türen schlagen zur anderen Wandseite auf.
+    FlipDoorSwing,
+    /// Gewählte Türen: DIN links und DIN rechts tauschen.
+    FlipDoorHinge,
+    /// Maßketten an den gewählten Wänden: Öffnungen und Gesamtmaß, außen.
+    DimensionWalls,
+    /// Decke im aktuellen Geschoss aus den Wänden darunter, im untersten Geschoss Bodenplatte.
+    SlabFromWalls,
+    /// Einen Raum in jeden umschlossenen Bereich ohne Raum setzen.
+    DetectSpaces,
     SetWallType(u64),
     SetAlignment(WallAlignment),
     SetStorey(u64),

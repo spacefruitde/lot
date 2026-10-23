@@ -179,6 +179,7 @@ pub fn tessellate_overlay(items: &[OverlayItem], px_per_mm: f64) -> PlanMesh {
                     text: text.clone(),
                     height_mm: mm(*height_px) as f64,
                     anchor: lot_plan::Anchor::Center,
+                    rotation: 0.0,
                 };
                 plan_font().outline(&text, &mut sink);
                 sink.finish_open();

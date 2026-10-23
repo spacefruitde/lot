@@ -1,5 +1,6 @@
 //! Zeitmessung am EFH gegen den Zielwert aus PLAN.md, Abschnitt 4: Nach einer
 //! Wandänderung sind Modell und sichtbare Ansichten in unter 50 ms aktualisiert.
+//! Gemessen werden Grundriss mit Raumstempeln und Maßketten, 3D und Flächen.
 //!
 //! Läuft nur von Hand, weil Zeiten auf den CI-Rechnern schwanken:
 //! `cargo test -p lot-cli --test messung -- --ignored --nocapture`
@@ -30,8 +31,14 @@ fn efh_wall_change_under_50_ms() {
         doc.set_param(wall, Param::WallLength, length + 0.01 * (i % 2) as f64).unwrap();
         let plan = floor_plan(doc.project(), view, standard, viewport);
         let geometry = lot_geom::build(doc.project()).unwrap();
+        let areas = lot_rules::area_report(doc.project());
         let ms = start.elapsed().as_secs_f64() * 1000.0;
-        println!("{ms:.1} ms: {} Planobjekte, {} Dreiecke", plan.len(), geometry.triangle_count());
+        println!(
+            "{ms:.1} ms: {} Planobjekte, {} Dreiecke, NRF {:.2} m²",
+            plan.len(),
+            geometry.triangle_count(),
+            areas.net()
+        );
         worst = worst.max(ms);
     }
     assert!(worst < 50.0, "langsamste Änderung {worst:.1} ms");

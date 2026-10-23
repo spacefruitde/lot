@@ -149,9 +149,11 @@ fn delete_removes_wall_with_openings() {
         width: 1.0,
         height: 2.1,
         sill_height: 0.0,
+        kind: lot_model::OpeningKind::Plain,
     }))
     .unwrap();
-    ed.pointer_down(&mut doc, input(3.0, 2.0), 1);
+    // Neben der Öffnung klicken; in der Öffnung wäre die Öffnung gewählt.
+    ed.pointer_down(&mut doc, input(3.0, 3.0), 1);
     ed.pointer_up(&mut doc);
     let r = ed.key(&mut doc, Key::Delete);
     assert!(r.model_changed, "{:?}", r.error);
@@ -172,6 +174,7 @@ fn flip_keeps_openings_in_place() {
             width: 1.5,
             height: 1.3,
             sill_height: 0.9,
+            kind: lot_model::OpeningKind::Plain,
         }))
         .unwrap();
     ed.selection = vec![bottom];
@@ -329,4 +332,229 @@ fn snaps_onto_the_arc() {
     let s = snap::snap(doc.project(), ed.storey, Point2::new(1.0, 0.8), 0.15, Some(Point2::new(1.0, -2.0)), false, &[]);
     let w = &walls(&doc)[0];
     assert!(w.locate(s.point).1.abs() < 1e-6 && (s.point.x - 1.0).abs() < 1e-6, "{:?}", s.point);
+}
+
+/// Zeichnet ein Rechteck 6 × 4 m und eine Trennwand bei x = 2,5.
+fn two_spaces(doc: &mut Document, ed: &mut Editor) {
+    ed.run(doc, &Command::WallTool);
+    for (x, y) in [(0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0), (0.0, 0.0)] {
+        click(doc, ed, x, y);
+    }
+    ed.key(doc, Key::Escape);
+    for (x, y) in [(2.5, 0.0), (2.5, 4.0)] {
+        click(doc, ed, x, y);
+    }
+    ed.key(doc, Key::Escape);
+}
+
+fn spaces(doc: &Document) -> Vec<lot_model::Space> {
+    doc.project().spaces_on(ElementId(1)).map(|(_, r)| r.clone()).collect()
+}
+
+#[test]
+fn space_tool_numbers_spaces_per_storey() {
+    let (mut doc, mut ed) = setup();
+    two_spaces(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::SpaceTool);
+    click(&mut doc, &mut ed, 1.2, 2.0);
+    click(&mut doc, &mut ed, 4.0, 2.0);
+    let r = spaces(&doc);
+    assert_eq!(r.iter().map(|r| r.number.as_str()).collect::<Vec<_>>(), ["0.01", "0.02"]);
+    assert!(r.iter().all(|r| r.living_space));
+}
+
+#[test]
+fn detect_spaces_fills_every_enclosed_area_once() {
+    let (mut doc, mut ed) = setup();
+    two_spaces(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::SpaceTool);
+    click(&mut doc, &mut ed, 1.2, 2.0);
+    let response = ed.run(&mut doc, &Command::DetectSpaces);
+    assert!(response.model_changed);
+    let r = spaces(&doc);
+    assert_eq!(r.len(), 2);
+    assert_eq!(r[1].number, "0.02");
+    assert!(r[1].position.x > 2.6, "neuer Raum im rechten Bereich: {:?}", r[1].position);
+    // Ein zweites Mal gibt es nichts mehr zu tun, und ein Undo nimmt alle neuen Räume zurück.
+    assert!(ed.run(&mut doc, &Command::DetectSpaces).error.is_some());
+    doc.undo().unwrap();
+    assert_eq!(spaces(&doc).len(), 1);
+}
+
+#[test]
+fn space_tag_can_be_picked_and_moved() {
+    let (mut doc, mut ed) = setup();
+    two_spaces(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::SpaceTool);
+    click(&mut doc, &mut ed, 4.0, 2.0);
+    ed.run(&mut doc, &Command::SelectTool);
+    // Klick neben den Stempel wählt den Raum, Ziehen verschiebt ihn.
+    ed.pointer_down(&mut doc, input(4.5, 2.2), 1);
+    assert_eq!(ed.selection.len(), 1);
+    ed.pointer_dragged(doc.project(), input(4.5, 3.2));
+    ed.pointer_up(&mut doc);
+    assert_eq!(spaces(&doc)[0].position, Point2::new(4.0, 3.0));
+    // Die Auswahl zeigt die Fläche des Raums.
+    let overlay = ed.overlay(doc.project());
+    let ring = &overlay.selected[0];
+    let xs: Vec<f64> = ring.iter().map(|p| p[0]).collect();
+    assert!(xs.iter().cloned().fold(f64::INFINITY, f64::min) > 2.5);
+}
+
+#[test]
+fn cellar_spaces_are_not_living_space() {
+    let (mut doc, mut ed) = setup();
+    doc.insert(lot_model::Element::Storey(lot_model::Storey { name: "KG".into(), elevation: -2.5, height: 2.5 }))
+        .unwrap();
+    let kg = doc.project().storeys()[0].0;
+    ed.run(&mut doc, &Command::SetStorey(kg.0));
+    ed.run(&mut doc, &Command::SpaceTool);
+    click(&mut doc, &mut ed, 1.0, 1.0);
+    let r: Vec<_> = doc.project().spaces_on(kg).map(|(_, r)| r.clone()).collect();
+    assert_eq!(r[0].number, "-1.01");
+    assert!(!r[0].living_space);
+}
+
+/// Eine Wand von (0,0) nach (6,0), Außenwand WDVS mit Bezugslinie in der Mitte.
+fn one_wall() -> (Document, Editor, ElementId) {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::WallTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    click(&mut doc, &mut ed, 6.0, 0.0);
+    ed.key(&mut doc, Key::Escape);
+    let wall = doc.project().walls().next().unwrap().0;
+    (doc, ed, wall)
+}
+
+fn openings(doc: &Document, wall: ElementId) -> Vec<Opening> {
+    doc.project().openings_in(wall).map(|(_, o)| o.clone()).collect()
+}
+
+#[test]
+fn door_opens_to_the_clicked_side_with_hinges_near_the_closer_end() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::DoorTool);
+    // Klick rechts (südlich) der Wand, nahe dem Anfang.
+    click(&mut doc, &mut ed, 1.5, -0.1);
+    let o = &openings(&doc, wall)[0];
+    assert!((o.offset - 1.0).abs() < 1e-9 && (o.width - 1.01).abs() < 1e-9, "mittig zum Klick: {o:?}");
+    let lot_model::OpeningKind::Door(d) = o.kind else { panic!("keine Tür") };
+    assert_eq!(d.opens_to, lot_model::WallSide::Right);
+    assert!(!d.hinge_at_end(), "Bänder am Wandanfang");
+}
+
+#[test]
+fn window_tool_places_window_and_rejects_overlap() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::WindowTool);
+    click(&mut doc, &mut ed, 4.0, 0.05);
+    let o = &openings(&doc, wall)[0];
+    assert_eq!(o.kind, lot_model::OpeningKind::Window);
+    assert!((o.sill_height - 0.885).abs() < 1e-9);
+    // Ein zweites Fenster an derselben Stelle überschneidet sich.
+    let r = click(&mut doc, &mut ed, 4.2, 0.05);
+    assert!(r.error.is_some());
+    assert_eq!(openings(&doc, wall).len(), 1);
+}
+
+#[test]
+fn opening_slides_along_its_wall() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::WindowTool);
+    click(&mut doc, &mut ed, 2.0, 0.0);
+    ed.run(&mut doc, &Command::SelectTool);
+    ed.pointer_down(&mut doc, input(2.0, 0.0), 1);
+    assert_eq!(ed.selection.len(), 1, "Klick in die Öffnung wählt die Öffnung");
+    assert!(matches!(doc.project().elements[&ed.selection[0]], lot_model::Element::Opening(_)));
+    // Schräg ziehen: nur der Anteil entlang der Wand zählt, die Wand bleibt.
+    ed.pointer_dragged(doc.project(), input(3.0, 0.7));
+    ed.pointer_up(&mut doc);
+    assert!((openings(&doc, wall)[0].offset - 2.37).abs() < 1e-9, "{:?}", openings(&doc, wall));
+    assert_eq!(walls(&doc)[0].start, Point2::new(0.0, 0.0));
+}
+
+#[test]
+fn door_swing_and_hinge_can_be_flipped() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::DoorTool);
+    click(&mut doc, &mut ed, 4.5, 0.1);
+    let before = match openings(&doc, wall)[0].kind {
+        lot_model::OpeningKind::Door(d) => d,
+        _ => panic!(),
+    };
+    ed.run(&mut doc, &Command::SelectAll);
+    ed.selection = doc.project().openings_in(wall).map(|(id, _)| id).collect();
+    ed.run(&mut doc, &Command::FlipDoorSwing);
+    let after = match openings(&doc, wall)[0].kind {
+        lot_model::OpeningKind::Door(d) => d,
+        _ => panic!(),
+    };
+    assert_eq!(after.opens_to, before.opens_to.other());
+    assert_eq!(after.hinge_at_end(), before.hinge_at_end(), "die Bänder bleiben am selben Ende");
+    ed.run(&mut doc, &Command::FlipDoorHinge);
+    let last = match openings(&doc, wall)[0].kind {
+        lot_model::OpeningKind::Door(d) => d,
+        _ => panic!(),
+    };
+    assert_ne!(last.hinge_at_end(), before.hinge_at_end());
+}
+
+#[test]
+fn dimension_chain_follows_the_wall() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::WindowTool);
+    click(&mut doc, &mut ed, 2.0, 0.0);
+    ed.run(&mut doc, &Command::SelectTool);
+    ed.selection = vec![wall];
+    let r = ed.run(&mut doc, &Command::DimensionWalls);
+    assert!(r.model_changed, "{:?}", r.error);
+    let dims: Vec<_> = doc.project().dimensions_on(ElementId(1)).map(|(_, d)| d.clone()).collect();
+    assert_eq!(dims.len(), 2, "Öffnungskette und Gesamtmaß");
+    let measures = |doc: &Document, d: &lot_model::DimensionChain| -> Vec<f64> {
+        let p = lot_geom::dimensions::resolve(doc.project(), d);
+        p.windows(2).map(|w| ((w[1].along - w[0].along) * 1000.0).round() / 1000.0).collect()
+    };
+    assert_eq!(measures(&doc, &dims[0]), vec![1.37, 1.26, 3.37]);
+    assert_eq!(measures(&doc, &dims[1]), vec![6.0]);
+    // Assoziativ: Die Wand wird länger, die Kette rechnet mit.
+    doc.set_param(wall, lot_model::Param::WallLength, 7.0).unwrap();
+    assert_eq!(measures(&doc, &dims[1]), vec![7.0]);
+    assert_eq!(measures(&doc, &dims[0]), vec![1.37, 1.26, 4.37]);
+}
+
+#[test]
+fn slab_from_walls_rests_on_the_storey_below() {
+    let (mut doc, mut ed) = setup();
+    two_spaces(&mut doc, &mut ed);
+    // Im untersten Geschoss: Bodenplatte.
+    ed.run(&mut doc, &Command::SlabFromWalls);
+    let base: Vec<_> = doc.project().slabs_on(ElementId(1)).map(|(_, s)| s.clone()).collect();
+    assert_eq!(base.len(), 1);
+    assert_eq!(base[0].kind, lot_model::SlabKind::Base);
+    // Darüber: Decke auf den Wänden darunter, auch ohne eigene Wände.
+    ed.run(&mut doc, &Command::AddStorey);
+    let r = ed.run(&mut doc, &Command::SlabFromWalls);
+    assert!(r.model_changed, "{:?}", r.error);
+    let upper: Vec<_> = doc.project().slabs_on(ed.storey).map(|(_, s)| s.clone()).collect();
+    assert_eq!(upper[0].kind, lot_model::SlabKind::Floor);
+    assert_eq!(upper[0].outline.len(), 4);
+}
+
+#[test]
+fn slab_opening_needs_a_slab_and_cuts_it() {
+    let (mut doc, mut ed) = setup();
+    two_spaces(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::SlabOpeningTool);
+    click(&mut doc, &mut ed, 3.0, 1.0);
+    let r = click(&mut doc, &mut ed, 4.2, 3.0);
+    assert!(r.error.is_some(), "ohne Decke kein Durchbruch");
+    ed.run(&mut doc, &Command::SlabFromWalls);
+    ed.run(&mut doc, &Command::SlabOpeningTool);
+    click(&mut doc, &mut ed, 3.0, 1.0);
+    let r = click(&mut doc, &mut ed, 4.2, 3.0);
+    assert!(r.model_changed, "{:?}", r.error);
+    let (slab_id, slab) = doc.project().slabs_on(ElementId(1)).next().map(|(id, s)| (id, s.clone())).unwrap();
+    let full = lot_geom::Area::from_ring(&slab.outline.iter().map(|p| [p.x, p.y]).collect::<Vec<_>>()).area();
+    let cut = lot_geom::slabs::slab_area(doc.project(), slab_id, &slab).area();
+    assert!((full - cut - 1.2 * 2.0).abs() < 1e-6, "{full} - {cut}");
 }

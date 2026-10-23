@@ -5,7 +5,9 @@
 //! (PLAN.md, Abschnitt 4, Grundentscheidung 9). Koordinaten auf dem Blatt sind
 //! Millimeter, Ursprung links unten, y nach oben.
 
+pub mod area_table;
 pub mod clip;
+pub mod dimensions;
 pub mod floor_plan;
 pub mod m0;
 pub mod sheets;
@@ -98,6 +100,9 @@ pub struct Text {
     /// Schrifthöhe (Versalhöhe) in mm, wie bei Normschrift nach DIN EN ISO 3098.
     pub height_mm: f64,
     pub anchor: Anchor,
+    /// Drehung um `position` in Grad, gegen den Uhrzeigersinn. Lesbar bleibt
+    /// Text nach DIN 1356-1 von unten und von rechts, also zwischen −90° und 90°.
+    pub rotation: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -153,6 +158,7 @@ impl Sheet {
             text: text.into(),
             height_mm,
             anchor,
+            rotation: 0.0,
         }));
     }
 }
@@ -234,7 +240,10 @@ pub fn hatch_segments(rings: &[Vec<PaperPoint>], angle_deg: f64, spacing_mm: f64
 
 /// Zahl im deutschen Format mit fester Anzahl Nachkommastellen, etwa „5,00“.
 pub fn format_de(value: f64, decimals: usize) -> String {
-    format!("{value:.decimals$}").replace('.', ",")
+    // Kaufmännisch runden: 24,345 wird 24,35, auch wenn die Zahl binär knapp darunter liegt.
+    let f = 10f64.powi(decimals as i32);
+    let rounded = value.signum() * ((value.abs() * f) * (1.0 + 1e-12)).round() / f;
+    format!("{rounded:.decimals$}").replace('.', ",")
 }
 
 #[cfg(test)]

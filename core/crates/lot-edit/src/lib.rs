@@ -14,8 +14,8 @@ use geometry::{
     End, as_elements, column_outline, element_at, end_point, footprint, moved_elements, moved_endpoint, outline,
 };
 use lot_model::{
-    Column, ColumnProfile, Document, Element, ElementId, GridLine, ModelError, Operation, Point2, Project, Storey, Top,
-    Wall, WallAlignment,
+    Column, ColumnProfile, Document, Element, ElementId, GridLine, Handing, ModelError, Opening, OpeningKind,
+    Operation, Point2, Project, Space, Storey, Top, Wall, WallAlignment, WallSide,
 };
 pub use snap::{Snap, SnapKind};
 
@@ -74,6 +74,14 @@ pub enum Tool {
     Grid,
     /// Stütze: ein Klick
     Column,
+    /// Raum: ein Klick in den Bereich
+    Space,
+    /// Tür: ein Klick auf die Wand, zur Seite, zu der sie aufschlägt
+    Door,
+    /// Fenster: ein Klick auf die Wand
+    Window,
+    /// Deckendurchbruch: zwei Ecken eines Rechtecks in der Decke des Geschosses
+    SlabOpening,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,6 +121,8 @@ pub struct Editor {
     chain_start: Option<Point2>,
     /// Endpunkt einer Bogenwand, deren Stich noch fehlt.
     arc_end: Option<Point2>,
+    /// Fangradius der letzten Zeigerbewegung, für die Vorschau von Türen und Fenstern.
+    hover_tolerance: f64,
     drag: Option<Drag>,
     pointer: Option<Snap>,
     typed: String,
@@ -130,6 +140,7 @@ impl Editor {
             selection: Vec::new(),
             chain_start: None,
             arc_end: None,
+            hover_tolerance: 0.1,
             drag: None,
             pointer: None,
             typed: String::new(),
@@ -155,7 +166,7 @@ impl Editor {
                 self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
                 Response::redraw()
             }
-            Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column => {
+            Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column | Tool::SlabOpening => {
                 self.pointer = Some(snap::snap(
                     project,
                     self.storey,
@@ -167,7 +178,12 @@ impl Editor {
                 ));
                 Response::redraw()
             }
-            Tool::Select => Response::default(),
+            Tool::Door | Tool::Window => {
+                self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
+                self.hover_tolerance = input.tolerance;
+                Response::redraw()
+            }
+            Tool::Space | Tool::Select => Response::default(),
         }
     }
 
@@ -185,6 +201,32 @@ impl Editor {
                     top: Top::Storey { offset: 0.0 },
                 };
                 Response::from_result(doc.insert(Element::Column(column)).map(|_| ()))
+            }
+            Tool::Door | Tool::Window => match self.placed_opening(doc.project(), input.point, input.tolerance) {
+                Some(opening) => Response::from_result(doc.insert(Element::Opening(opening)).map(|_| ())),
+                None => Response {
+                    error: Some(format!("{} braucht eine Wand mit genug Platz", self.opening_title())),
+                    ..Response::redraw()
+                },
+            },
+            Tool::Space => {
+                let p = Point2::new((input.point.x / 0.01).round() * 0.01, (input.point.y / 0.01).round() * 0.01);
+                let space = self.new_space(doc.project(), p, 0);
+                Response::from_result(doc.insert(Element::Space(space)).map(|_| ()))
+            }
+            Tool::SlabOpening => {
+                let p = snap::snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
+                self.pointer = None;
+                match self.chain_start {
+                    None => {
+                        self.chain_start = Some(p);
+                        Response::redraw()
+                    }
+                    Some(start) => {
+                        self.end_chain();
+                        self.add_slab_opening(doc, start, p)
+                    }
+                }
             }
             Tool::Grid => {
                 let p = snap::snap(
@@ -432,6 +474,19 @@ impl Editor {
             Command::ArcWallTool => self.set_tool(Tool::ArcWall),
             Command::GridTool => self.set_tool(Tool::Grid),
             Command::ColumnTool => self.set_tool(Tool::Column),
+            Command::SpaceTool => self.set_tool(Tool::Space),
+            Command::DoorTool => self.set_tool(Tool::Door),
+            Command::WindowTool => self.set_tool(Tool::Window),
+            Command::SlabOpeningTool => self.set_tool(Tool::SlabOpening),
+            Command::FlipDoorSwing => self.change_doors(doc, "Aufschlag wechseln", |d| {
+                // Die Bänder bleiben, wo sie sind: mit der Seite wechselt auch DIN links und rechts.
+                d.opens_to = d.opens_to.other();
+                d.hinge = d.hinge.other();
+            }),
+            Command::FlipDoorHinge => self.change_doors(doc, "Anschlag wechseln", |d| d.hinge = d.hinge.other()),
+            Command::DimensionWalls => self.dimension_walls(doc),
+            Command::SlabFromWalls => self.slab_from_walls(doc),
+            Command::DetectSpaces => self.detect_spaces(doc),
             Command::SetWallType(id) => {
                 let id = ElementId(*id);
                 if doc.project().wall_type(id).is_none() {
@@ -476,6 +531,8 @@ impl Editor {
                     .walls_on(self.storey)
                     .map(|(id, _)| id)
                     .chain(p.columns_on(self.storey).map(|(id, _)| id))
+                    .chain(p.spaces_on(self.storey).map(|(id, _)| id))
+                    .chain(p.slabs_on(self.storey).map(|(id, _)| id))
                     .collect();
                 Response::redraw()
             }
@@ -504,9 +561,23 @@ impl Editor {
             CommandInfo::new(Command::ArcWallTool, "Bogenwand zeichnen", "B", "Werkzeug"),
             CommandInfo::new(Command::GridTool, "Achse zeichnen", "A", "Werkzeug"),
             CommandInfo::new(Command::ColumnTool, "Stütze setzen", "S", "Werkzeug"),
+            CommandInfo::new(Command::SpaceTool, "Raum setzen", "R", "Werkzeug"),
+            CommandInfo::new(Command::DoorTool, "Tür setzen", "T", "Werkzeug"),
+            CommandInfo::new(Command::WindowTool, "Fenster setzen", "F", "Werkzeug"),
+            CommandInfo::new(Command::SlabOpeningTool, "Deckendurchbruch zeichnen", "D", "Werkzeug"),
+            CommandInfo::new(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "", "Auswahl"),
+            CommandInfo::new(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "", "Auswahl"),
+            CommandInfo::new(Command::DimensionWalls, "Bemaßen: Maßketten an den gewählten Wänden", "M", "Auswahl"),
+            CommandInfo::new(
+                Command::SlabFromWalls,
+                "Decke aus Wänden (im untersten Geschoss Bodenplatte)",
+                "",
+                "Geschoss",
+            ),
+            CommandInfo::new(Command::DetectSpaces, "Räume erkennen (jeder umschlossene Bereich)", "", "Werkzeug"),
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
-            CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "F", "Auswahl"),
+            CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "⇧F", "Auswahl"),
             CommandInfo::new(Command::Undo, "Widerrufen", "⌘Z", "Bearbeiten"),
             CommandInfo::new(Command::Redo, "Wiederholen", "⇧⌘Z", "Bearbeiten"),
         ];
@@ -556,6 +627,19 @@ impl Editor {
                 base_offset: 0.0,
                 top: Top::Storey { offset: 0.0 },
             }));
+        }
+        if matches!(self.tool, Tool::Door | Tool::Window)
+            && let Some(p) = self.pointer
+            && let Some(o) = self.placed_opening(project, p.point, self.hover_tolerance)
+        {
+            overlay.preview = geometry::opening_outline(project, &o);
+        }
+        if self.tool == Tool::SlabOpening {
+            overlay.snap = self.pointer;
+            if let (Some(a), Some(p)) = (self.chain_start, self.pointer) {
+                let b = p.point;
+                overlay.preview = Some(vec![[a.x, a.y], [b.x, a.y], [b.x, b.y], [a.x, b.y]]);
+            }
         }
         if self.tool == Tool::Grid {
             overlay.snap = self.pointer;
@@ -629,12 +713,24 @@ impl Editor {
             (Tool::Grid, None, _) => "Achse: Anfangspunkt klicken. Esc: zurück zum Auswählen.".into(),
             (Tool::Grid, Some(_), _) => "Achse: Endpunkt klicken. ⇧: nur rechte Winkel.".into(),
             (Tool::Column, _, _) => "Stütze 30/30: Mittelpunkt klicken. Esc: zurück zum Auswählen.".into(),
+            (Tool::Door, _, _) => {
+                "Tür: auf die Wand klicken, auf der Seite, zu der sie aufschlägt. Esc: zurück zum Auswählen.".into()
+            }
+            (Tool::Window, _, _) => "Fenster: auf die Wand klicken. Esc: zurück zum Auswählen.".into(),
+            (Tool::SlabOpening, None, _) => {
+                "Deckendurchbruch: erste Ecke in der Decke dieses Geschosses klicken. Esc: zurück.".into()
+            }
+            (Tool::SlabOpening, Some(_), _) => "Deckendurchbruch: gegenüberliegende Ecke klicken.".into(),
+            (Tool::Space, _, _) => {
+                "Raum: in den Bereich klicken, dort steht der Raumstempel. Esc: zurück zum Auswählen.".into()
+            }
             (Tool::Select, _, Some(_)) => "Loslassen setzt ab. Esc bricht ab.".into(),
             (Tool::Select, _, None) if self.selection.is_empty() => {
-                "Anklicken wählt. W: Wand, B: Bogenwand, A: Achse, S: Stütze. ⌘K: Befehle.".into()
+                "Anklicken wählt. W: Wand, B: Bogenwand, T: Tür, F: Fenster, R: Raum, A: Achse, S: Stütze. ⌘K: Befehle."
+                    .into()
             }
             (Tool::Select, _, None) => {
-                "Ziehen verschiebt, Enden ziehen ändert die Länge. ⌫ löscht. F dreht um. ⌘K: Befehle.".into()
+                "Ziehen verschiebt, Enden ziehen ändert die Länge. ⌫ löscht. ⇧F dreht um. ⌘K: Befehle.".into()
             }
         }
     }
@@ -690,6 +786,216 @@ impl Editor {
             self.arc_end = None;
         }
         Response::from_result(result)
+    }
+
+    /// Neuer Raum mit der nächsten freien Nummer im Geschoss. `skip` überspringt
+    /// Nummern, wenn mehrere Räume auf einmal entstehen.
+    fn new_space(&self, project: &Project, position: Point2, skip: u32) -> Space {
+        let below_ground = project.storey(self.storey).is_some_and(|s| s.elevation < -0.01);
+        Space {
+            storey: self.storey,
+            position,
+            number: next_space_number(project, self.storey, skip),
+            name: "Raum".into(),
+            usage: lot_model::SpaceUsage::default(),
+            living_space: !below_ground,
+        }
+    }
+
+    fn detect_spaces(&mut self, doc: &mut Document) -> Response {
+        let project = doc.project();
+        let finder = lot_geom::spaces::SpaceFinder::new(project, self.storey);
+        let ops: Vec<Operation> = finder
+            .unclaimed(project, self.storey)
+            .into_iter()
+            .filter_map(lot_geom::spaces::interior_point)
+            .enumerate()
+            .map(|(i, p)| {
+                let p = Point2::new((p[0] / 0.01).round() * 0.01, (p[1] / 0.01).round() * 0.01);
+                Operation::Insert {
+                    id: ElementId(project.next_id().0 + i as u64),
+                    element: Element::Space(self.new_space(project, p, i as u32)),
+                }
+            })
+            .collect();
+        if ops.is_empty() {
+            return Response {
+                error: Some("Kein umschlossener Bereich ohne Raum gefunden".into()),
+                ..Response::redraw()
+            };
+        }
+        Response::from_result(doc.apply(Operation::Group { label: "Räume erkennen".into(), ops }))
+    }
+
+    fn opening_title(&self) -> &'static str {
+        if self.tool == Tool::Door { "Eine Tür" } else { "Ein Fenster" }
+    }
+
+    /// Tür oder Fenster an der Stelle `p` auf einer Wand, mittig zum Zeiger, in
+    /// üblichen Rohbaumaßen nach DIN 18100:1983-10 (Vorschlag): Tür 1,01 × 2,135 m,
+    /// Fenster 1,26 × 1,385 m mit Brüstung 0,885 m. Die Tür schlägt zur Seite
+    /// des Zeigers auf, die Bänder sitzen am näheren Wandende.
+    fn placed_opening(&self, project: &Project, p: Point2, tolerance: f64) -> Option<Opening> {
+        let host = geometry::wall_at(project, self.storey, p, tolerance)?;
+        let wall = project.wall(host)?;
+        let (width, height, sill) = if self.tool == Tool::Door { (1.01, 2.135, 0.0) } else { (1.26, 1.385, 0.885) };
+        let length = wall.length();
+        if length < width + 0.02 {
+            return None;
+        }
+        let (s, t) = wall.locate(p);
+        let offset = ((s - width / 2.0) / 0.01).round() * 0.01;
+        let offset = offset.clamp(0.0, length - width);
+        let kind = if self.tool == Tool::Door {
+            let (left, right) = geometry::faces(project, wall);
+            let opens_to = if t > (left + right) / 2.0 { WallSide::Left } else { WallSide::Right };
+            let mut door = lot_model::Door { opens_to, hinge: Handing::DinLeft };
+            if door.hinge_at_end() != (s > length / 2.0) {
+                door.hinge = Handing::DinRight;
+            }
+            OpeningKind::Door(door)
+        } else {
+            OpeningKind::Window
+        };
+        Some(Opening { host, offset, width, height, sill_height: sill, kind })
+    }
+
+    /// Maßketten außen an den gewählten geraden Wänden (Vorschlag): in 1,00 m
+    /// Abstand Wandenden und Laibungen, in 1,70 m das Gesamtmaß. Ohne
+    /// Öffnungen nur das Gesamtmaß in 1,00 m.
+    fn dimension_walls(&mut self, doc: &mut Document) -> Response {
+        use lot_model::{DimRef, DimensionChain, WallEnd};
+        let project = doc.project();
+        let mut ops = Vec::new();
+        let mut next = project.next_id().0;
+        for id in &self.selection {
+            let Some(wall) = project.wall(*id) else { continue };
+            if wall.is_curved() {
+                return Response {
+                    error: Some("Bogenwände lassen sich noch nicht bemaßen".into()),
+                    ..Response::redraw()
+                };
+            }
+            let (left, _) = geometry::faces(project, wall);
+            let ends = |end| DimRef::WallEnd { wall: *id, end, side: WallSide::Left };
+            let mut openings: Vec<(ElementId, f64)> =
+                project.openings_in(*id).map(|(oid, o)| (oid, o.offset)).collect();
+            openings.sort_by(|a, b| a.1.total_cmp(&b.1));
+            let mut chains = Vec::new();
+            if !openings.is_empty() {
+                let mut refs = vec![ends(WallEnd::Start)];
+                for (oid, _) in &openings {
+                    refs.push(DimRef::Jamb { opening: *oid, end: WallEnd::Start, side: WallSide::Left });
+                    refs.push(DimRef::Jamb { opening: *oid, end: WallEnd::End, side: WallSide::Left });
+                }
+                refs.push(ends(WallEnd::End));
+                chains.push((1.0, refs));
+            }
+            let total = if openings.is_empty() { 1.0 } else { 1.7 };
+            chains.push((total, vec![ends(WallEnd::Start), ends(WallEnd::End)]));
+            let (dx, dy) = wall.direction();
+            for (distance, refs) in chains {
+                let element = Element::DimensionChain(DimensionChain {
+                    storey: self.storey,
+                    position: wall.point_at(0.0, left + distance),
+                    direction: Point2::new(dx, dy),
+                    refs,
+                });
+                ops.push(Operation::Insert { id: ElementId(next), element });
+                next += 1;
+            }
+        }
+        if ops.is_empty() {
+            return Response { error: Some("Keine Wand gewählt".into()), ..Response::redraw() };
+        }
+        Response::from_result(doc.apply(Operation::Group { label: "Bemaßen".into(), ops }))
+    }
+
+    /// Decke mit Oberkante auf OKFF des aktuellen Geschosses. Sie liegt auf den
+    /// Wänden des Geschosses darunter und folgt der Außenkante ihrer Tragschicht;
+    /// im untersten Geschoss wird sie zur Bodenplatte unter den eigenen Wänden.
+    fn slab_from_walls(&mut self, doc: &mut Document) -> Response {
+        use lot_model::{Slab, SlabKind};
+        let project = doc.project();
+        let storeys = project.storeys();
+        let Some(index) = storeys.iter().position(|(id, _)| *id == self.storey) else { return Response::default() };
+        let (support, kind) =
+            if index == 0 { (self.storey, SlabKind::Base) } else { (storeys[index - 1].0, SlabKind::Floor) };
+        let types: Vec<_> = project.slab_types().collect();
+        let base_type = types.iter().find(|(_, t)| t.name.contains("Bodenplatte")).or(types.last()).map(|(id, _)| *id);
+        let floor_type =
+            types.iter().find(|(_, t)| !t.name.contains("Bodenplatte")).or(types.first()).map(|(id, _)| *id);
+        let Some(slab_type) = (if kind == SlabKind::Base { base_type } else { floor_type }) else {
+            return Response {
+                error: Some("Im Projekt gibt es noch keinen Deckenaufbau".into()),
+                ..Response::redraw()
+            };
+        };
+        let outlines = lot_geom::slabs::slab_outlines(project, support);
+        if outlines.is_empty() {
+            return Response {
+                error: Some("Für eine Decke fehlen geschlossene Wände im Geschoss darunter".into()),
+                ..Response::redraw()
+            };
+        }
+        let first = project.next_id().0;
+        let ops = outlines
+            .into_iter()
+            .enumerate()
+            .map(|(i, ring)| Operation::Insert {
+                id: ElementId(first + i as u64),
+                element: Element::Slab(Slab {
+                    storey: self.storey,
+                    slab_type,
+                    outline: ring.into_iter().map(|p| Point2::new(p[0], p[1])).collect(),
+                    top_offset: 0.0,
+                    kind,
+                }),
+            })
+            .collect();
+        Response::from_result(doc.apply(Operation::Group { label: "Decke aus Wänden".into(), ops }))
+    }
+
+    /// Rechteckiger Durchbruch in der Decke des aktuellen Geschosses, in der die erste Ecke liegt.
+    fn add_slab_opening(&mut self, doc: &mut Document, a: Point2, b: Point2) -> Response {
+        if (a.x - b.x).abs() < 0.05 || (a.y - b.y).abs() < 0.05 {
+            return Response::redraw();
+        }
+        let project = doc.project();
+        let host = project.slabs_on(self.storey).find(|(_, s)| {
+            let ring: Vec<[f64; 2]> = s.outline.iter().map(|p| [p.x, p.y]).collect();
+            lot_geom::Area::from_ring(&ring).contains([a.x, a.y])
+        });
+        let Some((host, _)) = host else {
+            return Response {
+                error: Some("Hier liegt keine Decke dieses Geschosses (Werkzeug, Decke aus Wänden)".into()),
+                ..Response::redraw()
+            };
+        };
+        let outline = vec![a, Point2::new(b.x, a.y), b, Point2::new(a.x, b.y)];
+        let opening = lot_model::SlabOpening { host, outline };
+        Response::from_result(doc.insert(Element::SlabOpening(opening)).map(|_| ()))
+    }
+
+    fn change_doors(&mut self, doc: &mut Document, label: &str, change: impl Fn(&mut lot_model::Door)) -> Response {
+        let changes: Vec<(ElementId, Element)> = self
+            .selection
+            .iter()
+            .filter_map(|id| match doc.project().elements.get(id) {
+                Some(Element::Opening(o)) => match o.kind {
+                    OpeningKind::Door(mut d) => {
+                        change(&mut d);
+                        Some((*id, Element::Opening(Opening { kind: OpeningKind::Door(d), ..o.clone() })))
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        if changes.is_empty() {
+            return Response { error: Some("Keine Tür gewählt".into()), ..Response::redraw() };
+        }
+        Response::from_result(replace_all(doc, label, changes))
     }
 
     fn change_selected(&mut self, doc: &mut Document, label: &str, change: impl Fn(&mut Wall)) -> Response {
@@ -793,6 +1099,22 @@ fn sagitta_from(start: Point2, end: Point2, p: Point2) -> f64 {
     let (dx, dy) = ((end.x - start.x) / chord, (end.y - start.y) / chord);
     let t = -(p.x - start.x) * dy + (p.y - start.y) * dx;
     ((t / snap::ROUND).round() * snap::ROUND).clamp(-chord / 2.0, chord / 2.0)
+}
+
+/// Nächste Raumnummer im Geschoss: Ebene, Punkt, laufende Nummer, etwa „0.03“
+/// im Erdgeschoss, „1.01“ im ersten Obergeschoss, „-1.02“ im Keller. Die Ebene
+/// zählt ab dem untersten Geschoss mit OKFF auf oder über ±0,00.
+fn next_space_number(project: &Project, storey: ElementId, skip: u32) -> String {
+    let storeys = project.storeys();
+    let ground = storeys.iter().position(|(_, s)| s.elevation >= -0.01).unwrap_or(0) as i64;
+    let level = storeys.iter().position(|(id, _)| *id == storey).map_or(0, |i| i as i64 - ground);
+    let prefix = format!("{level}.");
+    let highest = project
+        .spaces_on(storey)
+        .filter_map(|(_, r)| r.number.strip_prefix(&prefix)?.parse::<u32>().ok())
+        .max()
+        .unwrap_or(0);
+    format!("{prefix}{:02}", highest + 1 + skip)
 }
 
 /// Getippte Länge in Metern, Komma oder Punkt als Dezimalzeichen.
