@@ -44,6 +44,7 @@ pub enum Element {
     Railing(crate::Railing),
     SectionView(SectionView),
     Annotation(crate::Annotation),
+    Underlay(crate::Underlay),
     ProjectInfo(ProjectInfo),
     PlanSheet(PlanSheet),
 }
@@ -69,6 +70,7 @@ pub enum ElementKind {
     Railing,
     SectionView,
     Annotation,
+    Underlay,
     ProjectInfo,
     PlanSheet,
 }
@@ -94,6 +96,7 @@ impl Element {
             Element::Railing(_) => ElementKind::Railing,
             Element::SectionView(_) => ElementKind::SectionView,
             Element::Annotation(_) => ElementKind::Annotation,
+            Element::Underlay(_) => ElementKind::Underlay,
             Element::ProjectInfo(_) => ElementKind::ProjectInfo,
             Element::PlanSheet(_) => ElementKind::PlanSheet,
         }

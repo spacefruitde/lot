@@ -3,11 +3,13 @@
 //! - Projektdatei `.lot` als SQLite-Datenbank ([`project_file`])
 //! - Testprojekte als lesbare RON-Textdateien ([`testproject`])
 //! - Planblätter als PDF, SVG und PNG ([`pdf`], [`svg`], [`png`])
+//! - Bilder für Unterlagen ([`raster`])
 
 pub mod pdf;
 pub mod plan_font;
 pub mod png;
 pub mod project_file;
+pub mod raster;
 pub mod svg;
 pub mod testproject;
 

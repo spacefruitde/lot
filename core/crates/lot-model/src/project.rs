@@ -193,6 +193,14 @@ impl Project {
         })
     }
 
+    /// Unterlagen unter dem Grundriss eines Geschosses.
+    pub fn underlays_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Underlay)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Underlay(u) if u.storey == storey => Some((*id, u)),
+            _ => None,
+        })
+    }
+
     pub fn stairs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Stair)> {
         self.elements.iter().filter_map(move |(id, e)| match e {
             Element::Stair(s) if s.storey == storey => Some((*id, s)),

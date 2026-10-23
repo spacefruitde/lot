@@ -8,6 +8,7 @@
 
 mod camera;
 mod plan2d;
+mod underlay;
 
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -18,6 +19,7 @@ use glam::Vec3;
 use lot_geom::ModelGeometry;
 use lot_plan::PlanObject;
 pub use plan2d::{OverlayItem, PlanCamera};
+pub use underlay::{UnderlayImage, UnderlayQuad};
 use wgpu::util::DeviceExt;
 
 /// Was der Renderer zeigt.
@@ -90,6 +92,8 @@ struct PlanState {
     mesh: Option<(PlanBuffers, f64)>,
     overlay: Vec<OverlayItem>,
     camera: PlanCamera,
+    underlay_pipeline: underlay::UnderlayPipeline,
+    underlays: Vec<underlay::UnderlayGpu>,
 }
 
 pub struct Renderer {
@@ -307,6 +311,13 @@ impl Renderer {
         self.plan.bounds = plan_bounds(&objects);
         self.plan.objects = objects;
         self.plan.mesh = None;
+    }
+
+    /// Unterlagen unter dem Plan (6.05), Ecken in Blattmillimetern.
+    pub fn set_underlays(&mut self, quads: &[UnderlayQuad]) {
+        let old = std::mem::take(&mut self.plan.underlays);
+        self.plan.underlays =
+            underlay::update(&self.device, &self.queue, &self.plan.underlay_pipeline, &self.plan.globals, old, quads);
     }
 
     /// Hinweise über dem Plan (Auswahl, Vorschau, Fangpunkt).
@@ -563,6 +574,7 @@ impl Renderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            underlay::draw(&mut pass, &self.plan.underlay_pipeline, &self.plan.underlays);
             pass.set_pipeline(&self.plan.pipeline);
             pass.set_bind_group(0, &self.plan.bind_group, &[]);
             for buffers in self.plan.mesh.iter().map(|(b, _)| b).chain(std::iter::once(&overlay)) {
@@ -696,6 +708,8 @@ fn plan_state(device: &wgpu::Device, format: wgpu::TextureFormat) -> PlanState {
         mesh: None,
         overlay: Vec::new(),
         camera: PlanCamera::default(),
+        underlay_pipeline: underlay::pipeline(device, format, SAMPLES),
+        underlays: Vec::new(),
     }
 }
 
@@ -829,5 +843,34 @@ mod tests {
             .filter(|&(x, y)| pixel(x, y).iter().all(|c| *c < 120))
             .count();
         assert!(dark > 50, "kaum Kanten: {dark} dunkle Pixel");
+    }
+
+    /// Eine rote Unterlage in der Planansicht färbt die Mitte blassrot; daneben bleibt Weiß.
+    #[test]
+    fn underlay_shows_faded_under_the_plan() {
+        let mut renderer = match Renderer::headless(200, 100) {
+            Ok(r) => r,
+            Err(RenderError::NoAdapter(e)) => {
+                eprintln!("übersprungen, keine Grafikkarte: {e}");
+                return;
+            }
+            Err(e) => panic!("{e}"),
+        };
+        renderer.set_mode(ViewMode::Plan);
+        let image = std::sync::Arc::new(UnderlayImage { width: 2, height: 2, rgba: [255, 0, 0, 255].repeat(4) });
+        renderer.set_underlays(&[UnderlayQuad {
+            corners: [[-10.0, -10.0], [10.0, -10.0], [10.0, 10.0], [-10.0, 10.0]],
+            image,
+            opacity: 0.5,
+        }]);
+        renderer.set_plan_camera(PlanCamera { center: [0.0, 0.0], px_per_mm: 2.0 });
+        let pixels = renderer.render_image().unwrap();
+        let pixel = |x: usize, y: usize| {
+            let i = (y * 200 + x) * 4;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        };
+        let mid = pixel(100, 50);
+        assert!(mid[0] > 240 && mid[1] > 120 && mid[1] < 230 && mid[2] < 230, "{mid:?}");
+        assert_eq!(pixel(5, 5), [255, 255, 255]);
     }
 }

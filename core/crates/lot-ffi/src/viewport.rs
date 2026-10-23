@@ -4,6 +4,7 @@
 //! Ansicht, y nach oben. Hier werden sie in Blattmillimeter und Modellmeter
 //! umgerechnet und an den Editor (lot-edit) gegeben.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -12,7 +13,7 @@ use lot_model::{Point2, Project};
 use lot_plan::floor_plan::{DEFAULT_CUT_HEIGHT, FloorPlanView, floor_plan};
 use lot_plan::standard::OfficeStandard;
 use lot_plan::{PaperPoint, Viewport as PlanViewport};
-use lot_render::{OverlayItem, Renderer, ViewMode};
+use lot_render::{OverlayItem, Renderer, UnderlayImage, UnderlayQuad, ViewMode};
 
 use crate::{LotDocument, LotError};
 
@@ -87,6 +88,19 @@ struct State {
     model_stale: bool,
     /// Die 3D-Kamera wurde schon einmal auf ein nicht leeres Modell eingestellt.
     model_fitted: bool,
+    /// Bilder der Unterlagen, nach Datei und Seite (siehe `underlay_key`).
+    images: HashMap<String, Arc<UnderlayImage>>,
+}
+
+/// Eine Unterlage, deren Bild die App liefern muss (PDF-Seite oder Bild).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct UnderlayRef {
+    pub source: String,
+    pub page: u32,
+}
+
+fn underlay_key(source: &str, page: u32) -> String {
+    format!("{source}#{page}")
 }
 
 #[derive(uniffi::Object)]
@@ -123,6 +137,7 @@ impl Viewport {
                 plan_scale: 100.0,
                 model_stale: true,
                 model_fitted: false,
+                images: HashMap::new(),
             }),
         }))
     }
@@ -137,11 +152,76 @@ impl Viewport {
         s.editor = Some(Editor::new(document.lock().project()));
         s.document = Some(document);
         s.model_fitted = false;
+        s.images.clear();
+        load_png_underlays(&mut s);
         let ms = rebuild(&mut s, true);
         build_model(&mut s);
         s.renderer.zoom_to_fit();
         s.renderer.plan_zoom_to_fit();
         ms
+    }
+
+    /// Bild einer Unterlage, von der App gerendert (PDF-Seite mit PDFKit oder ein Bild).
+    /// RGBA mit 8 Bit je Kanal, Zeilen von oben.
+    pub fn set_underlay_image(&self, source: String, page: u32, width: u32, height: u32, rgba: Vec<u8>) {
+        let mut s = self.lock();
+        s.images.insert(underlay_key(&source, page), Arc::new(UnderlayImage { width, height, rgba }));
+        rebuild(&mut s, false);
+    }
+
+    /// Unterlagen ohne Bild, die die App rendern muss. PNG liest der Kern selbst.
+    pub fn missing_underlay_images(&self) -> Vec<UnderlayRef> {
+        let mut s = self.lock();
+        load_png_underlays(&mut s);
+        let Some(doc) = s.document.clone() else { return Vec::new() };
+        let doc = doc.lock();
+        let mut out: Vec<UnderlayRef> = doc
+            .project()
+            .elements
+            .values()
+            .filter_map(|e| match e {
+                lot_model::Element::Underlay(u) if !s.images.contains_key(&underlay_key(&u.source, u.page)) => {
+                    Some(UnderlayRef { source: u.source.clone(), page: u.page })
+                }
+                _ => None,
+            })
+            .collect();
+        out.dedup();
+        out
+    }
+
+    /// Legt eine Unterlage im aktuellen Geschoss an, mittig in der Ansicht.
+    /// `width` und `height` in Einheiten der Vorlage (PDF-Punkte oder Bildpunkte),
+    /// `scale` in Metern je Einheit (vor dem Kalibrieren geschätzt).
+    pub fn add_underlay(
+        &self,
+        source: String,
+        page: u32,
+        width: f64,
+        height: f64,
+        scale: f64,
+    ) -> Result<u64, LotError> {
+        let mut s = self.lock();
+        let (Some(doc), Some(editor)) = (s.document.clone(), s.editor.as_ref()) else {
+            return Err(LotError::Failed("Kein Projekt geöffnet".into()));
+        };
+        let center = s.renderer.plan_camera().center;
+        let m = s.plan_scale / 1000.0;
+        let origin = Point2::new(center[0] * m - width * scale / 2.0, center[1] * m - height * scale / 2.0);
+        let underlay = lot_model::Underlay {
+            storey: editor.storey,
+            source,
+            page,
+            origin,
+            scale,
+            width,
+            height,
+            rotation: 0.0,
+            opacity: 0.45,
+        };
+        let id = doc.lock().insert(lot_model::Element::Underlay(underlay)).map_err(LotError::from_display)?;
+        rebuild(&mut s, false);
+        Ok(id.0)
     }
 
     /// Das Modell hat sich außerhalb der Ansicht geändert (Eigenschaften, Menü).
@@ -330,6 +410,8 @@ impl Viewport {
                         Tool::SlabOpening => "slabOpening",
                         Tool::Line => "line",
                         Tool::Text => "text",
+                        Tool::CalibrateUnderlay => "calibrate",
+                        Tool::AlignUnderlay => "align",
                     }
                     .to_string(),
                 )
@@ -409,10 +491,58 @@ fn rebuild(s: &mut State, model: bool) -> f64 {
         let view = FloorPlanView { storey: editor.storey, cut_height: DEFAULT_CUT_HEIGHT, scale: s.plan_scale };
         let viewport = PlanViewport { scale: s.plan_scale, origin: PaperPoint::new(0.0, 0.0) };
         s.renderer.set_plan(floor_plan(project, view, standard, viewport));
+        let quads = underlay_quads(project, editor.storey, &s.images, viewport);
+        s.renderer.set_underlays(&quads);
     }
     drop(doc);
     update_overlay(s);
     start.elapsed().as_secs_f64() * 1000.0
+}
+
+/// Unterlagen des Geschosses, deren Bild vorliegt, an ihrem Platz auf dem Blatt.
+pub(crate) fn underlay_quads(
+    project: &Project,
+    storey: lot_model::ElementId,
+    images: &HashMap<String, Arc<UnderlayImage>>,
+    viewport: PlanViewport,
+) -> Vec<UnderlayQuad> {
+    project
+        .underlays_on(storey)
+        .filter_map(|(_, u)| {
+            let image = images.get(&underlay_key(&u.source, u.page))?.clone();
+            let corners = u.corners().map(|p| {
+                let q = viewport.to_paper(p.x, p.y);
+                [q.x, q.y]
+            });
+            Some(UnderlayQuad { corners, image, opacity: u.opacity as f32 })
+        })
+        .collect()
+}
+
+/// Liest Unterlagen als PNG aus den Dateien des Projekts.
+fn load_png_underlays(s: &mut State) {
+    let Some(doc) = s.document.clone() else { return };
+    let wanted: Vec<(String, u32)> = doc
+        .lock()
+        .project()
+        .elements
+        .values()
+        .filter_map(|e| match e {
+            lot_model::Element::Underlay(u) if u.source.to_lowercase().ends_with(".png") => {
+                Some((u.source.clone(), u.page))
+            }
+            _ => None,
+        })
+        .collect();
+    for (source, page) in wanted {
+        let key = underlay_key(&source, page);
+        if s.images.contains_key(&key) {
+            continue;
+        }
+        if let Some(r) = doc.attachment_bytes(&source).and_then(|b| lot_io::raster::decode_png(&b).ok()) {
+            s.images.insert(key, Arc::new(UnderlayImage { width: r.width, height: r.height, rgba: r.rgba }));
+        }
+    }
 }
 
 /// Rechnet das 3D-Modell.

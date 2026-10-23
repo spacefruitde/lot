@@ -48,6 +48,8 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
         .with_context(|| format!("Testprojekt {} nicht lesbar", project_dir.display()))?;
     std::fs::create_dir_all(out).with_context(|| format!("Ordner {} nicht anlegbar", out.display()))?;
     let source = project_label(project_dir);
+    // Unterlagen liegen als Dateien im Projektordner.
+    let attachments = lot_io::testproject::attachments(&project, project_dir);
 
     for output in outputs(project_dir)? {
         if let Output::View3d { name } = &output {
@@ -61,7 +63,7 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
         }
         if let Output::PlanView { name, storey, scale } = &output {
             if with_3d {
-                match render_plan_view(&project, lot_model::ElementId(*storey), *scale) {
+                match render_plan_view(&project, &attachments, lot_model::ElementId(*storey), *scale) {
                     Ok(png) => write(&out.join(format!("{name}.png")), &png)?,
                     Err(e) => eprintln!("Hinweis: keine Planansicht ({e})"),
                 }
@@ -82,7 +84,7 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
 
     let doc = Document::new(project.clone());
     let lot_file = out.join("projekt.lot");
-    lot_io::project_file::save(&doc, &lot_file)?;
+    lot_io::project_file::save_with(&doc, &attachments, &lot_file)?;
     println!("geschrieben: {}", lot_file.display());
     // Prüfung der Treppen nach DIN 18065.
     for c in lot_rules::check_stairs(&project) {
@@ -114,8 +116,13 @@ fn render_3d(project: &lot_model::Project) -> Result<Vec<u8>> {
     encode_png(renderer.render_image()?, width, height)
 }
 
-/// Planansicht wie in der App, als PNG.
-fn render_plan_view(project: &lot_model::Project, storey: lot_model::ElementId, scale: f64) -> Result<Vec<u8>> {
+/// Planansicht wie in der App, als PNG, mit den Unterlagen des Geschosses (nur PNG).
+fn render_plan_view(
+    project: &lot_model::Project,
+    attachments: &lot_io::project_file::Attachments,
+    storey: lot_model::ElementId,
+    scale: f64,
+) -> Result<Vec<u8>> {
     let (width, height) = (1600, 1000);
     let mut renderer = lot_render::Renderer::headless(width, height)?;
     let standard = lot_plan::standard::OfficeStandard::default_standard();
@@ -123,6 +130,20 @@ fn render_plan_view(project: &lot_model::Project, storey: lot_model::ElementId, 
         lot_plan::floor_plan::FloorPlanView { storey, cut_height: lot_plan::floor_plan::DEFAULT_CUT_HEIGHT, scale };
     let viewport = lot_plan::Viewport { scale, origin: lot_plan::PaperPoint::new(0.0, 0.0) };
     renderer.set_plan(lot_plan::floor_plan::floor_plan(project, view, standard, viewport));
+    let quads: Vec<lot_render::UnderlayQuad> = project
+        .underlays_on(storey)
+        .filter_map(|(_, u)| {
+            let r = lot_io::raster::decode_png(attachments.get(&u.source)?).ok()?;
+            let image =
+                std::sync::Arc::new(lot_render::UnderlayImage { width: r.width, height: r.height, rgba: r.rgba });
+            let corners = u.corners().map(|p| {
+                let q = viewport.to_paper(p.x, p.y);
+                [q.x, q.y]
+            });
+            Some(lot_render::UnderlayQuad { corners, image, opacity: u.opacity as f32 })
+        })
+        .collect();
+    renderer.set_underlays(&quads);
     renderer.set_mode(lot_render::ViewMode::Plan);
     renderer.plan_zoom_to_fit();
     encode_png(renderer.render_image()?, width, height)

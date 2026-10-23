@@ -22,6 +22,10 @@ pub enum Command {
     LineTool,
     /// 2D-Text im Grundriss
     TextTool,
+    /// Unterlage kalibrieren: zwei Punkte, dann den wahren Abstand tippen
+    CalibrateUnderlayTool,
+    /// Unterlage ausrichten: zwei Punkte, die waagerecht oder senkrecht liegen sollen
+    AlignUnderlayTool,
     /// Gewählte Türen schlagen zur anderen Wandseite auf.
     FlipDoorSwing,
     /// Gewählte Türen: DIN links und DIN rechts tauschen.

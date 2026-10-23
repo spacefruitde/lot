@@ -652,3 +652,50 @@ fn set_phase_marks_selected_walls_and_undoes_in_one_step() {
     // Die Kennung ist lesbar für Befehlspalette und KI.
     assert_eq!(Command::SetPhase(lot_model::Phase::Existing).id(), "SetPhase(Existing)");
 }
+
+fn with_underlay(doc: &mut Document, storey: ElementId) -> ElementId {
+    doc.insert(lot_model::Element::Underlay(lot_model::Underlay {
+        storey,
+        source: "bestand.pdf".into(),
+        page: 0,
+        origin: Point2::new(0.0, 0.0),
+        scale: lot_model::pdf_point_scale(100.0),
+        width: 842.0,
+        height: 595.0,
+        rotation: 0.0,
+        opacity: 0.45,
+    }))
+    .unwrap()
+}
+
+#[test]
+fn calibrating_the_underlay_stretches_it_about_the_first_point() {
+    let (mut doc, mut ed) = setup();
+    let id = with_underlay(&mut doc, ed.storey);
+    ed.run(&mut doc, &Command::CalibrateUnderlayTool);
+    click(&mut doc, &mut ed, 2.0, 1.0);
+    click(&mut doc, &mut ed, 6.0, 1.0);
+    for c in "5,00".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    ed.key(&mut doc, Key::Enter);
+    let Some(lot_model::Element::Underlay(u)) = doc.project().elements.get(&id) else { panic!() };
+    // 4 m gemessen, 5 m wahr: alles um den Faktor 1,25 größer, (2 | 1) bleibt.
+    assert!((u.scale - lot_model::pdf_point_scale(100.0) * 1.25).abs() < 1e-12);
+    let (s, t) = u.to_source(Point2::new(2.0, 1.0));
+    assert!((u.to_model(s, t).distance(Point2::new(2.0, 1.0))) < 1e-9);
+    assert!((u.origin.x - (2.0 - 2.0 * 1.25)).abs() < 1e-9);
+    // Ein Undo-Schritt.
+    assert!(doc.undo().unwrap());
+}
+
+#[test]
+fn aligning_the_underlay_levels_a_skewed_line() {
+    let (mut doc, mut ed) = setup();
+    let id = with_underlay(&mut doc, ed.storey);
+    ed.run(&mut doc, &Command::AlignUnderlayTool);
+    click(&mut doc, &mut ed, 1.0, 1.0);
+    click(&mut doc, &mut ed, 9.0, 1.1);
+    let Some(lot_model::Element::Underlay(u)) = doc.project().elements.get(&id) else { panic!() };
+    assert!((u.rotation + (0.1f64).atan2(8.0).to_degrees()).abs() < 1e-9, "{}", u.rotation);
+}

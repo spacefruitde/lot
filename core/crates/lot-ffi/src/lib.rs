@@ -152,12 +152,22 @@ pub struct ParamValue {
 #[derive(uniffi::Object)]
 pub struct LotDocument {
     inner: Mutex<Document>,
+    /// Dateien im Projekt, etwa Unterlagen (6.05).
+    attachments: Mutex<lot_io::project_file::Attachments>,
 }
 
 impl LotDocument {
     pub(crate) fn lock(&self) -> MutexGuard<'_, Document> {
         // Ein Panic in einem anderen Aufruf soll die App nicht dauerhaft blockieren.
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn with(doc: Document, attachments: lot_io::project_file::Attachments) -> Arc<Self> {
+        Arc::new(Self { inner: Mutex::new(doc), attachments: Mutex::new(attachments) })
+    }
+
+    pub(crate) fn attachment_bytes(&self, name: &str) -> Option<Vec<u8>> {
+        self.attachments.lock().unwrap_or_else(|e| e.into_inner()).get(name).cloned()
     }
 }
 
@@ -166,30 +176,46 @@ impl LotDocument {
     /// Beispielprojekt aus M0: eine Wand mit Fenster.
     #[uniffi::constructor]
     pub fn new_sample() -> Arc<Self> {
-        Arc::new(Self { inner: Mutex::new(Document::new(Project::sample())) })
+        Self::with(Document::new(Project::sample()), Default::default())
     }
 
     /// Neues, leeres Projekt mit Erdgeschoss und üblichen Wandaufbauten.
     #[uniffi::constructor]
     pub fn new_empty() -> Arc<Self> {
-        Arc::new(Self { inner: Mutex::new(Document::new(Project::template("Neues Projekt"))) })
+        Self::with(Document::new(Project::template("Neues Projekt")), Default::default())
     }
 
     /// Testprojekt aus einem Ordner mit `projekt.ron` (zum Ausprobieren, etwa das EFH).
     #[uniffi::constructor]
     pub fn open_testproject(path: String) -> Result<Arc<Self>, LotError> {
-        let project = lot_io::testproject::load(Path::new(&path)).map_err(LotError::from_display)?;
-        Ok(Arc::new(Self { inner: Mutex::new(Document::new(project)) }))
+        let path = Path::new(&path);
+        let project = lot_io::testproject::load(path).map_err(LotError::from_display)?;
+        // Unterlagen liegen bei Testprojekten als Dateien im Projektordner.
+        let dir = if path.is_dir() { path } else { path.parent().unwrap_or(Path::new(".")) };
+        let attachments = lot_io::testproject::attachments(&project, dir);
+        Ok(Self::with(Document::new(project), attachments))
     }
 
     #[uniffi::constructor]
     pub fn open(path: String) -> Result<Arc<Self>, LotError> {
         let doc = lot_io::project_file::load(Path::new(&path)).map_err(LotError::from_display)?;
-        Ok(Arc::new(Self { inner: Mutex::new(doc) }))
+        let attachments = lot_io::project_file::load_attachments(Path::new(&path)).map_err(LotError::from_display)?;
+        Ok(Self::with(doc, attachments))
     }
 
     pub fn save(&self, path: String) -> Result<(), LotError> {
-        lot_io::project_file::save(&self.lock(), Path::new(&path)).map_err(LotError::from_display)
+        let attachments = self.attachments.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        lot_io::project_file::save_with(&self.lock(), &attachments, Path::new(&path)).map_err(LotError::from_display)
+    }
+
+    /// Legt eine Datei im Projekt ab, etwa eine Unterlage. Gleicher Name ersetzt.
+    pub fn add_attachment(&self, name: String, data: Vec<u8>) {
+        self.attachments.lock().unwrap_or_else(|e| e.into_inner()).insert(name, data);
+    }
+
+    /// Inhalt einer Datei im Projekt.
+    pub fn attachment(&self, name: String) -> Option<Vec<u8>> {
+        self.attachment_bytes(&name)
     }
 
     pub fn name(&self) -> String {
@@ -253,6 +279,7 @@ impl LotDocument {
             Some(lot_model::Element::Stair(s)) => format!("Treppe · {} Steigungen", s.risers()),
             Some(lot_model::Element::Railing(_)) => "Geländer".into(),
             Some(lot_model::Element::SectionView(v)) => v.name.clone(),
+            Some(lot_model::Element::Underlay(u)) => format!("Unterlage · {}", u.source),
             Some(lot_model::Element::Annotation(a)) => match &a.shape {
                 lot_model::AnnotationShape::Text { text, .. } => format!("Text · {text}"),
                 lot_model::AnnotationShape::Polyline(_) => "Linie".into(),

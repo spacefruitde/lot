@@ -5,10 +5,13 @@
 //! - `meta(key, value)`: Projektname und Programmversion
 //! - `elements(id, kind, data)`: ein Element je Zeile, Parameter als JSON
 //! - `operations(seq, data)`: das Operationsprotokoll in Reihenfolge, als JSON
+//! - `attachments(name, data)`: Dateien, auf die das Projekt verweist, etwa
+//!   Unterlagen als PDF oder Bild (seit M4; ältere Dateien haben die Tabelle nicht)
 //!
 //! Die Datei trägt `application_id` und `user_version`, damit Lot fremde
 //! Datenbanken und neuere Formate erkennt.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use lot_model::{Document, Element, ElementId, Operation, Project};
@@ -27,13 +30,22 @@ const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS elements (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS operations (seq INTEGER PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS attachments (name TEXT PRIMARY KEY, data BLOB NOT NULL);
 ";
+
+/// Dateien im Projekt, nach Namen.
+pub type Attachments = BTreeMap<String, Vec<u8>>;
 
 /// Schreibt das Dokument in eine Projektdatei. Eine vorhandene Datei wird ersetzt.
 ///
 /// Geschrieben wird zuerst in eine Nachbardatei, die dann umbenannt wird. Ein
 /// Absturz während des Speicherns lässt die alte Datei unversehrt.
 pub fn save(doc: &Document, path: &Path) -> Result<(), IoError> {
+    save_with(doc, &Attachments::new(), path)
+}
+
+/// Wie [`save`], mit den Dateien des Projekts.
+pub fn save_with(doc: &Document, attachments: &Attachments, path: &Path) -> Result<(), IoError> {
     let tmp = path.with_extension("lot-tmp");
     if tmp.exists() {
         std::fs::remove_file(&tmp)?;
@@ -57,6 +69,10 @@ pub fn save(doc: &Document, path: &Path) -> Result<(), IoError> {
             let mut stmt = tx.prepare("INSERT INTO operations (seq, data) VALUES (?1, ?2)")?;
             for (seq, op) in doc.log().iter().enumerate() {
                 stmt.execute(params![seq as i64, serde_json::to_string(op)?])?;
+            }
+            let mut stmt = tx.prepare("INSERT INTO attachments (name, data) VALUES (?1, ?2)")?;
+            for (name, data) in attachments {
+                stmt.execute(params![name, data])?;
             }
         }
         tx.commit()?;
@@ -111,6 +127,25 @@ pub fn load(path: &Path) -> Result<Document, IoError> {
     Ok(Document::with_log(project, log))
 }
 
+/// Die Dateien einer Projektdatei; leer bei Dateien ohne Anhänge.
+pub fn load_attachments(path: &Path) -> Result<Attachments, IoError> {
+    let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let exists: Option<String> = conn
+        .query_row("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'attachments'", [], |r| r.get(0))
+        .optional()?;
+    let mut out = Attachments::new();
+    if exists.is_none() {
+        return Ok(out);
+    }
+    let mut stmt = conn.prepare("SELECT name, data FROM attachments ORDER BY name")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?)))?;
+    for row in rows {
+        let (name, data) = row?;
+        out.insert(name, data);
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,6 +164,20 @@ mod tests {
         let loaded = load(&path).unwrap();
         assert_eq!(loaded.project(), doc.project());
         assert_eq!(loaded.log(), doc.log());
+    }
+
+    #[test]
+    fn attachments_survive_a_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("umbau.lot");
+        let doc = Document::new(Project::sample());
+        let mut files = Attachments::new();
+        files.insert("bestand.pdf".into(), vec![37, 80, 68, 70, 0, 255]);
+        save_with(&doc, &files, &path).unwrap();
+        assert_eq!(load_attachments(&path).unwrap(), files);
+        // Ohne Anhänge gespeichert: leer, kein Fehler.
+        save(&doc, &path).unwrap();
+        assert!(load_attachments(&path).unwrap().is_empty());
     }
 
     #[test]

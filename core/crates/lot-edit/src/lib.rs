@@ -87,6 +87,10 @@ pub enum Tool {
     Line,
     /// 2D-Text: ein Klick
     Text,
+    /// Unterlage kalibrieren: zwei Punkte, dann der wahre Abstand
+    CalibrateUnderlay,
+    /// Unterlage ausrichten: zwei Punkte, die waagerecht oder senkrecht liegen sollen
+    AlignUnderlay,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -183,7 +187,7 @@ impl Editor {
                 ));
                 Response::redraw()
             }
-            Tool::Door | Tool::Window | Tool::Text => {
+            Tool::Door | Tool::Window | Tool::Text | Tool::CalibrateUnderlay | Tool::AlignUnderlay => {
                 self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
                 self.hover_tolerance = input.tolerance;
                 Response::redraw()
@@ -287,6 +291,30 @@ impl Editor {
                     Some(_) => {}
                 }
                 Response::redraw()
+            }
+            Tool::CalibrateUnderlay | Tool::AlignUnderlay => {
+                let Some(id) = self.underlay(doc.project()) else {
+                    return Response {
+                        error: Some("Auf diesem Geschoss liegt keine Unterlage".into()),
+                        ..Response::redraw()
+                    };
+                };
+                match (self.chain_start, self.arc_end) {
+                    (None, _) => {
+                        self.chain_start = Some(input.point);
+                        Response::redraw()
+                    }
+                    (Some(a), None) if self.tool == Tool::AlignUnderlay => {
+                        self.end_chain();
+                        self.change_underlay(doc, id, "Unterlage ausrichten", |u| u.aligned(a, input.point))
+                    }
+                    (Some(_), None) => {
+                        // Der zweite Punkt; der wahre Abstand wird getippt.
+                        self.arc_end = Some(input.point);
+                        Response::redraw()
+                    }
+                    (Some(_), Some(_)) => Response::redraw(),
+                }
             }
             Tool::Text => {
                 let p = Point2::new((input.point.x / 0.01).round() * 0.01, (input.point.y / 0.01).round() * 0.01);
@@ -471,6 +499,15 @@ impl Editor {
                 Response::redraw()
             }
             Key::Enter => {
+                if self.tool == Tool::CalibrateUnderlay
+                    && let (Some(a), Some(b), Some(distance)) =
+                        (self.chain_start, self.arc_end, parse_length(&self.typed))
+                    && let Some(id) = self.underlay(doc.project())
+                {
+                    self.typed.clear();
+                    self.end_chain();
+                    return self.change_underlay(doc, id, "Unterlage kalibrieren", |u| u.calibrated(a, b, distance));
+                }
                 if let (Some(start), Some(end), Some(height)) =
                     (self.chain_start, self.arc_end, parse_length(&self.typed))
                 {
@@ -532,6 +569,8 @@ impl Editor {
             Command::SlabOpeningTool => self.set_tool(Tool::SlabOpening),
             Command::LineTool => self.set_tool(Tool::Line),
             Command::TextTool => self.set_tool(Tool::Text),
+            Command::CalibrateUnderlayTool => self.set_tool(Tool::CalibrateUnderlay),
+            Command::AlignUnderlayTool => self.set_tool(Tool::AlignUnderlay),
             Command::FlipDoorSwing => self.change_doors(doc, "Aufschlag wechseln", |d| {
                 // Die Bänder bleiben, wo sie sind: mit der Seite wechselt auch DIN links und rechts.
                 d.opens_to = d.opens_to.other();
@@ -636,6 +675,8 @@ impl Editor {
             CommandInfo::new(Command::SlabOpeningTool, "Deckendurchbruch zeichnen", "D", "Werkzeug"),
             CommandInfo::new(Command::LineTool, "Linie zeichnen (2D)", "L", "Werkzeug"),
             CommandInfo::new(Command::TextTool, "Text setzen (2D)", "X", "Werkzeug"),
+            CommandInfo::new(Command::CalibrateUnderlayTool, "Unterlage kalibrieren", "K", "Unterlage"),
+            CommandInfo::new(Command::AlignUnderlayTool, "Unterlage ausrichten (waagerecht)", "", "Unterlage"),
             CommandInfo::new(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "", "Auswahl"),
             CommandInfo::new(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "", "Auswahl"),
             CommandInfo::new(Command::DimensionWalls, "Bemaßen: Maßketten an den gewählten Wänden", "M", "Auswahl"),
@@ -716,6 +757,20 @@ impl Editor {
                 let b = p.point;
                 overlay.preview = Some(vec![[a.x, a.y], [b.x, a.y], [b.x, b.y], [a.x, b.y]]);
             }
+        }
+        if matches!(self.tool, Tool::CalibrateUnderlay | Tool::AlignUnderlay)
+            && let Some(a) = self.chain_start
+            && let Some(b) = self.arc_end.or(self.pointer.map(|p| p.point))
+        {
+            let (dx, dy) = (b.x - a.x, b.y - a.y);
+            let len = dx.hypot(dy).max(1e-9);
+            let (nx, ny) = (-dy / len * 0.01, dx / len * 0.01);
+            overlay.preview =
+                Some(vec![[a.x - nx, a.y - ny], [b.x - nx, b.y - ny], [b.x + nx, b.y + ny], [a.x + nx, a.y + ny]]);
+            let mid = Point2::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+            let text =
+                if self.typed.is_empty() { format!("jetzt {}", format_m(len)) } else { format!("{} m", self.typed) };
+            overlay.label = Some((mid, text));
         }
         if self.tool == Tool::Line {
             overlay.snap = self.pointer;
@@ -819,6 +874,19 @@ impl Editor {
                 "Nächsten Punkt klicken oder Länge tippen. ⇧: nur rechte Winkel. Doppelklick oder Esc: fertig.".into()
             }
             (Tool::Text, _, _) => "Text: Stelle klicken, den Text im Inspektor ändern. Esc: zurück.".into(),
+            (Tool::CalibrateUnderlay, None, _) => {
+                "Unterlage kalibrieren: Anfang einer bekannten Strecke auf der Unterlage klicken.".into()
+            }
+            (Tool::CalibrateUnderlay, Some(_), _) if self.arc_end.is_none() => "Ende der Strecke klicken.".into(),
+            (Tool::CalibrateUnderlay, Some(_), _) if self.typed.is_empty() => {
+                "Wahren Abstand in m tippen und ⏎. Esc: neu beginnen.".into()
+            }
+            (Tool::CalibrateUnderlay, Some(_), _) => format!("Abstand {} m, ⏎ übernimmt.", self.typed),
+            (Tool::AlignUnderlay, None, _) => {
+                "Unterlage ausrichten: zwei Punkte einer Linie klicken, die waagerecht oder senkrecht liegen soll."
+                    .into()
+            }
+            (Tool::AlignUnderlay, Some(_), _) => "Zweiten Punkt der Linie klicken.".into(),
             (Tool::Space, _, _) => {
                 "Raum: in den Bereich klicken, dort steht der Raumstempel. Esc: zurück zum Auswählen.".into()
             }
@@ -872,6 +940,28 @@ impl Editor {
             self.chain_start = Some(end);
         }
         Response::from_result(result)
+    }
+
+    /// Die Unterlage, auf die Kalibrieren und Ausrichten wirken: die gewählte,
+    /// sonst die zuletzt angelegte des Geschosses.
+    fn underlay(&self, project: &Project) -> Option<ElementId> {
+        self.selection
+            .iter()
+            .copied()
+            .find(|id| matches!(project.elements.get(id), Some(Element::Underlay(_))))
+            .or_else(|| project.underlays_on(self.storey).map(|(id, _)| id).last())
+    }
+
+    fn change_underlay(
+        &mut self,
+        doc: &mut Document,
+        id: ElementId,
+        label: &str,
+        change: impl Fn(&lot_model::Underlay) -> lot_model::Underlay,
+    ) -> Response {
+        let Some(Element::Underlay(u)) = doc.project().elements.get(&id) else { return Response::redraw() };
+        let new = change(u);
+        Response::from_result(replace_all(doc, label, vec![(id, Element::Underlay(new))]))
     }
 
     fn add_line(&mut self, doc: &mut Document, start: Point2, end: Point2) -> Response {

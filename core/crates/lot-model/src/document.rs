@@ -321,6 +321,19 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     ));
                 }
             }
+            Element::Underlay(u) => {
+                if project.storey(u.storey).is_none() {
+                    return Err(invalid("Unterlage: Das Geschoss fehlt"));
+                }
+                if u.source.trim().is_empty()
+                    || u.scale <= 0.0
+                    || u.width <= 0.0
+                    || u.height <= 0.0
+                    || !(0.0..=1.0).contains(&u.opacity)
+                {
+                    return Err(invalid("Unterlage: Datei, Maßstab größer null und Deckkraft 0 bis 1"));
+                }
+            }
             Element::Annotation(a) => {
                 let view_ok = match a.view {
                     crate::AnnotationView::FloorPlan { storey } => project.storey(storey).is_some(),
