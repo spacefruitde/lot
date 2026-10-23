@@ -2,7 +2,15 @@ import SwiftUI
 
 @main
 struct LotApp: App {
-    @State private var model = AppModel()
+    @State private var model: AppModel
+
+    init() {
+        // Planschrift aus dem App-Bundle, bevor der Kern sie zum ersten Mal braucht.
+        if let font = Bundle.main.path(forResource: "osifont-lgpl3fe", ofType: "ttf") {
+            setenv("LOT_PLAN_FONT", font, 1)
+        }
+        _model = State(initialValue: AppModel())
+    }
 
     var body: some Scene {
         Window("Lot", id: "main") {
@@ -12,10 +20,12 @@ struct LotApp: App {
         }
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Neues Beispielprojekt") { model.newSample() }
+                Button("Neues Projekt") { model.newProject() }
                     .keyboardShortcut("n")
                 Button("Öffnen …") { model.openWithPanel() }
                     .keyboardShortcut("o")
+                Button("Testprojekt öffnen …") { model.openTestprojectWithPanel() }
+                    .keyboardShortcut("o", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .saveItem) {
                 Button("Sichern") { model.save() }
@@ -32,9 +42,27 @@ struct LotApp: App {
                     .disabled(!model.canRedo)
             }
             CommandGroup(before: .toolbar) {
+                Button("Grundriss") { model.setView(.plan) }
+                    .keyboardShortcut("1")
+                Button("3D") { model.setView(.model) }
+                    .keyboardShortcut("2")
                 Button("Alles zeigen") { model.zoomToFit() }
                     .keyboardShortcut("0")
                 Divider()
+            }
+            CommandMenu("Werkzeug") {
+                Button("Befehle …") { model.showPalette.toggle() }
+                    .keyboardShortcut("k")
+                Divider()
+                Button("Auswählen") { model.run("SelectTool") }
+                Button("Wand zeichnen") { model.run("WallTool") }
+                Button("Bogenwand zeichnen") { model.run("ArcWallTool") }
+                Button("Achse zeichnen") { model.run("GridTool") }
+                Button("Stütze setzen") { model.run("ColumnTool") }
+                Divider()
+                Button("Alles auswählen") { model.run("SelectAll") }
+                    .keyboardShortcut("a")
+                Button("Löschen") { model.run("DeleteSelection") }
             }
         }
     }

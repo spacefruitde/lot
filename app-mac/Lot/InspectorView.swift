@@ -1,30 +1,53 @@
 import SwiftUI
 
-/// Parameter von Wand und Fenster. Jede Änderung ist eine Operation im Kern
-/// und lässt sich widerrufen.
+/// Eigenschaften der gewählten Elemente. Jede Änderung ist eine Operation im
+/// Kern und lässt sich widerrufen.
 struct InspectorView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         Form {
-            Section("Wand") {
-                ForEach(model.parameters.filter { $0.kind.isWall }, id: \.kind) { ParameterRow(parameter: $0) }
+            if model.parameters.isEmpty {
+                Section {
+                    Text("Nichts gewählt. Eine Wand anklicken zeigt ihre Maße.")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                ForEach(groups, id: \.0) { element, parameters in
+                    Section(model.label(for: element)) {
+                        ForEach(parameters, id: \.kind) { ParameterRow(parameter: $0) }
+                    }
+                }
             }
-            Section("Fenster") {
-                ForEach(model.parameters.filter { !$0.kind.isWall }, id: \.kind) { ParameterRow(parameter: $0) }
+            if let state = model.viewState {
+                Section("Zeichnen") {
+                    LabeledContent("Geschoss", value: state.storey)
+                    LabeledContent("Wandaufbau", value: state.wallType)
+                    LabeledContent("Maßstab", value: "1:\(Int(state.scale))")
+                }
             }
             Section("Bedienung") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Zwei Finger ziehen: drehen")
-                    Text("Zwei Finger mit ⇧: verschieben")
-                    Text("Zwei Finger spreizen: zum Zeiger zoomen")
-                    Text("Maus: ziehen dreht, mit ⌥ verschieben, Rad zoomt")
+                    Text("W: Wand, A: Achse, S: Stütze, V: Auswählen, ⌘K: Befehle")
+                    Text("Zeichnen: klicken, Länge tippen und ⏎, ⇧ rechtwinklig")
+                    Text("Grundriss: zwei Finger verschieben, spreizen zoomt")
+                    Text("3D: zwei Finger drehen, mit ⇧ verschieben")
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var groups: [(UInt64, [ParamValue])] {
+        var order: [UInt64] = []
+        var by: [UInt64: [ParamValue]] = [:]
+        for p in model.parameters {
+            if by[p.element] == nil { order.append(p.element) }
+            by[p.element, default: []].append(p)
+        }
+        return order.map { ($0, by[$0] ?? []) }
     }
 }
 
@@ -51,22 +74,21 @@ private struct ParameterRow: View {
 }
 
 extension ParamKind {
-    var isWall: Bool {
-        switch self {
-        case .wallLength, .wallThickness, .wallHeight: true
-        default: false
-        }
-    }
-
     var label: String {
         switch self {
         case .wallLength: "Länge"
-        case .wallThickness: "Dicke"
+        case .wallSagitta: "Stich (Bogen)"
         case .wallHeight: "Höhe"
+        case .wallTopOffset: "Oberkante über Geschoss"
+        case .baseOffset: "Unterkante über OKFF"
         case .openingOffset: "Abstand vom Wandanfang"
         case .openingWidth: "Breite"
         case .openingHeight: "Höhe"
         case .openingSillHeight: "Brüstungshöhe"
+        case .storeyElevation: "OKFF über ±0,00"
+        case .storeyHeight: "Geschosshöhe"
+        case .columnWidth: "Breite"
+        case .columnDepth: "Tiefe"
         }
     }
 }

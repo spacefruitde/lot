@@ -5,7 +5,11 @@
 //! (PLAN.md, Abschnitt 4, Grundentscheidung 9). Koordinaten auf dem Blatt sind
 //! Millimeter, Ursprung links unten, y nach oben.
 
+pub mod clip;
+pub mod floor_plan;
 pub mod m0;
+pub mod sheets;
+pub mod standard;
 
 /// Punkt auf dem Blatt in Millimetern.
 #[derive(Debug, Clone, Copy, PartialEq)]

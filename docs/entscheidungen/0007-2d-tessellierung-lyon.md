@@ -1,6 +1,6 @@
 # 0007 2D-Darstellung der Pläne auf dem Bildschirm mit lyon
 
-Status: entschieden für M1, in M0 noch nicht genutzt · 22.10.2026
+Status: umgesetzt in M1 · 23.10.2026
 
 ## Kontext
 
@@ -13,6 +13,10 @@ Die Planansicht auf dem Bildschirm braucht Linien mit exakten Breiten in mm bei 
 ## Alternativen
 
 - **vello** (Apache/MIT): rechnet auf der Grafikkarte, der Renderer gilt laut eigener Angabe als experimentell, ist an eine bestimmte wgpu-Version gebunden und baut die Szene in jedem Bild neu auf.
+
+## Umsetzung in M1
+
+Die Planansicht zerlegt dieselben Planobjekte wie das PDF, in Blattmillimetern. Zerlegt wird neu, wenn sich der Zoom um mehr als 5 % ändert; so bleibt jede Linie mindestens ein Pixel breit. Die Breiten wachsen mit dem Zoom wie in einem PDF-Betrachter. Der Ansatz mit Breiten im Shader bleibt die Option, wenn große Pläne beim Zoomen ruckeln.
 
 ## Folgen
 

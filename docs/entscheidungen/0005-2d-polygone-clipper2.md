@@ -1,6 +1,6 @@
 # 0005 2D-Polygone mit clipper2-rust
 
-Status: entschieden für M1, in M0 noch nicht direkt genutzt · 22.10.2026
+Status: umgesetzt in M1 · 23.10.2026
 
 ## Kontext
 

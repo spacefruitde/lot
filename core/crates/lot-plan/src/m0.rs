@@ -7,6 +7,9 @@
 
 use lot_model::Project;
 
+use crate::floor_plan::{FloorPlanView, floor_plan};
+use crate::standard::OfficeStandard;
+
 use crate::{
     Anchor, Area, Fill, Gray, PEN_WIDTHS_MM, PaperPoint, Pen, PlanObject, Sheet, Viewport, format_de, rect_points,
 };
@@ -68,9 +71,9 @@ pub fn sheet(project: &Project, source: &str) -> Sheet {
         Anchor::Left,
     );
     let plan = Viewport { scale: 100.0, origin: PaperPoint::new(25.0, 48.0) };
-    for ring in lot_geom::plan_cut(project, CUT_HEIGHT) {
-        let points: Vec<PaperPoint> = ring.iter().map(|p| plan.to_paper(p[0], p[1])).collect();
-        s.polygon(points, bold);
+    if let Some((storey, _)) = project.storeys().first() {
+        let view = FloorPlanView { storey: *storey, cut_height: CUT_HEIGHT, scale: 100.0 };
+        s.objects.extend(floor_plan(project, view, OfficeStandard::default_standard(), plan));
     }
     if let Some((min, max)) = lot_geom::plan_extent(project) {
         let a = plan.to_paper(min[0], min[1]);
@@ -80,7 +83,7 @@ pub fn sheet(project: &Project, source: &str) -> Sheet {
     s.text(
         25.0,
         28.0,
-        "Darstellung noch ohne Regeln: nur Schnittkanten, Fenster ohne Rahmen. Regeln folgen in M1.",
+        "Darstellung nach Bürostandard 1:100 (Vorschlag M1), Fenster noch ohne Rahmen.",
         LABEL,
         Anchor::Left,
     );
@@ -149,7 +152,7 @@ mod tests {
     #[test]
     fn wall_cut_shows_window_gap() {
         // Schnitt bei 1,00 m geht durch das Fenster (Brüstung 0,90 m): zwei Wandstücke.
-        let rings = lot_geom::plan_cut(&Project::sample(), CUT_HEIGHT);
-        assert_eq!(rings.len(), 2);
+        let regions = lot_geom::layer_regions(&Project::sample(), lot_model::ElementId(1), CUT_HEIGHT);
+        assert_eq!(regions[0].area.rings().len(), 2);
     }
 }

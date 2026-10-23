@@ -1,4 +1,4 @@
-use crate::{Element, ElementId, Operation, Param, Project};
+use crate::{ColumnProfile, Element, ElementId, Operation, Param, Project, Top};
 
 /// Kleinste Maße, die das Modell zulässt, in Metern.
 const MIN_LENGTH: f64 = 0.01;
@@ -13,8 +13,8 @@ pub enum ModelError {
     DuplicateElement(ElementId),
     #[error("Element {id:?} hat den Parameter {param:?} nicht")]
     UnknownParam { id: ElementId, param: Param },
-    #[error("Der Modellstand passt nicht zur Operation (erwartet {expected}, gefunden {found})")]
-    Conflict { expected: f64, found: f64 },
+    #[error("Der Modellstand passt nicht zur Operation")]
+    Conflict,
     #[error("Ungültiger Wert: {0}")]
     Invalid(String),
 }
@@ -72,6 +72,21 @@ impl Document {
         Ok(id)
     }
 
+    /// Ersetzt ein Element als Ganzes.
+    pub fn replace(&mut self, id: ElementId, new: Element) -> Result<(), ModelError> {
+        let old = self.project.elements.get(&id).ok_or(ModelError::UnknownElement(id))?.clone();
+        if old == new {
+            return Ok(());
+        }
+        self.apply(Operation::Replace { id, old, new })
+    }
+
+    /// Löscht ein Element.
+    pub fn delete(&mut self, id: ElementId) -> Result<(), ModelError> {
+        let element = self.project.elements.get(&id).ok_or(ModelError::UnknownElement(id))?.clone();
+        self.apply(Operation::Delete { id, element })
+    }
+
     /// Setzt einen Parameter auf einen neuen Wert.
     pub fn set_param(&mut self, id: ElementId, param: Param, value: f64) -> Result<(), ModelError> {
         let element = self.project.elements.get(&id).ok_or(ModelError::UnknownElement(id))?;
@@ -110,30 +125,7 @@ impl Document {
     /// Bei einem Fehler bleibt das Modell unverändert.
     fn execute(&mut self, op: &Operation) -> Result<(), ModelError> {
         let mut next = self.project.clone();
-        match op {
-            Operation::Insert { id, element } => {
-                if next.elements.contains_key(id) {
-                    return Err(ModelError::DuplicateElement(*id));
-                }
-                next.elements.insert(*id, element.clone());
-            }
-            Operation::Delete { id, .. } => {
-                if next.elements.remove(id).is_none() {
-                    return Err(ModelError::UnknownElement(*id));
-                }
-                if next.openings_in(*id).next().is_some() {
-                    return Err(ModelError::Invalid("Die Wand enthält noch Öffnungen".into()));
-                }
-            }
-            Operation::SetParam { id, param, old, new } => {
-                let element = next.elements.get_mut(id).ok_or(ModelError::UnknownElement(*id))?;
-                let found = element.param(*param).ok_or(ModelError::UnknownParam { id: *id, param: *param })?;
-                if (found - old).abs() > TOLERANCE {
-                    return Err(ModelError::Conflict { expected: *old, found });
-                }
-                element.set_param(*param, *new);
-            }
-        }
+        apply_to(&mut next, op)?;
         validate(&next)?;
         self.project = next;
         self.log.push(op.clone());
@@ -141,41 +133,149 @@ impl Document {
     }
 }
 
+/// Wendet eine Operation auf einen Projektstand an, ohne zu prüfen, ob das
+/// Ergebnis gültig ist.
+fn apply_to(project: &mut Project, op: &Operation) -> Result<(), ModelError> {
+    match op {
+        Operation::Insert { id, element } => {
+            if project.elements.contains_key(id) {
+                return Err(ModelError::DuplicateElement(*id));
+            }
+            project.elements.insert(*id, element.clone());
+        }
+        Operation::Delete { id, element } => {
+            match project.elements.get(id) {
+                Some(found) if found == element => {}
+                Some(_) => return Err(ModelError::Conflict),
+                None => return Err(ModelError::UnknownElement(*id)),
+            }
+            project.elements.remove(id);
+        }
+        Operation::SetParam { id, param, old, new } => {
+            let element = project.elements.get_mut(id).ok_or(ModelError::UnknownElement(*id))?;
+            let found = element.param(*param).ok_or(ModelError::UnknownParam { id: *id, param: *param })?;
+            if (found - old).abs() > TOLERANCE {
+                return Err(ModelError::Conflict);
+            }
+            element.set_param(*param, *new);
+        }
+        Operation::Replace { id, old, new } => {
+            let element = project.elements.get_mut(id).ok_or(ModelError::UnknownElement(*id))?;
+            if element != old {
+                return Err(ModelError::Conflict);
+            }
+            if element.kind() != new.kind() {
+                return Err(ModelError::Invalid("Ein Element kann seine Art nicht ändern".into()));
+            }
+            *element = new.clone();
+        }
+        Operation::Group { ops, .. } => {
+            for op in ops {
+                apply_to(project, op)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 impl Project {
-    /// Prüft, ob der Projektstand geometrisch sinnvoll ist. Dieselben Regeln
-    /// gelten für jede Operation, für geladene Dateien und für Testprojekte.
+    /// Prüft, ob der Projektstand sinnvoll ist: Bezüge zeigen auf passende
+    /// Elemente, Maße sind positiv, Öffnungen passen in ihre Wand. Dieselben
+    /// Regeln gelten für jede Operation, für geladene Dateien und für Testprojekte.
     pub fn validate(&self) -> Result<(), ModelError> {
         validate(self)
     }
 }
 
+fn invalid(message: impl Into<String>) -> ModelError {
+    ModelError::Invalid(message.into())
+}
+
 fn validate(project: &Project) -> Result<(), ModelError> {
-    for element in project.elements.values() {
+    for (id, element) in &project.elements {
         match element {
+            Element::Storey(s) => {
+                if s.height < MIN_LENGTH {
+                    return Err(invalid(format!(
+                        "Geschoss {}: Die Geschosshöhe muss mindestens 1 cm betragen",
+                        s.name
+                    )));
+                }
+            }
+            Element::GridLine(g) => {
+                if g.start.distance(g.end) < MIN_LENGTH {
+                    return Err(invalid(format!("Achse {}: Anfang und Ende fallen zusammen", g.label)));
+                }
+            }
+            Element::WallType(t) => {
+                if t.layers.is_empty() {
+                    return Err(invalid(format!("Wandaufbau {}: Es fehlt mindestens eine Schicht", t.name)));
+                }
+                if t.layers.iter().any(|l| l.thickness < 0.001) {
+                    return Err(invalid(format!("Wandaufbau {}: Jede Schicht muss mindestens 1 mm dick sein", t.name)));
+                }
+            }
             Element::Wall(w) => {
-                if w.length() < MIN_LENGTH || w.thickness < MIN_LENGTH || w.height < MIN_LENGTH {
-                    return Err(ModelError::Invalid(
-                        "Länge, Dicke und Höhe der Wand müssen mindestens 1 cm betragen".into(),
+                if project.storey(w.storey).is_none() {
+                    return Err(invalid(format!("Wand {}: Das Geschoss fehlt", id.0)));
+                }
+                if project.wall_type(w.wall_type).is_none() {
+                    return Err(invalid(format!("Wand {}: Der Wandaufbau fehlt", id.0)));
+                }
+                if w.length() < MIN_LENGTH {
+                    return Err(invalid("Eine Wand muss mindestens 1 cm lang sein"));
+                }
+                if w.sagitta.abs() > w.chord() / 2.0 + TOLERANCE {
+                    return Err(invalid(
+                        "Der Stich einer Bogenwand darf höchstens die halbe Sehne betragen (Halbkreis)",
                     ));
                 }
+                if let (Some(arc), Some(t)) = (w.arc(), project.wall_type(w.wall_type)) {
+                    let offsets = w.layer_offsets(t);
+                    let inner = arc.radius_at(offsets[0].0).min(arc.radius_at(offsets[offsets.len() - 1].1));
+                    if inner < MIN_LENGTH {
+                        return Err(invalid("Der Bogen ist zu eng für die Wanddicke"));
+                    }
+                }
+                check_height(project, w.storey, w.base_offset, w.top, "Wand")?;
             }
             Element::Opening(o) => {
-                let wall = project.wall(o.host).ok_or_else(|| {
-                    ModelError::Invalid(format!("Die Öffnung sitzt in Element {:?}, das keine Wand ist", o.host))
-                })?;
+                let wall = project
+                    .wall(o.host)
+                    .ok_or_else(|| invalid(format!("Die Öffnung sitzt in Element {}, das keine Wand ist", o.host.0)))?;
                 if o.width < MIN_LENGTH || o.height < MIN_LENGTH {
-                    return Err(ModelError::Invalid(
-                        "Breite und Höhe der Öffnung müssen mindestens 1 cm betragen".into(),
-                    ));
+                    return Err(invalid("Breite und Höhe der Öffnung müssen mindestens 1 cm betragen"));
                 }
                 if o.offset < 0.0 || o.offset + o.width > wall.length() + TOLERANCE {
-                    return Err(ModelError::Invalid("Die Öffnung ragt seitlich aus der Wand".into()));
+                    return Err(invalid("Die Öffnung ragt seitlich aus der Wand"));
                 }
-                if o.sill_height < 0.0 || o.sill_height + o.height > wall.height + TOLERANCE {
-                    return Err(ModelError::Invalid("Die Öffnung ragt oben oder unten aus der Wand".into()));
+                let (bottom, top) = project.wall_extent(wall).unwrap_or((0.0, 0.0));
+                if o.sill_height < 0.0 || o.sill_height + o.height > top - bottom + TOLERANCE {
+                    return Err(invalid("Die Öffnung ragt oben oder unten aus der Wand"));
                 }
             }
+            Element::Column(c) => {
+                if project.storey(c.storey).is_none() {
+                    return Err(invalid(format!("Stütze {}: Das Geschoss fehlt", id.0)));
+                }
+                let too_small = match c.profile {
+                    ColumnProfile::Rectangle { width, depth } => width < MIN_LENGTH || depth < MIN_LENGTH,
+                    ColumnProfile::Circle { diameter } => diameter < MIN_LENGTH,
+                };
+                if too_small {
+                    return Err(invalid("Der Querschnitt einer Stütze muss mindestens 1 cm messen"));
+                }
+                check_height(project, c.storey, c.base_offset, c.top, "Stütze")?;
+            }
         }
+    }
+    Ok(())
+}
+
+fn check_height(project: &Project, storey: ElementId, base: f64, top: Top, what: &str) -> Result<(), ModelError> {
+    let (bottom, top) = project.vertical_extent(storey, base, top).unwrap_or((0.0, 0.0));
+    if top - bottom < MIN_LENGTH {
+        return Err(invalid(format!("Die {what} muss mindestens 1 cm hoch sein")));
     }
     Ok(())
 }
@@ -183,21 +283,28 @@ fn validate(project: &Project) -> Result<(), ModelError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Opening, Point2, Wall};
+    use crate::{Opening, Point2, Wall, WallAlignment};
+
+    const WALL: ElementId = ElementId(3);
+    const OPENING: ElementId = ElementId(4);
 
     fn doc() -> Document {
         Document::new(Project::sample())
     }
 
+    fn width(d: &Document) -> Option<f64> {
+        d.project().elements[&OPENING].param(Param::OpeningWidth)
+    }
+
     #[test]
     fn set_param_and_undo_redo() {
         let mut d = doc();
-        d.set_param(ElementId(2), Param::OpeningWidth, 2.0).unwrap();
-        assert_eq!(d.project().elements[&ElementId(2)].param(Param::OpeningWidth), Some(2.0));
+        d.set_param(OPENING, Param::OpeningWidth, 2.0).unwrap();
+        assert_eq!(width(&d), Some(2.0));
         assert!(d.undo().unwrap());
-        assert_eq!(d.project().elements[&ElementId(2)].param(Param::OpeningWidth), Some(1.5));
+        assert_eq!(width(&d), Some(1.5));
         assert!(d.redo().unwrap());
-        assert_eq!(d.project().elements[&ElementId(2)].param(Param::OpeningWidth), Some(2.0));
+        assert_eq!(width(&d), Some(2.0));
         // Ausführen, Undo, Redo: drei Einträge im Protokoll.
         assert_eq!(d.log().len(), 3);
     }
@@ -205,10 +312,10 @@ mod tests {
     #[test]
     fn new_operation_clears_redo() {
         let mut d = doc();
-        d.set_param(ElementId(1), Param::WallHeight, 3.0).unwrap();
+        d.set_param(WALL, Param::WallHeight, 3.0).unwrap();
         d.undo().unwrap();
         assert!(d.can_redo());
-        d.set_param(ElementId(1), Param::WallThickness, 0.24).unwrap();
+        d.set_param(WALL, Param::BaseOffset, 0.1).unwrap();
         assert!(!d.can_redo());
     }
 
@@ -217,7 +324,7 @@ mod tests {
         let mut d = doc();
         let before = d.project().clone();
         // Die Öffnung (1,75 + 1,5 = 3,25 m) passt nicht mehr in eine 3 m lange Wand.
-        let err = d.set_param(ElementId(1), Param::WallLength, 3.0).unwrap_err();
+        let err = d.set_param(WALL, Param::WallLength, 3.0).unwrap_err();
         assert!(matches!(err, ModelError::Invalid(_)));
         assert_eq!(d.project(), &before);
         assert!(d.log().is_empty());
@@ -226,33 +333,33 @@ mod tests {
 
     #[test]
     fn wall_length_keeps_direction() {
-        let mut d = Document::new(Project::new("t"));
-        let id = d
-            .insert(Element::Wall(Wall {
-                start: Point2::new(1.0, 1.0),
-                end: Point2::new(4.0, 5.0),
-                thickness: 0.2,
-                height: 2.5,
-            }))
-            .unwrap();
-        d.set_param(id, Param::WallLength, 10.0).unwrap();
-        let w = d.project().wall(id).unwrap();
+        let mut d = doc();
+        let mut wall = d.project().wall(WALL).unwrap().clone();
+        wall.start = Point2::new(1.0, 1.0);
+        wall.end = Point2::new(4.0, 5.0);
+        d.replace(WALL, Element::Wall(wall)).unwrap();
+        d.set_param(WALL, Param::WallLength, 10.0).unwrap();
+        let w = d.project().wall(WALL).unwrap();
         assert!((w.end.x - 7.0).abs() < 1e-12 && (w.end.y - 9.0).abs() < 1e-12);
     }
 
     #[test]
     fn stale_operation_is_a_conflict() {
         let mut d = doc();
-        let op = Operation::SetParam { id: ElementId(2), param: Param::OpeningWidth, old: 9.0, new: 1.0 };
-        assert!(matches!(d.apply(op), Err(ModelError::Conflict { .. })));
+        let op = Operation::SetParam { id: OPENING, param: Param::OpeningWidth, old: 9.0, new: 1.0 };
+        assert!(matches!(d.apply(op), Err(ModelError::Conflict)));
     }
 
     #[test]
     fn cannot_delete_wall_with_openings() {
         let mut d = doc();
-        let wall = d.project().elements[&ElementId(1)].clone();
-        let err = d.apply(Operation::Delete { id: ElementId(1), element: wall }).unwrap_err();
-        assert!(matches!(err, ModelError::Invalid(_)));
+        assert!(matches!(d.delete(WALL), Err(ModelError::Invalid(_))));
+    }
+
+    #[test]
+    fn cannot_delete_storey_in_use() {
+        let mut d = doc();
+        assert!(matches!(d.delete(ElementId(1)), Err(ModelError::Invalid(_))));
     }
 
     #[test]
@@ -268,5 +375,71 @@ mod tests {
             }))
             .unwrap_err();
         assert!(matches!(err, ModelError::Invalid(_)));
+    }
+
+    #[test]
+    fn group_is_undone_as_one() {
+        let mut d = doc();
+        let mut moved = d.project().wall(WALL).unwrap().clone();
+        moved.start.y += 1.0;
+        moved.end.y += 1.0;
+        let group = Operation::Group {
+            label: "Wand verschieben".into(),
+            ops: vec![
+                Operation::Replace { id: WALL, old: d.project().elements[&WALL].clone(), new: Element::Wall(moved) },
+                Operation::SetParam { id: OPENING, param: Param::OpeningWidth, old: 1.5, new: 1.0 },
+            ],
+        };
+        d.apply(group).unwrap();
+        assert_eq!(d.project().wall(WALL).unwrap().start.y, 1.0);
+        assert_eq!(width(&d), Some(1.0));
+        d.undo().unwrap();
+        assert_eq!(d.project(), &Project::sample());
+    }
+
+    #[test]
+    fn failing_group_changes_nothing() {
+        let mut d = doc();
+        let group = Operation::Group {
+            label: "t".into(),
+            ops: vec![
+                Operation::SetParam { id: OPENING, param: Param::OpeningWidth, old: 1.5, new: 1.0 },
+                Operation::SetParam { id: OPENING, param: Param::OpeningWidth, old: 9.0, new: 1.0 },
+            ],
+        };
+        assert!(d.apply(group).is_err());
+        assert_eq!(d.project(), &Project::sample());
+    }
+
+    #[test]
+    fn wall_on_storey_follows_storey_height() {
+        let mut d = doc();
+        let mut wall = d.project().wall(WALL).unwrap().clone();
+        wall.top = Top::Storey { offset: -0.2 };
+        d.replace(WALL, Element::Wall(wall)).unwrap();
+        let w = d.project().wall(WALL).unwrap();
+        assert_eq!(d.project().wall_extent(w), Some((0.0, 2.55)));
+        d.set_param(ElementId(1), Param::StoreyHeight, 3.0).unwrap();
+        let w = d.project().wall(WALL).unwrap();
+        assert_eq!(d.project().wall_extent(w), Some((0.0, 2.8)));
+    }
+
+    #[test]
+    fn layer_offsets_follow_alignment() {
+        let p = Project::sample();
+        let t = crate::WallType {
+            name: "t".into(),
+            layers: vec![
+                crate::Layer { material: "a".into(), thickness: 0.1, function: crate::LayerFunction::Insulation },
+                crate::Layer { material: "b".into(), thickness: 0.2, function: crate::LayerFunction::Structure },
+            ],
+        };
+        let mut w: Wall = p.wall(WALL).unwrap().clone();
+        w.alignment = WallAlignment::Exterior;
+        assert_eq!(w.layer_offsets(&t), vec![(0.0, -0.1), (-0.1, -0.30000000000000004)]);
+        w.alignment = WallAlignment::Interior;
+        assert_eq!(w.layer_offsets(&t)[0], (0.30000000000000004, 0.20000000000000004));
+        w.alignment = WallAlignment::Center;
+        assert_eq!(w.layer_offsets(&t)[0].0, 0.15000000000000002);
     }
 }

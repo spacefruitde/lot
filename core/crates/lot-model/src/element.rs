@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 
 /// Eindeutige Kennung eines Elements innerhalb eines Projekts.
@@ -15,7 +13,7 @@ pub struct Point2 {
 }
 
 impl Point2 {
-    pub fn new(x: f64, y: f64) -> Self {
+    pub const fn new(x: f64, y: f64) -> Self {
         Self { x, y }
     }
 
@@ -24,78 +22,38 @@ impl Point2 {
     }
 }
 
-/// Ein Projekt: alle Elemente mit ihren Parametern.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Project {
-    pub name: String,
-    pub elements: BTreeMap<ElementId, Element>,
-}
-
-impl Project {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), elements: BTreeMap::new() }
-    }
-
-    /// Nächste freie Kennung. Wird aus dem Bestand abgeleitet und nicht gespeichert.
-    pub fn next_id(&self) -> ElementId {
-        ElementId(self.elements.keys().last().map_or(1, |id| id.0 + 1))
-    }
-
-    pub fn wall(&self, id: ElementId) -> Option<&Wall> {
-        match self.elements.get(&id) {
-            Some(Element::Wall(w)) => Some(w),
-            _ => None,
-        }
-    }
-
-    /// Alle Öffnungen, die in der Wand `host` sitzen.
-    pub fn openings_in(&self, host: ElementId) -> impl Iterator<Item = (ElementId, &Opening)> {
-        self.elements.iter().filter_map(move |(id, e)| match e {
-            Element::Opening(o) if o.host == host => Some((*id, o)),
-            _ => None,
-        })
-    }
-
-    /// Beispielprojekt für M0: eine 5 m lange Wand mit einem Fenster.
-    /// Entspricht `testprojekte/m0-wand/projekt.ron`.
-    pub fn sample() -> Self {
-        let mut p = Project::new("M0 Wand mit Fenster");
-        p.elements.insert(
-            ElementId(1),
-            Element::Wall(Wall {
-                start: Point2::new(0.0, 0.0),
-                end: Point2::new(5.0, 0.0),
-                thickness: 0.3,
-                height: 2.6,
-            }),
-        );
-        p.elements.insert(
-            ElementId(2),
-            Element::Opening(Opening { host: ElementId(1), offset: 1.75, width: 1.5, height: 1.3, sill_height: 0.9 }),
-        );
-        p
-    }
-}
-
-/// Bauteil im Modell. Die Varianten folgen den IFC-Klassen (siehe docs/glossar.md).
+/// Bauteil oder Bezug im Modell. Die Varianten folgen den IFC-Klassen
+/// (siehe docs/glossar.md).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Element {
+    Storey(Storey),
+    GridLine(GridLine),
+    WallType(WallType),
     Wall(Wall),
     Opening(Opening),
+    Column(Column),
 }
 
 /// Art eines Elements, ohne Daten.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ElementKind {
+    Storey,
+    GridLine,
+    WallType,
     Wall,
     Opening,
+    Column,
 }
 
 impl Element {
     pub fn kind(&self) -> ElementKind {
         match self {
+            Element::Storey(_) => ElementKind::Storey,
+            Element::GridLine(_) => ElementKind::GridLine,
+            Element::WallType(_) => ElementKind::WallType,
             Element::Wall(_) => ElementKind::Wall,
             Element::Opening(_) => ElementKind::Opening,
+            Element::Column(_) => ElementKind::Column,
         }
     }
 
@@ -103,81 +61,464 @@ impl Element {
     pub fn param(&self, param: Param) -> Option<f64> {
         match (self, param) {
             (Element::Wall(w), Param::WallLength) => Some(w.length()),
-            (Element::Wall(w), Param::WallThickness) => Some(w.thickness),
-            (Element::Wall(w), Param::WallHeight) => Some(w.height),
+            (Element::Wall(w), Param::WallSagitta) => Some(w.sagitta),
+            (Element::Wall(w), Param::WallHeight) => match w.top {
+                Top::Height(h) => Some(h),
+                Top::Storey { .. } => None,
+            },
+            (Element::Wall(w), Param::WallTopOffset) => match w.top {
+                Top::Storey { offset } => Some(offset),
+                Top::Height(_) => None,
+            },
+            (Element::Wall(w), Param::BaseOffset) => Some(w.base_offset),
+            (Element::Column(c), Param::BaseOffset) => Some(c.base_offset),
             (Element::Opening(o), Param::OpeningOffset) => Some(o.offset),
             (Element::Opening(o), Param::OpeningWidth) => Some(o.width),
             (Element::Opening(o), Param::OpeningHeight) => Some(o.height),
             (Element::Opening(o), Param::OpeningSillHeight) => Some(o.sill_height),
+            (Element::Storey(s), Param::StoreyElevation) => Some(s.elevation),
+            (Element::Storey(s), Param::StoreyHeight) => Some(s.height),
+            (Element::Column(c), Param::ColumnWidth) => match c.profile {
+                ColumnProfile::Rectangle { width, .. } => Some(width),
+                ColumnProfile::Circle { diameter } => Some(diameter),
+            },
+            (Element::Column(c), Param::ColumnDepth) => match c.profile {
+                ColumnProfile::Rectangle { depth, .. } => Some(depth),
+                ColumnProfile::Circle { .. } => None,
+            },
             _ => None,
         }
     }
 
     /// Setzt einen Parameter. Gibt `false` zurück, wenn das Element ihn nicht hat.
     pub(crate) fn set_param(&mut self, param: Param, value: f64) -> bool {
+        if self.param(param).is_none() {
+            return false;
+        }
         match (self, param) {
             (Element::Wall(w), Param::WallLength) => w.set_length(value),
-            (Element::Wall(w), Param::WallThickness) => w.thickness = value,
-            (Element::Wall(w), Param::WallHeight) => w.height = value,
+            (Element::Wall(w), Param::WallSagitta) => w.sagitta = value,
+            (Element::Wall(w), Param::WallHeight) => w.top = Top::Height(value),
+            (Element::Wall(w), Param::WallTopOffset) => w.top = Top::Storey { offset: value },
+            (Element::Wall(w), Param::BaseOffset) => w.base_offset = value,
+            (Element::Column(c), Param::BaseOffset) => c.base_offset = value,
             (Element::Opening(o), Param::OpeningOffset) => o.offset = value,
             (Element::Opening(o), Param::OpeningWidth) => o.width = value,
             (Element::Opening(o), Param::OpeningHeight) => o.height = value,
             (Element::Opening(o), Param::OpeningSillHeight) => o.sill_height = value,
+            (Element::Storey(s), Param::StoreyElevation) => s.elevation = value,
+            (Element::Storey(s), Param::StoreyHeight) => s.height = value,
+            (Element::Column(c), Param::ColumnWidth) => match &mut c.profile {
+                ColumnProfile::Rectangle { width, .. } => *width = value,
+                ColumnProfile::Circle { diameter } => *diameter = value,
+            },
+            (Element::Column(c), Param::ColumnDepth) => {
+                if let ColumnProfile::Rectangle { depth, .. } = &mut c.profile {
+                    *depth = value;
+                }
+            }
             _ => return false,
         }
         true
     }
 }
 
-/// Wand (IfcWall). Die Achse läuft von `start` nach `end`, die Dicke liegt
-/// symmetrisch zur Achse. Schichtaufbau folgt in M1.
+/// Geschoss (IfcBuildingStorey).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Wall {
-    pub start: Point2,
-    pub end: Point2,
-    pub thickness: f64,
+pub struct Storey {
+    pub name: String,
+    /// Höhe der Oberkante Fertigfußboden (OKFF) über ±0,00, in Metern.
+    pub elevation: f64,
+    /// Geschosshöhe: von OKFF bis OKFF des Geschosses darüber.
     pub height: f64,
 }
 
-impl Wall {
-    pub fn length(&self) -> f64 {
-        self.start.distance(self.end)
-    }
+/// Achse eines Achsrasters (IfcGridAxis).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GridLine {
+    /// Beschriftung im Achskreis, etwa „A“ oder „1“.
+    pub label: String,
+    pub start: Point2,
+    pub end: Point2,
+}
 
-    /// Ändert die Länge, der Anfangspunkt bleibt fest.
-    fn set_length(&mut self, length: f64) {
-        let current = self.length();
-        let (dx, dy) = if current > 0.0 {
-            ((self.end.x - self.start.x) / current, (self.end.y - self.start.y) / current)
-        } else {
-            (1.0, 0.0)
-        };
-        self.end = Point2::new(self.start.x + dx * length, self.start.y + dy * length);
+/// Wandaufbau (IfcWallType): Schichten von außen nach innen.
+///
+/// „Außen“ ist die linke Seite in Zeichenrichtung der Wand. Wer ein Haus im
+/// Uhrzeigersinn zeichnet, hat die Außenseite also immer außen.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WallType {
+    pub name: String,
+    pub layers: Vec<Layer>,
+}
+
+impl WallType {
+    pub fn thickness(&self) -> f64 {
+        self.layers.iter().map(|l| l.thickness).sum()
     }
 }
 
-/// Öffnung in einer Wand (IfcOpeningElement). In M0 eine rechteckige
-/// Fensteröffnung ohne Rahmen, Laibung oder Anschlag.
+/// Schicht eines Wandaufbaus (IfcMaterialLayer).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Layer {
+    /// Schlüssel des Materials im Bürostandard, etwa „kalksandstein“.
+    pub material: String,
+    pub thickness: f64,
+    pub function: LayerFunction,
+}
+
+/// Funktion einer Schicht. Sie bestimmt, wie Schichten an Wandanschlüssen
+/// ineinandergreifen (siehe [`LayerFunction::priority`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LayerFunction {
+    /// Tragschicht
+    Structure,
+    /// Dämmung
+    Insulation,
+    /// Luftschicht
+    AirGap,
+    /// Installationsebene
+    Service,
+    /// Putz oder Bekleidung
+    Finish,
+}
+
+impl LayerFunction {
+    /// Rang an Anschlüssen, 1 ist der höchste. Eine Schicht läuft durch
+    /// Schichten mit niedrigerem Rang hindurch und endet an der ersten Schicht
+    /// mit gleichem oder höherem Rang.
+    pub fn priority(self) -> u8 {
+        match self {
+            LayerFunction::Structure => 1,
+            LayerFunction::Insulation => 2,
+            LayerFunction::AirGap => 3,
+            LayerFunction::Service => 4,
+            LayerFunction::Finish => 5,
+        }
+    }
+}
+
+/// Lage der Bezugslinie einer Wand im Aufbau.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum WallAlignment {
+    /// Mitte des Gesamtaufbaus
+    #[default]
+    Center,
+    /// Außenkante (linke Seite in Zeichenrichtung)
+    Exterior,
+    /// Innenkante (rechte Seite in Zeichenrichtung)
+    Interior,
+}
+
+/// Oberkante eines Bauteils.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum Top {
+    /// Feste Höhe über der Unterkante.
+    Height(f64),
+    /// Bis OKFF des darüberliegenden Geschosses (Geschosshöhe), plus Versatz.
+    Storey { offset: f64 },
+}
+
+/// Wand (IfcWall). Die Bezugslinie läuft von `start` nach `end`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Wall {
+    pub storey: ElementId,
+    pub wall_type: ElementId,
+    pub start: Point2,
+    pub end: Point2,
+    #[serde(default)]
+    pub alignment: WallAlignment,
+    /// Unterkante über OKFF des Geschosses.
+    #[serde(default)]
+    pub base_offset: f64,
+    pub top: Top,
+    /// Stich (Pfeilhöhe) einer gebogenen Wand: Abstand der Bogenmitte von der
+    /// Sehne zwischen `start` und `end`, positiv nach links. 0 bei geraden Wänden.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sagitta: f64,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+/// Kreisbogen der Bezugslinie einer gebogenen Wand.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CircularArc {
+    pub center: Point2,
+    pub radius: f64,
+    /// Winkel des Anfangspunkts im Bogenmaß.
+    pub start_angle: f64,
+    /// Überstrichener Winkel, positiv gegen den Uhrzeigersinn.
+    pub sweep: f64,
+}
+
+impl CircularArc {
+    pub fn length(&self) -> f64 {
+        self.radius * self.sweep.abs()
+    }
+
+    /// Vorzeichen der Querlage: +1, wenn links der Zeichenrichtung außen liegt
+    /// (Bogen im Uhrzeigersinn), sonst -1.
+    fn outward_sign(&self) -> f64 {
+        if self.sweep < 0.0 { 1.0 } else { -1.0 }
+    }
+
+    /// Radius einer Linie im Abstand `across` von der Bezugslinie (links positiv).
+    pub fn radius_at(&self, across: f64) -> f64 {
+        self.radius + self.outward_sign() * across
+    }
+
+    fn angle_at(&self, along: f64) -> f64 {
+        self.start_angle + self.sweep * along / self.length()
+    }
+
+    /// Punkt im Abstand `along` vom Anfang, gemessen auf dem Bogen, und
+    /// `across` quer dazu (links der Laufrichtung positiv).
+    pub fn point_at(&self, along: f64, across: f64) -> Point2 {
+        let angle = self.angle_at(along);
+        let r = self.radius_at(across);
+        Point2::new(self.center.x + r * angle.cos(), self.center.y + r * angle.sin())
+    }
+
+    /// Umkehrung von [`CircularArc::point_at`]. Die Unstetigkeit liegt gegenüber der Bogenmitte.
+    pub fn locate(&self, p: Point2) -> (f64, f64) {
+        use std::f64::consts::{PI, TAU};
+        let angle = (p.y - self.center.y).atan2(p.x - self.center.x);
+        let half = self.sweep.abs() / 2.0;
+        let phi = (self.sweep.signum() * (angle - self.start_angle) - half + PI).rem_euclid(TAU) - PI + half;
+        (phi * self.radius, self.outward_sign() * (p.distance(self.center) - self.radius))
+    }
+
+    /// Laufrichtung im Abstand `along` vom Anfang.
+    pub fn tangent_at(&self, along: f64) -> (f64, f64) {
+        let angle = self.angle_at(along);
+        let sign = self.sweep.signum();
+        (-sign * angle.sin(), sign * angle.cos())
+    }
+}
+
+impl Wall {
+    /// Länge entlang der Bezugslinie, bei gebogenen Wänden die Bogenlänge.
+    pub fn length(&self) -> f64 {
+        self.arc().map_or_else(|| self.chord(), |a| a.length())
+    }
+
+    /// Abstand zwischen Anfang und Ende.
+    pub fn chord(&self) -> f64 {
+        self.start.distance(self.end)
+    }
+
+    pub fn is_curved(&self) -> bool {
+        self.arc().is_some()
+    }
+
+    /// Bogen der Bezugslinie; `None` bei geraden Wänden.
+    pub fn arc(&self) -> Option<CircularArc> {
+        let c = self.chord();
+        if self.sagitta.abs() < 1e-6 || c < 1e-9 {
+            return None;
+        }
+        let s = self.sagitta;
+        let radius = (c * c / 4.0 + s * s) / (2.0 * s.abs());
+        let (dx, dy) = self.direction();
+        let (nx, ny) = (-dy, dx);
+        let mid = ((self.start.x + self.end.x) / 2.0, (self.start.y + self.end.y) / 2.0);
+        let k = s - s.signum() * radius;
+        let center = Point2::new(mid.0 + nx * k, mid.1 + ny * k);
+        let start_angle = (self.start.y - center.y).atan2(self.start.x - center.x);
+        let sweep = -s.signum() * 4.0 * (2.0 * s.abs() / c).atan();
+        Some(CircularArc { center, radius, start_angle, sweep })
+    }
+
+    /// Einheitsvektor in Zeichenrichtung, bei gebogenen Wänden entlang der Sehne.
+    pub fn direction(&self) -> (f64, f64) {
+        let len = self.chord();
+        if len > 0.0 { ((self.end.x - self.start.x) / len, (self.end.y - self.start.y) / len) } else { (1.0, 0.0) }
+    }
+
+    /// Punkt im Abstand `along` vom Anfang, gemessen entlang der Bezugslinie,
+    /// und `across` quer dazu (links positiv).
+    pub fn point_at(&self, along: f64, across: f64) -> Point2 {
+        match self.arc() {
+            Some(a) => a.point_at(along, across),
+            None => {
+                let (dx, dy) = self.direction();
+                Point2::new(self.start.x + dx * along - dy * across, self.start.y + dy * along + dx * across)
+            }
+        }
+    }
+
+    /// Lage eines Punkts zur Bezugslinie: (entlang ab Anfang, quer, links positiv).
+    /// Umkehrung von [`Wall::point_at`].
+    pub fn locate(&self, p: Point2) -> (f64, f64) {
+        match self.arc() {
+            Some(a) => a.locate(p),
+            None => {
+                let (dx, dy) = self.direction();
+                let (px, py) = (p.x - self.start.x, p.y - self.start.y);
+                (px * dx + py * dy, -px * dy + py * dx)
+            }
+        }
+    }
+
+    /// Richtung der Bezugslinie im Abstand `along` vom Anfang.
+    pub fn tangent_at(&self, along: f64) -> (f64, f64) {
+        self.arc().map_or_else(|| self.direction(), |a| a.tangent_at(along))
+    }
+
+    /// Ändert die Länge, der Anfangspunkt bleibt fest. Ein Bogen behält seinen
+    /// Öffnungswinkel, Sehne und Stich wachsen mit.
+    fn set_length(&mut self, length: f64) {
+        let k = length / self.length().max(1e-12);
+        self.end =
+            Point2::new(self.start.x + (self.end.x - self.start.x) * k, self.start.y + (self.end.y - self.start.y) * k);
+        self.sagitta *= k;
+    }
+
+    /// Lage der Schichten quer zur Bezugslinie, als (links, rechts) je Schicht,
+    /// von außen nach innen. Positive Werte liegen links der Bezugslinie.
+    pub fn layer_offsets(&self, wall_type: &WallType) -> Vec<(f64, f64)> {
+        let total = wall_type.thickness();
+        let mut left = match self.alignment {
+            WallAlignment::Center => total / 2.0,
+            WallAlignment::Exterior => 0.0,
+            WallAlignment::Interior => total,
+        };
+        wall_type
+            .layers
+            .iter()
+            .map(|l| {
+                let right = left - l.thickness;
+                let pair = (left, right);
+                left = right;
+                pair
+            })
+            .collect()
+    }
+}
+
+/// Öffnung in einer Wand (IfcOpeningElement). Rechteckig, ohne Rahmen,
+/// Laibung oder Anschlag; Türen und Fenster folgen in M2.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Opening {
     /// Die Wand, in der die Öffnung sitzt.
     pub host: ElementId,
-    /// Abstand vom Wandanfang bis zur Kante der Öffnung, entlang der Achse.
+    /// Abstand vom Wandanfang bis zur Kante der Öffnung, entlang der Bezugslinie.
     pub offset: f64,
     pub width: f64,
     pub height: f64,
-    /// Brüstungshöhe über Unterkante Wand. Geschosse und Fertigfußboden folgen in M1.
+    /// Brüstungshöhe über Unterkante Wand.
     pub sill_height: f64,
+}
+
+/// Stütze (IfcColumn).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Column {
+    pub storey: ElementId,
+    /// Mittelpunkt des Querschnitts.
+    pub position: Point2,
+    pub profile: ColumnProfile,
+    /// Drehung des Querschnitts gegen den Uhrzeigersinn, in Grad.
+    #[serde(default)]
+    pub rotation: f64,
+    /// Schlüssel des Materials im Bürostandard.
+    pub material: String,
+    #[serde(default)]
+    pub base_offset: f64,
+    pub top: Top,
+}
+
+/// Querschnitt einer Stütze.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum ColumnProfile {
+    Rectangle { width: f64, depth: f64 },
+    Circle { diameter: f64 },
 }
 
 /// Parameter, die sich über eine Operation ändern lassen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Param {
     WallLength,
-    WallThickness,
+    /// Stich einer gebogenen Wand, 0 macht sie gerade.
+    WallSagitta,
+    /// Feste Höhe; nur bei Wänden mit `Top::Height`.
     WallHeight,
+    /// Versatz der Oberkante; nur bei Wänden, die am Geschoss hängen.
+    WallTopOffset,
+    /// Unterkante über OKFF, für Wände und Stützen.
+    BaseOffset,
     OpeningOffset,
     OpeningWidth,
     OpeningHeight,
     OpeningSillHeight,
+    StoreyElevation,
+    StoreyHeight,
+    /// Breite einer Rechteckstütze oder Durchmesser einer Rundstütze.
+    ColumnWidth,
+    ColumnDepth,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn arc_wall(sagitta: f64) -> Wall {
+        Wall {
+            storey: ElementId(1),
+            wall_type: ElementId(2),
+            start: Point2::new(0.0, 0.0),
+            end: Point2::new(4.0, 0.0),
+            alignment: WallAlignment::Center,
+            base_offset: 0.0,
+            top: Top::Height(2.5),
+            sagitta,
+        }
+    }
+
+    fn close(a: Point2, b: Point2) -> bool {
+        a.distance(b) < 1e-9
+    }
+
+    #[test]
+    fn semicircle_bulges_to_the_left() {
+        let w = arc_wall(2.0);
+        let a = w.arc().unwrap();
+        assert!(close(a.center, Point2::new(2.0, 0.0)));
+        assert!((a.radius - 2.0).abs() < 1e-12);
+        assert!((w.length() - std::f64::consts::PI * 2.0).abs() < 1e-9);
+        // Bogenmitte liegt 2 m links der Sehne.
+        assert!(close(w.point_at(w.length() / 2.0, 0.0), Point2::new(2.0, 2.0)));
+        assert!(close(w.point_at(w.length(), 0.0), w.end));
+        // Links ist außen: 0,1 m links der Bogenmitte liegt weiter oben.
+        assert!(close(w.point_at(w.length() / 2.0, 0.1), Point2::new(2.0, 2.1)));
+        // Am Anfang zeigt die Tangente nach oben.
+        let (tx, ty) = w.tangent_at(0.0);
+        assert!(tx.abs() < 1e-9 && (ty - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn locate_inverts_point_at() {
+        for sagitta in [0.0, 0.5, -0.8, 2.0] {
+            let w = arc_wall(sagitta);
+            for (along, across) in [(0.0, 0.0), (1.3, 0.12), (w.length(), -0.2), (-0.4, 0.05), (w.length() + 0.3, 0.0)]
+            {
+                let (s, t) = w.locate(w.point_at(along, across));
+                assert!(
+                    (s - along).abs() < 1e-9 && (t - across).abs() < 1e-9,
+                    "{sagitta}: {along}, {across} -> {s}, {t}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn set_length_keeps_the_angle() {
+        let mut w = arc_wall(1.0);
+        let sweep = w.arc().unwrap().sweep;
+        w.set_length(w.length() * 1.5);
+        assert!((w.arc().unwrap().sweep - sweep).abs() < 1e-12);
+        assert!((w.sagitta - 1.5).abs() < 1e-12);
+        assert!(close(w.start, Point2::new(0.0, 0.0)));
+    }
 }

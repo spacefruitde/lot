@@ -2,14 +2,15 @@
 
 Jede Abhängigkeit und jedes übernommene Stück Code steht hier mit Lizenz. Regeln siehe CLAUDE.md, Punkt 12.
 
-Stand M0 (22.10.2026). Die Tabelle nennt die direkten Abhängigkeiten. Insgesamt zieht der Kern 250 Crates nach. Alle stehen unter MIT, Apache-2.0, BSD, Zlib, ISC, BSL-1.0, Unicode-3.0 oder sind gemeinfrei, einzige Ausnahme ist UniFFI (MPL-2.0, nur als Bibliothek). GPL oder AGPL kommt nicht vor. Prüfen mit `cargo metadata` (Auswertung im Prüfpaket M0).
+Stand M1 (23.10.2026). Die Tabelle nennt die direkten Abhängigkeiten. Insgesamt zieht der Kern 254 Crates nach. Alle stehen unter MIT, Apache-2.0, BSD, Zlib, ISC, BSL-1.0, Unicode-3.0 oder sind gemeinfrei, einzige Ausnahme ist UniFFI (MPL-2.0, nur als Bibliothek). GPL oder AGPL kommt nicht vor. Prüfen mit `cargo metadata` (Auswertung im Prüfpaket M0).
 
 ## Kern (`core/`)
 
 | Name | Version | Lizenz | Wofür | Art (Bibliothek / übernommener Code) |
 |---|---|---|---|---|
 | manifold-rust | 0.18.0 | Apache-2.0 | 3D-Booleans (Wand minus Öffnung), Schnitte | Bibliothek |
-| clipper2-rust | 1.2.0 | BSL-1.0 | 2D-Polygone, kommt mit manifold-rust | Bibliothek |
+| clipper2-rust | 1.2.0 | BSL-1.0 | 2D-Booleans der Wandanschlüsse, auch über manifold-rust | Bibliothek |
+| lyon_tessellation | 1.0.23 | MIT OR Apache-2.0 | Planansicht auf dem Bildschirm: Linien und Flächen in Dreiecke | Bibliothek |
 | wgpu | 30.0.1 | MIT OR Apache-2.0 | Renderer der 3D-Ansicht (Metal auf dem Mac) | Bibliothek |
 | raw-window-handle | 0.6.2 | MIT OR Apache-2.0 OR Zlib | Übergabe des NSView an wgpu | Bibliothek |
 | glam | 0.34.1 | MIT OR Apache-2.0 | Vektoren und Matrizen der Kamera | Bibliothek |

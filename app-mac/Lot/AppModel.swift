@@ -3,26 +3,34 @@ import Observation
 import UniformTypeIdentifiers
 
 /// Zustand des geöffneten Projekts. Alle Änderungen am Modell laufen über den
-/// Rust-Kern, die App hält nur, was sie für die Anzeige braucht.
+/// Rust-Kern; die App hält nur, was sie für die Anzeige braucht.
 @MainActor
 @Observable
 final class AppModel {
     private(set) var document: LotDocument
-    private(set) var parameters: [ParamValue] = []
     private(set) var fileURL: URL?
     private(set) var canUndo = false
     private(set) var canRedo = false
-    /// Zählt Änderungen am Modell. Die 3D-Ansicht rechnet neu, wenn sich der Wert ändert.
-    private(set) var revision = 0
-    /// Zählt Aufforderungen, die Ansicht auf das ganze Modell einzustellen.
-    private(set) var fitRequest = 0
+    /// Parameter der gewählten Elemente.
+    private(set) var parameters: [ParamValue] = []
+    /// Werkzeug, Geschoss, Maßstab, Auswahl und Hinweis aus dem Kern.
+    private(set) var viewState: ViewState?
+    private(set) var commands: [CommandItem] = []
+    /// Zählt neue Dokumente; die Ansicht lädt dann neu.
+    private(set) var documentGeneration = 0
     var stats = ViewportStatsDisplay()
     var errorMessage: String?
+    var showPalette = false
+
+    /// Die Ansicht, sobald ihr NSView steht.
+    private(set) weak var viewport: Viewport?
+    /// Bittet die Ansicht, neu zu zeichnen.
+    var requestRedraw: (() -> Void)?
 
     static let fileType = UTType(filenameExtension: "lot") ?? .data
 
     init() {
-        document = LotDocument.newSample()
+        document = LotDocument.newEmpty()
         refresh()
     }
 
@@ -30,27 +38,83 @@ final class AppModel {
         fileURL?.deletingPathExtension().lastPathComponent ?? document.name()
     }
 
-    func newSample() {
-        document = LotDocument.newSample()
-        fileURL = nil
-        refresh()
-        fitRequest += 1
+    var isPlan: Bool { viewState?.view != .model }
+
+    // MARK: Ansicht
+
+    func attach(_ viewport: Viewport) {
+        self.viewport = viewport
+        stats.rebuildMs = viewport.setDocument(document: document)
+        updateViewState()
     }
 
-    func set(_ value: Double, for parameter: ParamValue) {
-        perform { try document.setParam(element: parameter.element, kind: parameter.kind, value: value) }
+    /// Ergebnis eines Ereignisses in der Ansicht verarbeiten.
+    func handle(_ result: EventResult) {
+        if let error = result.error {
+            errorMessage = error
+        }
+        if result.modelChanged {
+            refresh()
+        }
+        updateViewState()
     }
 
-    func undo() {
-        perform { _ = try document.undo() }
+    func run(_ id: String) {
+        guard let viewport else { return }
+        handle(viewport.runCommand(id: id))
+        requestRedraw?()
     }
 
-    func redo() {
-        perform { _ = try document.redo() }
+    func setView(_ view: ViewKind) {
+        viewport?.setView(view: view)
+        updateViewState()
+        requestRedraw?()
     }
 
     func zoomToFit() {
-        fitRequest += 1
+        viewport?.zoomToFit()
+        requestRedraw?()
+    }
+
+    /// Bezeichnung eines Elements für den Inspektor.
+    func label(for element: UInt64) -> String {
+        document.elementLabel(element: element)
+    }
+
+    private func updateViewState() {
+        guard let viewport else { return }
+        let state = viewport.state()
+        viewState = state
+        commands = viewport.commands()
+        parameters = state.selection.isEmpty ? [] : document.parameters(ids: state.selection)
+    }
+
+    // MARK: Modell
+
+    func set(_ value: Double, for parameter: ParamValue) {
+        do {
+            try document.setParam(element: parameter.element, kind: parameter.kind, value: value)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+        if let viewport {
+            stats.rebuildMs = viewport.refresh()
+        }
+        refresh()
+        updateViewState()
+        requestRedraw?()
+    }
+
+    func undo() {
+        if viewport != nil { run("Undo") } else { _ = try? document.undo(); refresh() }
+    }
+
+    func redo() {
+        if viewport != nil { run("Redo") } else { _ = try? document.redo(); refresh() }
+    }
+
+    func newProject() {
+        replace(with: LotDocument.newEmpty(), url: nil)
     }
 
     func openWithPanel() {
@@ -59,10 +123,21 @@ final class AppModel {
         panel.allowsOtherFileTypes = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            document = try LotDocument.open(path: url.path)
-            fileURL = url
-            refresh()
-            fitRequest += 1
+            replace(with: try LotDocument.open(path: url.path), url: url)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+    }
+
+    /// Öffnet ein Testprojekt (Ordner mit projekt.ron), etwa das EFH zum Ausprobieren.
+    func openTestprojectWithPanel() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.message = "Ordner eines Testprojekts wählen (mit projekt.ron)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            replace(with: try LotDocument.openTestproject(path: url.path), url: nil)
         } catch {
             errorMessage = Self.message(for: error)
         }
@@ -84,6 +159,18 @@ final class AppModel {
         write(to: url)
     }
 
+    private func replace(with document: LotDocument, url: URL?) {
+        self.document = document
+        fileURL = url
+        documentGeneration += 1
+        if let viewport {
+            stats.rebuildMs = viewport.setDocument(document: document)
+        }
+        refresh()
+        updateViewState()
+        requestRedraw?()
+    }
+
     private func write(to url: URL) {
         do {
             try document.save(path: url.path)
@@ -93,20 +180,9 @@ final class AppModel {
         }
     }
 
-    private func perform(_ action: () throws -> Void) {
-        do {
-            try action()
-        } catch {
-            errorMessage = Self.message(for: error)
-        }
-        refresh()
-    }
-
     private func refresh() {
-        parameters = document.parameters()
         canUndo = document.canUndo()
         canRedo = document.canRedo()
-        revision += 1
     }
 
     static func message(for error: Error) -> String {
@@ -119,7 +195,7 @@ final class AppModel {
     }
 }
 
-/// Messwerte der 3D-Ansicht für die Statuszeile.
+/// Messwerte der Ansicht für die Statuszeile.
 struct ViewportStatsDisplay: Equatable {
     var frameMs: Double = 0
     var rebuildMs: Double = 0

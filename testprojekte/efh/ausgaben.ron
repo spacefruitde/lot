@@ -1,0 +1,10 @@
+// Ausgaben von lot-cli render für dieses Testprojekt.
+[
+    FloorPlan(name: "eg-100", storey: 2, scale: 100.0),
+    FloorPlan(name: "eg-50", storey: 2, scale: 50.0),
+    FloorPlan(name: "eg-200", storey: 2, scale: 200.0),
+    FloorPlan(name: "kg-100", storey: 1, scale: 100.0),
+    FloorPlan(name: "dg-100", storey: 3, scale: 100.0),
+    View3d(name: "efh-3d"),
+    PlanView(name: "eg-planansicht", storey: 2, scale: 100.0),
+]

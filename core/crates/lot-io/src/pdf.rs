@@ -24,17 +24,28 @@ use crate::plan_font::plan_font;
 pub const PT_PER_MM: f64 = 72.0 / 25.4;
 
 pub fn to_pdf(sheet: &Sheet) -> Result<Vec<u8>, IoError> {
-    render(sheet, SerializeSettings::default())
+    render(std::slice::from_ref(sheet), SerializeSettings::default())
 }
 
-fn render(sheet: &Sheet, settings: SerializeSettings) -> Result<Vec<u8>, IoError> {
+/// Mehrere Blätter als Seiten eines PDF, etwa der Wandknoten-Katalog.
+pub fn to_pdf_pages(sheets: &[Sheet]) -> Result<Vec<u8>, IoError> {
+    render(sheets, SerializeSettings::default())
+}
+
+fn render(sheets: &[Sheet], settings: SerializeSettings) -> Result<Vec<u8>, IoError> {
     let font_data: Arc<Vec<u8>> = plan_font().data().clone();
     let font = Font::new(font_data.into(), 0).ok_or_else(|| IoError::Pdf("Planschrift nicht lesbar".into()))?;
+    let title = sheets.first().map_or(String::new(), |s| s.title.clone());
 
     let mut document = Document::new_with(settings);
-    document.set_metadata(
-        Metadata::new().title(sheet.title.clone()).creator(concat!("Lot ", env!("CARGO_PKG_VERSION")).to_string()),
-    );
+    document.set_metadata(Metadata::new().title(title).creator(concat!("Lot ", env!("CARGO_PKG_VERSION")).to_string()));
+    for sheet in sheets {
+        draw_page(&mut document, sheet, &font)?;
+    }
+    document.finish().map_err(|e| IoError::Pdf(format!("{e:?}")))
+}
+
+fn draw_page(document: &mut Document, sheet: &Sheet, font: &Font) -> Result<(), IoError> {
     let (w, h) = (sheet.width_mm * PT_PER_MM, sheet.height_mm * PT_PER_MM);
     let settings =
         PageSettings::from_wh(w as f32, h as f32).ok_or_else(|| IoError::Pdf("Ungültige Blattgröße".into()))?;
@@ -94,7 +105,7 @@ fn render(sheet: &Sheet, settings: SerializeSettings) -> Result<Vec<u8>, IoError
     }
     surface.finish();
     page.finish();
-    document.finish().map_err(|e| IoError::Pdf(format!("{e:?}")))
+    Ok(())
 }
 
 fn stroke_line(surface: &mut Surface<'_>, line: &Line, pt: &impl Fn(&PaperPoint) -> (f32, f32)) {
@@ -153,7 +164,7 @@ mod tests {
         sheet.line(vec![PaperPoint::new(10.0, 10.0), PaperPoint::new(60.0, 10.0)], Pen::mm(0.5));
         sheet.text(10.0, 20.0, "Wohnen 24,31 m²", 3.5, lot_plan::Anchor::Left);
         let settings = SerializeSettings { compress_content_streams: false, ..Default::default() };
-        let pdf = render(&sheet, settings).unwrap();
+        let pdf = render(std::slice::from_ref(&sheet), settings).unwrap();
         let text = String::from_utf8_lossy(&pdf);
         // A4 quer: 297 x 210 mm = 841,89 x 595,28 pt.
         assert!(text.contains("/MediaBox[0 0 841.8898 595.2756]"), "Blattgröße falsch");

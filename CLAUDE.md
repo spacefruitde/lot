@@ -43,20 +43,21 @@ Angelegt in M0, immer aktuell halten. Rust über rustup, die Version steht in `c
 - CI: `.github/workflows/pruefen.yml` prüft bei jedem Push Formatierung, clippy und Tests unter Linux und macOS und baut die Mac-App
 - Kern unter Linux lokal prüfen, ohne Ordnerfreigabe für Docker: `tar --exclude core/target -cf - core testprojekte | docker run -i --rm rust:1.99 bash -c 'mkdir /lot && tar -C /lot -xf - && cd /lot/core && cargo test --workspace'`
 - Testprojekt rechnen und Pläne ausgeben: `cd core && cargo run -p lot-cli -- render ../testprojekte/<name> --out ../out/<name>`
-  - schreibt `m0-pruefblatt.pdf/.svg/.png`, `3d.png` und `projekt.lot`
+  - schreibt, was `testprojekte/<name>/ausgaben.ron` beschreibt (Grundrisse, Katalog, 3D-Bild, Planansicht), dazu `projekt.lot`
   - `--no-3d` auf Rechnern ohne Grafikkarte (etwa Cloud-Sessions)
   - die Planschrift liegt in `core/assets/fonts/`, ein anderer Ort geht über `LOT_PLAN_FONT`
 - Swift-Anbindung neu erzeugen: `app-mac/scripts/build-core.sh` (läuft auch automatisch als erste Build-Phase in Xcode)
 - Mac-App bauen: `cd app-mac && xcodebuild -project Lot.xcodeproj -scheme Lot -configuration Debug -derivedDataPath build/DerivedData build`
 - Mac-App für Apple Silicon und Intel (ab macOS 14): dasselbe mit `-configuration Release -destination 'generic/platform=macOS'`
-- Mac-App starten: `open app-mac/build/DerivedData/Build/Products/Debug/Lot.app`, oder in Xcode `app-mac/Lot.xcodeproj` öffnen und ⌘R
+- Mac-App starten: `open app-mac/build/DerivedData/Build/Products/Debug/Lot.app`, oder in Xcode `app-mac/Lot.xcodeproj` öffnen und ⌘R. Testprojekte öffnet die App über Ablage, Testprojekt öffnen (⇧⌘O).
+- Zeitmessung gegen das Ziel aus PLAN.md (Wandänderung unter 50 ms): `cd core && cargo test -p lot-cli --test messung -- --ignored --nocapture`
 - Golden-Tests: `core/crates/lot-cli/tests/golden.rs` vergleicht jede Referenz in `testprojekte/*/referenz/` zeichengenau mit dem neu gerechneten SVG. Referenzen nur nach Bens Freigabe anlegen oder ändern (Regel 3).
 
 ## Aufbau
 
 Siehe `docs/PLAN.md`, Abschnitt 4.
 
-- `core/`: Rust-Workspace (Modell, Geometrie, Pläne, Regeln, Dateien, Renderer, Swift-Schnittstelle, Kommandozeile)
+- `core/`: Rust-Workspace (Modell, Geometrie, Pläne, Regeln, Dateien, Renderer, Bearbeiten, Swift-Schnittstelle, Kommandozeile)
 - `app-mac/`: Mac-App in Swift
 - `testprojekte/`: Referenzprojekte als lesbare Textdateien, dazu die freigegebenen Referenzpläne
 - `pruefpakete/`: Lieferungen zum Prüfen für Ben

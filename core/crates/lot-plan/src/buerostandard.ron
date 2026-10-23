@@ -1,0 +1,101 @@
+// Bürostandard (2.08): Materialien, Schraffuren und Stiftsets je Maßstab.
+//
+// VORSCHLAG für M1, von Ben zu prüfen (Prüfpaket M1). Grundlage:
+// DIN 1356-1:1995-02 „Bauzeichnungen; Arten, Inhalte und Grundregeln der
+// Darstellung“ (Schraffuren für Baustoffe, Liniengruppen) und
+// DIN EN ISO 128-20:2002 (Linienbreiten 0,13 bis 1,0 mm).
+//
+// Schraffurabstände und Linienbreiten in mm auf dem Papier, Winkel in Grad
+// gegen die Blattwaagerechte. Farben für die 3D-Ansicht in sRGB.
+OfficeStandard(
+    materials: {
+        "kalksandstein": Material(
+            name: "Kalksandstein",
+            color: (236, 233, 226),
+            cut: Lines(angle: 45.0, spacing: 1.25),
+        ),
+        "ziegel": Material(
+            name: "Ziegel",
+            color: (226, 196, 176),
+            cut: Lines(angle: 45.0, spacing: 1.25),
+        ),
+        "mauerwerk": Material(
+            name: "Mauerwerk",
+            color: (230, 222, 210),
+            cut: Lines(angle: 45.0, spacing: 1.25),
+        ),
+        "stahlbeton": Material(
+            name: "Stahlbeton",
+            color: (205, 207, 208),
+            cut: Cross(angle: 45.0, spacing: 1.25),
+        ),
+        "beton": Material(
+            name: "Beton unbewehrt",
+            color: (214, 214, 210),
+            cut: Lines(angle: 45.0, spacing: 2.5),
+        ),
+        "daemmung": Material(
+            name: "Dämmung weich (Mineralwolle)",
+            color: (240, 226, 160),
+            cut: Insulation(soft: true),
+        ),
+        "daemmung_hart": Material(
+            name: "Dämmung hart (WDVS, EPS)",
+            color: (244, 238, 214),
+            cut: Insulation(soft: false),
+        ),
+        "putz": Material(
+            name: "Putz",
+            color: (246, 245, 241),
+            cut: Empty,
+        ),
+        "gipskarton": Material(
+            name: "Gipskarton",
+            color: (242, 242, 240),
+            cut: Empty,
+        ),
+        "holz": Material(
+            name: "Holz",
+            color: (214, 180, 132),
+            cut: Lines(angle: 45.0, spacing: 3.0),
+        ),
+        "luftschicht": Material(
+            name: "Luftschicht",
+            color: (250, 250, 250),
+            cut: Empty,
+        ),
+        "klinker": Material(
+            name: "Klinker (Vormauerschale)",
+            color: (176, 108, 84),
+            cut: Lines(angle: 45.0, spacing: 1.25),
+        ),
+    },
+    // Je Maßstabsbereich: Detailgrad und Stifte. Es gilt der erste Eintrag,
+    // dessen `up_to` mindestens so groß ist wie die Maßstabszahl.
+    scales: [
+        // 1:50 und größer: alle Schichten mit Materialschraffur.
+        ScaleStyle(
+            up_to: 50.0,
+            detail: Fine,
+            pens: Pens(cut: 0.7, layer: 0.25, hatch: 0.18, view: 0.35, hidden: 0.25, grid: 0.18, annotation: 0.25),
+            text: 3.5,
+            grid_bubble: 10.0,
+        ),
+        // 1:100: Tragschicht schraffiert, weitere Schichten nur als Linie.
+        ScaleStyle(
+            up_to: 100.0,
+            detail: Medium,
+            pens: Pens(cut: 0.5, layer: 0.18, hatch: 0.13, view: 0.25, hidden: 0.18, grid: 0.13, annotation: 0.18),
+            text: 2.5,
+            grid_bubble: 8.0,
+        ),
+        // 1:200 und kleiner: Wände als gefüllte Fläche ohne Schichten.
+        ScaleStyle(
+            up_to: 100000.0,
+            detail: Coarse,
+            pens: Pens(cut: 0.35, layer: 0.13, hatch: 0.13, view: 0.18, hidden: 0.13, grid: 0.13, annotation: 0.18),
+            text: 2.0,
+            grid_bubble: 6.0,
+        ),
+    ],
+)

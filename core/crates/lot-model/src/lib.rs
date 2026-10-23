@@ -11,7 +11,12 @@
 mod document;
 mod element;
 mod operation;
+mod project;
 
 pub use document::{Document, ModelError};
-pub use element::{Element, ElementId, ElementKind, Opening, Param, Point2, Project, Wall};
+pub use element::{
+    CircularArc, Column, ColumnProfile, Element, ElementId, ElementKind, GridLine, Layer, LayerFunction, Opening,
+    Param, Point2, Storey, Top, Wall, WallAlignment, WallType,
+};
 pub use operation::Operation;
+pub use project::Project;

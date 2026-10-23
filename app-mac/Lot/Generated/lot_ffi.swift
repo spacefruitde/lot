@@ -605,12 +605,17 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     
     func canUndo()  -> Bool
     
+    /**
+     * Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36“.
+     */
+    func elementLabel(element: UInt64)  -> String
+    
     func name()  -> String
     
     /**
-     * Alle änderbaren Parameter aller Elemente, nach Element geordnet.
+     * Alle änderbaren Parameter der Elemente `ids`, oder aller Elemente, wenn `ids` leer ist.
      */
-    func parameters()  -> [ParamValue]
+    func parameters(ids: [UInt64])  -> [ParamValue]
     
     func redo() throws  -> Bool
     
@@ -673,6 +678,17 @@ open class LotDocument: LotDocumentProtocol, @unchecked Sendable {
 
     
     /**
+     * Neues, leeres Projekt mit Erdgeschoss und üblichen Wandaufbauten.
+     */
+public static func newEmpty() -> LotDocument  {
+    return try!  FfiConverterTypeLotDocument_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_constructor_lotdocument_new_empty(uniffiCallStatus
+    )
+})
+}
+    
+    /**
      * Beispielprojekt aus M0: eine Wand mit Fenster.
      */
 public static func newSample() -> LotDocument  {
@@ -687,6 +703,18 @@ public static func `open`(path: String)throws  -> LotDocument  {
     return try  FfiConverterTypeLotDocument_lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_constructor_lotdocument_open(
+        FfiConverterString.lower(path),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Testprojekt aus einem Ordner mit `projekt.ron` (zum Ausprobieren, etwa das EFH).
+     */
+public static func openTestproject(path: String)throws  -> LotDocument  {
+    return try  FfiConverterTypeLotDocument_lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_constructor_lotdocument_open_testproject(
         FfiConverterString.lower(path),uniffiCallStatus
     )
 })
@@ -712,6 +740,19 @@ open func canUndo() -> Bool  {
 })
 }
     
+    /**
+     * Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36“.
+     */
+open func elementLabel(element: UInt64) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_element_label(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),uniffiCallStatus
+    )
+})
+}
+    
 open func name() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
@@ -722,13 +763,14 @@ open func name() -> String  {
 }
     
     /**
-     * Alle änderbaren Parameter aller Elemente, nach Element geordnet.
+     * Alle änderbaren Parameter der Elemente `ids`, oder aller Elemente, wenn `ids` leer ist.
      */
-open func parameters() -> [ParamValue]  {
+open func parameters(ids: [UInt64]) -> [ParamValue]  {
     return try!  FfiConverterSequenceTypeParamValue.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_lotdocument_parameters(
-            self.uniffiCloneHandle(),uniffiCallStatus
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
     )
 })
 }
@@ -821,17 +863,35 @@ public func FfiConverterTypeLotDocument_lower(_ value: LotDocument) -> UInt64 {
 
 
 
-/**
- * Die 3D-Ansicht.
- */
 public protocol ViewportProtocol: AnyObject, Sendable {
     
     /**
-     * Drehen um das Ziel. Verschiebung in Punkten, wie sie das Trackpad liefert.
+     * Befehle für die Befehlspalette: Editor und Ansicht.
+     */
+    func commands()  -> [CommandItem]
+    
+    func key(key: KeyInput)  -> EventResult
+    
+    /**
+     * Zwei Finger: in 3D drehen, im Plan verschieben. Bewegung in Punkten.
      */
     func orbit(dx: Float, dy: Float) 
     
     func pan(dx: Float, dy: Float) 
+    
+    func pointerDown(x: Float, y: Float, clicks: UInt32, shift: Bool)  -> EventResult
+    
+    func pointerDragged(x: Float, y: Float, shift: Bool)  -> EventResult
+    
+    func pointerMoved(x: Float, y: Float, shift: Bool)  -> EventResult
+    
+    func pointerUp()  -> EventResult
+    
+    /**
+     * Das Modell hat sich außerhalb der Ansicht geändert (Eigenschaften, Menü).
+     * Rechnet neu und gibt die Zeit in Millisekunden zurück.
+     */
+    func refresh()  -> Double
     
     /**
      * Zeichnet ein Bild. `false`, wenn das Fenster gerade verdeckt ist; dann erneut versuchen.
@@ -841,25 +901,35 @@ public protocol ViewportProtocol: AnyObject, Sendable {
     func resize(widthPx: UInt32, heightPx: UInt32, scale: Float) 
     
     /**
-     * Rechnet die Geometrie des Dokuments und lädt sie auf die Grafikkarte.
-     * Gibt die benötigte Zeit in Millisekunden zurück.
+     * Führt einen Befehl aus der Befehlspalette aus.
      */
-    func show(document: LotDocument) throws  -> Double
+    func runCommand(id: String)  -> EventResult
+    
+    /**
+     * Zeigt ein Dokument. Rechnet alles neu und stellt beide Ansichten auf das ganze Modell ein.
+     */
+    func setDocument(document: LotDocument)  -> Double
+    
+    /**
+     * Maßstab der Planansicht (100 für 1:100). Der Zoom bleibt gleich groß auf dem Bildschirm.
+     */
+    func setPlanScale(scale: Double) 
+    
+    func setView(view: ViewKind) 
+    
+    func state()  -> ViewState
     
     func triangleCount()  -> UInt32
     
     /**
      * Zoomen zum Zeiger. Faktor größer 1 zoomt hinein. `x`, `y`: Lage des
-     * Zeigers in Punkten vom Mittelpunkt der Ansicht, y nach oben.
+     * Zeigers in Punkten von der Mitte der Ansicht, y nach oben.
      */
     func zoom(factor: Float, x: Float, y: Float) 
     
     func zoomToFit() 
     
 }
-/**
- * Die 3D-Ansicht.
- */
 open class Viewport: ViewportProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
 
@@ -933,7 +1003,29 @@ public convenience init(nsView: UInt64, widthPx: UInt32, heightPx: UInt32, scale
 
     
     /**
-     * Drehen um das Ziel. Verschiebung in Punkten, wie sie das Trackpad liefert.
+     * Befehle für die Befehlspalette: Editor und Ansicht.
+     */
+open func commands() -> [CommandItem]  {
+    return try!  FfiConverterSequenceTypeCommandItem.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_commands(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+open func key(key: KeyInput) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_key(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeKeyInput_lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Zwei Finger: in 3D drehen, im Plan verschieben. Bewegung in Punkten.
      */
 open func orbit(dx: Float, dy: Float)  {try! rustCall() {
         uniffiCallStatus in
@@ -953,6 +1045,65 @@ open func pan(dx: Float, dy: Float)  {try! rustCall() {
         FfiConverterFloat.lower(dy),uniffiCallStatus
     )
 }
+}
+    
+open func pointerDown(x: Float, y: Float, clicks: UInt32, shift: Bool) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_pointer_down(
+            self.uniffiCloneHandle(),
+        FfiConverterFloat.lower(x),
+        FfiConverterFloat.lower(y),
+        FfiConverterUInt32.lower(clicks),
+        FfiConverterBool.lower(shift),uniffiCallStatus
+    )
+})
+}
+    
+open func pointerDragged(x: Float, y: Float, shift: Bool) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_pointer_dragged(
+            self.uniffiCloneHandle(),
+        FfiConverterFloat.lower(x),
+        FfiConverterFloat.lower(y),
+        FfiConverterBool.lower(shift),uniffiCallStatus
+    )
+})
+}
+    
+open func pointerMoved(x: Float, y: Float, shift: Bool) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_pointer_moved(
+            self.uniffiCloneHandle(),
+        FfiConverterFloat.lower(x),
+        FfiConverterFloat.lower(y),
+        FfiConverterBool.lower(shift),uniffiCallStatus
+    )
+})
+}
+    
+open func pointerUp() -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_pointer_up(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Das Modell hat sich außerhalb der Ansicht geändert (Eigenschaften, Menü).
+     * Rechnet neu und gibt die Zeit in Millisekunden zurück.
+     */
+open func refresh() -> Double  {
+    return try!  FfiConverterDouble.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_refresh(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
 }
     
     /**
@@ -979,15 +1130,57 @@ open func resize(widthPx: UInt32, heightPx: UInt32, scale: Float)  {try! rustCal
 }
     
     /**
-     * Rechnet die Geometrie des Dokuments und lädt sie auf die Grafikkarte.
-     * Gibt die benötigte Zeit in Millisekunden zurück.
+     * Führt einen Befehl aus der Befehlspalette aus.
      */
-open func show(document: LotDocument)throws  -> Double  {
-    return try  FfiConverterDouble.lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
+open func runCommand(id: String) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_lot_ffi_fn_method_viewport_show(
+    uniffi_lot_ffi_fn_method_viewport_run_command(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Zeigt ein Dokument. Rechnet alles neu und stellt beide Ansichten auf das ganze Modell ein.
+     */
+open func setDocument(document: LotDocument) -> Double  {
+    return try!  FfiConverterDouble.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_set_document(
             self.uniffiCloneHandle(),
         FfiConverterTypeLotDocument_lower(document),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Maßstab der Planansicht (100 für 1:100). Der Zoom bleibt gleich groß auf dem Bildschirm.
+     */
+open func setPlanScale(scale: Double)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_set_plan_scale(
+            self.uniffiCloneHandle(),
+        FfiConverterDouble.lower(scale),uniffiCallStatus
+    )
+}
+}
+    
+open func setView(view: ViewKind)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_set_view(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeViewKind_lower(view),uniffiCallStatus
+    )
+}
+}
+    
+open func state() -> ViewState  {
+    return try!  FfiConverterTypeViewState_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_state(
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
@@ -1003,7 +1196,7 @@ open func triangleCount() -> UInt32  {
     
     /**
      * Zoomen zum Zeiger. Faktor größer 1 zoomt hinein. `x`, `y`: Lage des
-     * Zeigers in Punkten vom Mittelpunkt der Ansicht, y nach oben.
+     * Zeigers in Punkten von der Mitte der Ansicht, y nach oben.
      */
 open func zoom(factor: Float, x: Float, y: Float)  {try! rustCall() {
         uniffiCallStatus in
@@ -1072,6 +1265,147 @@ public func FfiConverterTypeViewport_lower(_ value: Viewport) -> UInt64 {
 
 
 
+public struct CommandItem: Equatable, Hashable {
+    public var id: String
+    public var title: String
+    public var shortcut: String
+    public var group: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, title: String, shortcut: String, group: String) {
+        self.id = id
+        self.title = title
+        self.shortcut = shortcut
+        self.group = group
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension CommandItem: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCommandItem: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CommandItem {
+        return
+            try CommandItem(
+                id: FfiConverterString.read(from: &buf), 
+                title: FfiConverterString.read(from: &buf), 
+                shortcut: FfiConverterString.read(from: &buf), 
+                group: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CommandItem, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterString.write(value.shortcut, into: &buf)
+        FfiConverterString.write(value.group, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCommandItem_lift(_ buf: RustBuffer) throws -> CommandItem {
+    return try FfiConverterTypeCommandItem.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCommandItem_lower(_ value: CommandItem) -> RustBuffer {
+    return FfiConverterTypeCommandItem.lower(value)
+}
+
+
+/**
+ * Ergebnis eines Ereignisses für die App.
+ */
+public struct EventResult: Equatable, Hashable {
+    /**
+     * Die Ansicht muss neu gezeichnet werden.
+     */
+    public var redraw: Bool
+    /**
+     * Das Modell hat sich geändert (Eigenschaften, Undo neu lesen).
+     */
+    public var modelChanged: Bool
+    /**
+     * Meldung für den Benutzer.
+     */
+    public var error: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Die Ansicht muss neu gezeichnet werden.
+         */redraw: Bool, 
+        /**
+         * Das Modell hat sich geändert (Eigenschaften, Undo neu lesen).
+         */modelChanged: Bool, 
+        /**
+         * Meldung für den Benutzer.
+         */error: String?) {
+        self.redraw = redraw
+        self.modelChanged = modelChanged
+        self.error = error
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension EventResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEventResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EventResult {
+        return
+            try EventResult(
+                redraw: FfiConverterBool.read(from: &buf), 
+                modelChanged: FfiConverterBool.read(from: &buf), 
+                error: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EventResult, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.redraw, into: &buf)
+        FfiConverterBool.write(value.modelChanged, into: &buf)
+        FfiConverterOptionString.write(value.error, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEventResult_lift(_ buf: RustBuffer) throws -> EventResult {
+    return try FfiConverterTypeEventResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEventResult_lower(_ value: EventResult) -> RustBuffer {
+    return FfiConverterTypeEventResult.lower(value)
+}
+
+
 /**
  * Ein Parameterwert eines Elements, in Metern.
  */
@@ -1131,6 +1465,175 @@ public func FfiConverterTypeParamValue_lift(_ buf: RustBuffer) throws -> ParamVa
 public func FfiConverterTypeParamValue_lower(_ value: ParamValue) -> RustBuffer {
     return FfiConverterTypeParamValue.lower(value)
 }
+
+
+/**
+ * Zustand für Werkzeugleiste und Statuszeile.
+ */
+public struct ViewState: Equatable, Hashable {
+    public var view: ViewKind
+    /**
+     * Aktives Werkzeug: „select“, „wall“, „grid“ oder „column“.
+     */
+    public var tool: String
+    public var storey: String
+    public var scale: Double
+    public var wallType: String
+    public var selection: [UInt64]
+    public var hint: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(view: ViewKind, 
+        /**
+         * Aktives Werkzeug: „select“, „wall“, „grid“ oder „column“.
+         */tool: String, storey: String, scale: Double, wallType: String, selection: [UInt64], hint: String) {
+        self.view = view
+        self.tool = tool
+        self.storey = storey
+        self.scale = scale
+        self.wallType = wallType
+        self.selection = selection
+        self.hint = hint
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ViewState: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeViewState: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ViewState {
+        return
+            try ViewState(
+                view: FfiConverterTypeViewKind.read(from: &buf), 
+                tool: FfiConverterString.read(from: &buf), 
+                storey: FfiConverterString.read(from: &buf), 
+                scale: FfiConverterDouble.read(from: &buf), 
+                wallType: FfiConverterString.read(from: &buf), 
+                selection: FfiConverterSequenceUInt64.read(from: &buf), 
+                hint: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ViewState, into buf: inout [UInt8]) {
+        FfiConverterTypeViewKind.write(value.view, into: &buf)
+        FfiConverterString.write(value.tool, into: &buf)
+        FfiConverterString.write(value.storey, into: &buf)
+        FfiConverterDouble.write(value.scale, into: &buf)
+        FfiConverterString.write(value.wallType, into: &buf)
+        FfiConverterSequenceUInt64.write(value.selection, into: &buf)
+        FfiConverterString.write(value.hint, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeViewState_lift(_ buf: RustBuffer) throws -> ViewState {
+    return try FfiConverterTypeViewState.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeViewState_lower(_ value: ViewState) -> RustBuffer {
+    return FfiConverterTypeViewState.lower(value)
+}
+
+
+/**
+ * Tasten für den Editor.
+ */
+
+public enum KeyInput: Equatable, Hashable {
+    
+    case escape
+    case enter
+    case delete
+    case character(text: String
+    )
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension KeyInput: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKeyInput: FfiConverterRustBuffer {
+    typealias SwiftType = KeyInput
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KeyInput {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .escape
+        
+        case 2: return .enter
+        
+        case 3: return .delete
+        
+        case 4: return .character(text: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: KeyInput, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .escape:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .enter:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .delete:
+            writeInt(&buf, Int32(3))
+        
+        
+        case let .character(text):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(text, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKeyInput_lift(_ buf: RustBuffer) throws -> KeyInput {
+    return try FfiConverterTypeKeyInput.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKeyInput_lower(_ value: KeyInput) -> RustBuffer {
+    return FfiConverterTypeKeyInput.lower(value)
+}
+
 
 
 public 
@@ -1215,12 +1718,18 @@ public func FfiConverterTypeLotError_lower(_ value: LotError) -> RustBuffer {
 public enum ParamKind: Equatable, Hashable {
     
     case wallLength
-    case wallThickness
+    case wallSagitta
     case wallHeight
+    case wallTopOffset
+    case baseOffset
     case openingOffset
     case openingWidth
     case openingHeight
     case openingSillHeight
+    case storeyElevation
+    case storeyHeight
+    case columnWidth
+    case columnDepth
 
 
 
@@ -1244,17 +1753,29 @@ public struct FfiConverterTypeParamKind: FfiConverterRustBuffer {
         
         case 1: return .wallLength
         
-        case 2: return .wallThickness
+        case 2: return .wallSagitta
         
         case 3: return .wallHeight
         
-        case 4: return .openingOffset
+        case 4: return .wallTopOffset
         
-        case 5: return .openingWidth
+        case 5: return .baseOffset
         
-        case 6: return .openingHeight
+        case 6: return .openingOffset
         
-        case 7: return .openingSillHeight
+        case 7: return .openingWidth
+        
+        case 8: return .openingHeight
+        
+        case 9: return .openingSillHeight
+        
+        case 10: return .storeyElevation
+        
+        case 11: return .storeyHeight
+        
+        case 12: return .columnWidth
+        
+        case 13: return .columnDepth
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1268,7 +1789,7 @@ public struct FfiConverterTypeParamKind: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case .wallThickness:
+        case .wallSagitta:
             writeInt(&buf, Int32(2))
         
         
@@ -1276,20 +1797,44 @@ public struct FfiConverterTypeParamKind: FfiConverterRustBuffer {
             writeInt(&buf, Int32(3))
         
         
-        case .openingOffset:
+        case .wallTopOffset:
             writeInt(&buf, Int32(4))
         
         
-        case .openingWidth:
+        case .baseOffset:
             writeInt(&buf, Int32(5))
         
         
-        case .openingHeight:
+        case .openingOffset:
             writeInt(&buf, Int32(6))
         
         
-        case .openingSillHeight:
+        case .openingWidth:
             writeInt(&buf, Int32(7))
+        
+        
+        case .openingHeight:
+            writeInt(&buf, Int32(8))
+        
+        
+        case .openingSillHeight:
+            writeInt(&buf, Int32(9))
+        
+        
+        case .storeyElevation:
+            writeInt(&buf, Int32(10))
+        
+        
+        case .storeyHeight:
+            writeInt(&buf, Int32(11))
+        
+        
+        case .columnWidth:
+            writeInt(&buf, Int32(12))
+        
+        
+        case .columnDepth:
+            writeInt(&buf, Int32(13))
         
         }
     }
@@ -1310,6 +1855,146 @@ public func FfiConverterTypeParamKind_lower(_ value: ParamKind) -> RustBuffer {
     return FfiConverterTypeParamKind.lower(value)
 }
 
+
+
+
+public enum ViewKind: Equatable, Hashable {
+    
+    case plan
+    case model
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ViewKind: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeViewKind: FfiConverterRustBuffer {
+    typealias SwiftType = ViewKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ViewKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .plan
+        
+        case 2: return .model
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ViewKind, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .plan:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .model:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeViewKind_lift(_ buf: RustBuffer) throws -> ViewKind {
+    return try FfiConverterTypeViewKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeViewKind_lower(_ value: ViewKind) -> RustBuffer {
+    return FfiConverterTypeViewKind.lower(value)
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
+    typealias SwiftType = String?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterString.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceUInt64: FfiConverterRustBuffer {
+    typealias SwiftType = [UInt64]
+
+    public static func write(_ value: [UInt64], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterUInt64.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UInt64] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [UInt64]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterUInt64.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeCommandItem: FfiConverterRustBuffer {
+    typealias SwiftType = [CommandItem]
+
+    public static func write(_ value: [CommandItem], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeCommandItem.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [CommandItem] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [CommandItem]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeCommandItem.read(from: &buf))
+        }
+        return seq
+    }
+}
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1357,10 +2042,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_can_undo() != 5022) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_element_label() != 44890) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_lotdocument_name() != 35177) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_lotdocument_parameters() != 2614) {
+    if (uniffi_lot_ffi_checksum_method_lotdocument_parameters() != 55506) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_redo() != 6291) {
@@ -1375,28 +2063,64 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_undo() != 9472) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_orbit() != 726) {
+    if (uniffi_lot_ffi_checksum_method_viewport_commands() != 3015) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_pan() != 13555) {
+    if (uniffi_lot_ffi_checksum_method_viewport_key() != 43844) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_render() != 13907) {
+    if (uniffi_lot_ffi_checksum_method_viewport_orbit() != 27308) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_resize() != 1189) {
+    if (uniffi_lot_ffi_checksum_method_viewport_pan() != 46301) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_show() != 46842) {
+    if (uniffi_lot_ffi_checksum_method_viewport_pointer_down() != 59198) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_triangle_count() != 37453) {
+    if (uniffi_lot_ffi_checksum_method_viewport_pointer_dragged() != 56413) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_zoom() != 18110) {
+    if (uniffi_lot_ffi_checksum_method_viewport_pointer_moved() != 25751) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_zoom_to_fit() != 41120) {
+    if (uniffi_lot_ffi_checksum_method_viewport_pointer_up() != 41216) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_refresh() != 15108) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_render() != 46846) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_resize() != 17368) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_run_command() != 13208) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_set_document() != 22496) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_set_plan_scale() != 46506) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_set_view() != 40284) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_state() != 40038) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_triangle_count() != 10380) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_zoom() != 37871) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_zoom_to_fit() != 8710) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_constructor_lotdocument_new_empty() != 3910) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_constructor_lotdocument_new_sample() != 17850) {
@@ -1405,7 +2129,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_constructor_lotdocument_open() != 5568) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_constructor_viewport_new() != 42090) {
+    if (uniffi_lot_ffi_checksum_constructor_lotdocument_open_testproject() != 18514) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_constructor_viewport_new() != 685) {
         return InitializationResult.apiChecksumMismatch
     }
 

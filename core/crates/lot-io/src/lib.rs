@@ -27,6 +27,8 @@ pub enum IoError {
     NotALotFile,
     #[error("Die Datei hat Formatversion {found}, diese Version von Lot kennt nur bis {supported}")]
     UnsupportedVersion { found: i64, supported: i64 },
+    #[error("Die Datei stammt aus einer Vorversion von Lot (Format {found}) und lässt sich nicht mehr öffnen")]
+    OutdatedVersion { found: i64 },
     #[error("PDF-Ausgabe: {0}")]
     Pdf(String),
     #[error("PNG-Ausgabe: {0}")]
