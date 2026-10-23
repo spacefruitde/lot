@@ -1,6 +1,7 @@
 // Ausgaben von lot-cli render für dieses Testprojekt.
 [
-    FloorPlan(name: "eg-100", storey: 2, scale: 100.0),
+    FloorPlan(name: "eg-100", storey: 2, scale: 100.0, cad: true),
+    FloorPlan(name: "eg-variante-offen", storey: 2, scale: 100.0, variant: Some((141, 1))),
     FloorPlan(name: "eg-50", storey: 2, scale: 50.0),
     FloorPlan(name: "eg-200", storey: 2, scale: 200.0),
     FloorPlan(name: "kg-100", storey: 1, scale: 100.0),
@@ -14,5 +15,5 @@
     Section(name: "ansicht-ost", view: 111, scale: 100.0),
     Section(name: "ansicht-nord", view: 112, scale: 100.0),
     Section(name: "ansicht-west", view: 113, scale: 100.0),
-    PlanSheets(name: "planblaetter"),
+    PlanSheets(name: "planblaetter", cad: true),
 ]

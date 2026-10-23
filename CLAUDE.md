@@ -45,9 +45,11 @@ Angelegt in M0, immer aktuell halten. Rust über rustup, die Version steht in `c
 - Testprojekt rechnen und Pläne ausgeben: `cd core && cargo run -p lot-cli -- render ../testprojekte/<name> --out ../out/<name>`
   - schreibt, was `testprojekte/<name>/ausgaben.ron` beschreibt (Grundrisse, Schnitte und Ansichten, Planblätter mit Plankopf, Katalog, 3D-Bild, Planansicht, Flächenaufstellung als PDF und CSV), dazu `projekt.lot`
   - gibt die Prüfung aller Treppen nach DIN 18065 aus (Steigungsverhältnis, Durchgangshöhe)
+  - schreibt mit `cad: true` auch DXF und DWG (acadrust); Unterlagen und IFC-Referenzen liest es aus dem Projektordner
+  - DXF fremd prüfen (ohne Lot): `python -m venv venv && venv/bin/pip install ezdxf`, dann `venv/bin/ezdxf audit datei.dxf`
   - `--no-3d` auf Rechnern ohne Grafikkarte (etwa Cloud-Sessions)
   - die Planschrift liegt in `core/assets/fonts/`, ein anderer Ort geht über `LOT_PLAN_FONT`
-- Abnahmetest EFH (Planblätter vollständig, Treppen nach DIN 18065): `cd core && cargo test -p lot-cli --test efh`
+- Abnahmetests: EFH (Planblätter vollständig, Treppen nach DIN 18065) `cd core && cargo test -p lot-cli --test efh`, Umbau (Bauzustände, Unterlage, IFC-Referenz) `cargo test -p lot-cli --test umbau`
 - Swift-Anbindung neu erzeugen: `app-mac/scripts/build-core.sh` (läuft auch automatisch als erste Build-Phase in Xcode)
 - Mac-App bauen: `cd app-mac && xcodebuild -project Lot.xcodeproj -scheme Lot -configuration Debug -derivedDataPath build/DerivedData build`
 - Mac-App für Apple Silicon und Intel (ab macOS 14): dasselbe mit `-configuration Release -destination 'generic/platform=macOS'`

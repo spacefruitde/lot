@@ -35,6 +35,21 @@ fn options() -> ron::Options {
     ron::Options::default().with_default_extension(Extensions::UNWRAP_VARIANT_NEWTYPES)
 }
 
+/// Dateien, auf die ein Testprojekt verweist (Unterlagen), aus seinem Ordner.
+/// Fehlende Dateien fehlen auch im Ergebnis.
+pub fn attachments(project: &Project, dir: &Path) -> crate::project_file::Attachments {
+    project
+        .elements
+        .values()
+        .filter_map(|e| match e {
+            lot_model::Element::Underlay(u) => Some(u.source.clone()),
+            lot_model::Element::ReferenceModel(r) => Some(r.source.clone()),
+            _ => None,
+        })
+        .filter_map(|name| std::fs::read(dir.join(&name)).ok().map(|data| (name, data)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

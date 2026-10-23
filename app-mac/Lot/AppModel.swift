@@ -19,6 +19,9 @@ final class AppModel {
     private(set) var doors: [DoorInfo] = []
     /// Gewählte 2D-Texte.
     private(set) var texts: [TextInfo] = []
+    /// Bauzustand der Auswahl: 0 Bestand, 1 Abbruch, 2 Neubau; `nil` ohne Bauteile mit Bauzustand,
+    /// -1 bei gemischter Auswahl.
+    private(set) var selectionPhase: Int?
     /// Flächen je Geschoss, für die Übersicht im Inspektor.
     private(set) var storeyAreas: [StoreyAreaInfo] = []
     /// Nutzungsgruppen nach DIN 277.
@@ -55,6 +58,7 @@ final class AppModel {
     func attach(_ viewport: Viewport) {
         self.viewport = viewport
         stats.rebuildMs = viewport.setDocument(document: document)
+        loadMissingUnderlays()
         updateViewState()
     }
 
@@ -99,6 +103,8 @@ final class AppModel {
         parameters = state.selection.isEmpty ? [] : document.parameters(ids: state.selection)
         spaces = state.selection.isEmpty ? [] : document.spaces(ids: state.selection)
         doors = state.selection.isEmpty ? [] : document.doors(ids: state.selection)
+        let phases = Set(state.selection.compactMap { document.elementPhase(element: $0) })
+        selectionPhase = phases.isEmpty ? nil : (phases.count == 1 ? Int(phases.first!) : -1)
         texts = state.selection.compactMap { id in
             guard let text = document.annotationText(element: id) else { return nil }
             return TextInfo(element: id, text: text, height: document.annotationTextHeight(element: id) ?? 2.5)
@@ -140,6 +146,13 @@ final class AppModel {
         refresh()
         updateViewState()
         requestRedraw?()
+    }
+
+    /// Setzt den Bauzustand der gewählten Bauteile.
+    func setPhase(_ phase: Int) {
+        let names = ["Existing", "Demolished", "New"]
+        guard names.indices.contains(phase) else { return }
+        run("SetPhase(\(names[phase]))")
     }
 
     /// Ändert Inhalt und Schrifthöhe eines 2D-Texts.
@@ -217,6 +230,7 @@ final class AppModel {
         documentGeneration += 1
         if let viewport {
             stats.rebuildMs = viewport.setDocument(document: document)
+            loadMissingUnderlays()
         }
         refresh()
         updateViewState()

@@ -151,6 +151,7 @@ fn other_elements(project: &Project, storey: ElementId, p: Point2, tolerance: f6
         .or_else(|| walls_columns_grids(project, storey, p, tolerance))
         .or_else(|| slab_opening_at(project, storey, p, tolerance))
         .or_else(|| roof_at(project, storey, p, tolerance))
+        .or_else(|| underlay_at(project, storey, p, tolerance))
 }
 
 /// Das Dach des Geschosses, dessen Umriss mit Überstand am Punkt liegt.
@@ -218,6 +219,20 @@ fn annotation_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64
         .map(|(id, _)| id)
 }
 
+/// Die Unterlage, deren Rand am Punkt liegt. Ins Bild klicken wählt sie nicht,
+/// sonst ließe sich darauf nicht zeichnen.
+fn underlay_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    project
+        .underlays_on(storey)
+        .filter_map(|(id, u)| {
+            let c = u.corners();
+            let d = (0..4).map(|i| segment_distance(c[i], c[(i + 1) % 4], p)).fold(f64::INFINITY, f64::min);
+            (d <= tolerance).then_some((id, d))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
 /// Der Deckendurchbruch des Geschosses, dessen Rand am Punkt liegt.
 fn slab_opening_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
     project
@@ -271,6 +286,7 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
         Element::Opening(o) => opening_outline(project, o),
         Element::SlabOpening(o) => Some(o.outline.iter().map(|p| [p.x, p.y]).collect()),
         Element::Roof(r) => Some(r.outer_outline().iter().map(|p| [p.x, p.y]).collect()),
+        Element::Underlay(u) => Some(u.corners().iter().map(|p| [p.x, p.y]).collect()),
         Element::Annotation(a) => match &a.shape {
             lot_model::AnnotationShape::Polyline(points) if points.len() == 2 => {
                 let (s, e) = (points[0], points[1]);
@@ -387,6 +403,11 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
                 n.offset = ((o.offset + along) / 0.01).round() * 0.01;
                 n.offset = n.offset.clamp(0.0, (wall.length() - o.width).max(0.0));
                 changes.push((*id, Element::Opening(n)));
+            }
+            Some(Element::Underlay(u)) => {
+                let mut n = u.clone();
+                n.origin = shift(u.origin);
+                changes.push((*id, Element::Underlay(n)));
             }
             Some(Element::Annotation(a)) => {
                 let mut n = a.clone();

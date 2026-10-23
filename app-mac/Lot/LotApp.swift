@@ -26,6 +26,9 @@ struct LotApp: App {
                     .keyboardShortcut("o")
                 Button("Testprojekt öffnen …") { model.openTestprojectWithPanel() }
                     .keyboardShortcut("o", modifiers: [.command, .shift])
+                Divider()
+                Button("Unterlage laden (PDF, Bild, DXF, DWG) …") { model.importUnderlayWithPanel() }
+                Button("Referenzmodell laden (IFC) …") { model.importReferenceWithPanel() }
             }
             CommandGroup(replacing: .saveItem) {
                 Button("Sichern") { model.save() }
@@ -69,6 +72,8 @@ struct LotApp: App {
                 Button("Satteldach über dem Geschoss") { model.run("GableRoofFromWalls") }
                 Button("Linie zeichnen (2D)") { model.run("LineTool") }
                 Button("Text setzen (2D)") { model.run("TextTool") }
+                Button("Unterlage kalibrieren") { model.run("CalibrateUnderlayTool") }
+                Button("Unterlage ausrichten") { model.run("AlignUnderlayTool") }
                 Divider()
                 Button("Alles auswählen") { model.run("SelectAll") }
                     .keyboardShortcut("a")

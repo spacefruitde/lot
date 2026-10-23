@@ -321,6 +321,44 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     ));
                 }
             }
+            Element::ReferenceModel(r) => {
+                if r.source.trim().is_empty() {
+                    return Err(invalid("Referenzmodell: Die Datei fehlt"));
+                }
+            }
+            Element::VariantSet(v) => {
+                if v.variants.len() < 2 || v.active >= v.variants.len() {
+                    return Err(invalid("Variantengruppe: mindestens zwei Varianten, eine davon aktiv"));
+                }
+                let mut seen = std::collections::BTreeSet::new();
+                for e in v.variants.iter().flat_map(|x| &x.elements) {
+                    if !seen.insert(*e) {
+                        return Err(invalid("Variantengruppe: Ein Bauteil steht in zwei Varianten"));
+                    }
+                }
+            }
+            Element::Terrain(t) => {
+                if t.points.len() < 3 {
+                    return Err(invalid("Gelände: mindestens drei Höhenpunkte"));
+                }
+                let others = project.elements.iter().any(|(other, e)| other != id && matches!(e, Element::Terrain(_)));
+                if others {
+                    return Err(invalid("Ein Projekt hat ein Gelände"));
+                }
+            }
+            Element::Underlay(u) => {
+                if project.storey(u.storey).is_none() {
+                    return Err(invalid("Unterlage: Das Geschoss fehlt"));
+                }
+                if u.source.trim().is_empty()
+                    || u.scale <= 0.0
+                    || u.width <= 0.0
+                    || u.height <= 0.0
+                    || !(0.0..=1.0).contains(&u.opacity)
+                {
+                    return Err(invalid("Unterlage: Datei, Maßstab größer null und Deckkraft 0 bis 1"));
+                }
+            }
             Element::Annotation(a) => {
                 let view_ok = match a.view {
                     crate::AnnotationView::FloorPlan { storey } => project.storey(storey).is_some(),
@@ -547,6 +585,7 @@ mod tests {
         let mut d = doc();
         let err = d
             .insert(Element::Opening(Opening {
+                phase: Default::default(),
                 host: ElementId(2),
                 offset: 0.0,
                 width: 1.0,

@@ -48,11 +48,13 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
         .with_context(|| format!("Testprojekt {} nicht lesbar", project_dir.display()))?;
     std::fs::create_dir_all(out).with_context(|| format!("Ordner {} nicht anlegbar", out.display()))?;
     let source = project_label(project_dir);
+    // Unterlagen liegen als Dateien im Projektordner.
+    let attachments = lot_io::testproject::attachments(&project, project_dir);
 
     for output in outputs(project_dir)? {
         if let Output::View3d { name } = &output {
             if with_3d {
-                match render_3d(&project) {
+                match render_3d(&project, &attachments) {
                     Ok(png) => write(&out.join(format!("{name}.png")), &png)?,
                     Err(e) => eprintln!("Hinweis: kein 3D-Bild ({e})"),
                 }
@@ -61,18 +63,22 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
         }
         if let Output::PlanView { name, storey, scale } = &output {
             if with_3d {
-                match render_plan_view(&project, lot_model::ElementId(*storey), *scale) {
+                match render_plan_view(&project, &attachments, lot_model::ElementId(*storey), *scale) {
                     Ok(png) => write(&out.join(format!("{name}.png")), &png)?,
                     Err(e) => eprintln!("Hinweis: keine Planansicht ({e})"),
                 }
             }
             continue;
         }
-        if let Output::AreaTable { name } = &output {
-            let csv = lot_plan::area_table::area_csv(&lot_rules::area_report(&project));
+        if let Output::AreaTable { name, phase } = &output {
+            let csv =
+                lot_plan::area_table::area_csv(&lot_rules::area_report(&lot_cli::phase_project(&project, *phase)));
             write(&out.join(format!("{name}.csv")), csv.as_bytes())?;
         }
-        let pages = sheets(&project, &output, &source);
+        for (file, bytes) in lot_cli::cad_files(&project, &output, &attachments)? {
+            write(&out.join(file), &bytes)?;
+        }
+        let pages = sheets(&project, &output, &source, &attachments);
         write(&out.join(format!("{}.pdf", output.name())), &lot_io::pdf::to_pdf_pages(&pages)?)?;
         for (sheet, page) in pages.iter().zip(page_names(output.name(), pages.len())) {
             write(&out.join(format!("{page}.svg")), lot_io::svg::to_svg(sheet).as_bytes())?;
@@ -82,7 +88,7 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
 
     let doc = Document::new(project.clone());
     let lot_file = out.join("projekt.lot");
-    lot_io::project_file::save(&doc, &lot_file)?;
+    lot_io::project_file::save_with(&doc, &attachments, &lot_file)?;
     println!("geschrieben: {}", lot_file.display());
     // Prüfung der Treppen nach DIN 18065.
     for c in lot_rules::check_stairs(&project) {
@@ -103,9 +109,12 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
 }
 
 /// Ansicht des Modells als PNG, ohne Fenster gerechnet.
-fn render_3d(project: &lot_model::Project) -> Result<Vec<u8>> {
+fn render_3d(project: &lot_model::Project, attachments: &lot_io::project_file::Attachments) -> Result<Vec<u8>> {
     let (width, height) = (1600, 1000);
-    let geometry = lot_geom::build(project)?;
+    // Bei Umbauten der Zustand nach dem Umbau, dazu die Referenzmodelle.
+    let shown = project.variant_view().phase_view(lot_model::PhaseFilter::Planned);
+    let mut geometry = lot_geom::build(&shown)?;
+    geometry.elements.extend(lot_io::ifc::references(&shown, attachments));
     let mut renderer = lot_render::Renderer::headless(width, height)?;
     let standard = lot_plan::standard::OfficeStandard::default_standard();
     renderer.set_geometry(&geometry, &|m| standard.material(m).color);
@@ -113,15 +122,45 @@ fn render_3d(project: &lot_model::Project) -> Result<Vec<u8>> {
     encode_png(renderer.render_image()?, width, height)
 }
 
-/// Planansicht wie in der App, als PNG.
-fn render_plan_view(project: &lot_model::Project, storey: lot_model::ElementId, scale: f64) -> Result<Vec<u8>> {
+/// Planansicht wie in der App, als PNG, mit den Unterlagen des Geschosses (nur PNG).
+fn render_plan_view(
+    project: &lot_model::Project,
+    attachments: &lot_io::project_file::Attachments,
+    storey: lot_model::ElementId,
+    scale: f64,
+) -> Result<Vec<u8>> {
     let (width, height) = (1600, 1000);
     let mut renderer = lot_render::Renderer::headless(width, height)?;
     let standard = lot_plan::standard::OfficeStandard::default_standard();
     let view =
         lot_plan::floor_plan::FloorPlanView { storey, cut_height: lot_plan::floor_plan::DEFAULT_CUT_HEIGHT, scale };
     let viewport = lot_plan::Viewport { scale, origin: lot_plan::PaperPoint::new(0.0, 0.0) };
-    renderer.set_plan(lot_plan::floor_plan::floor_plan(project, view, standard, viewport));
+    // Unterlagen aus DXF und DWG als graue Linien unter dem Plan.
+    let mut objects = Vec::new();
+    for (_, u) in project.underlays_on(storey).filter(|(_, u)| lot_io::cad::is_cad(&u.source)) {
+        if let Some(v) = attachments.get(&u.source).and_then(|b| lot_io::cad::read_vectors(b).ok()) {
+            objects.extend(lot_io::cad::underlay_objects(u, &v, viewport));
+        }
+    }
+    // Referenzmodelle in der Schnittebene.
+    let z = project.storey(storey).map_or(0.0, |s| s.elevation) + lot_plan::floor_plan::DEFAULT_CUT_HEIGHT;
+    lot_plan::reference::draw_reference_cut(&mut objects, &lot_io::ifc::references(project, attachments), z, viewport);
+    objects.extend(lot_plan::floor_plan::floor_plan(&project.variant_view(), view, standard, viewport));
+    renderer.set_plan(objects);
+    let quads: Vec<lot_render::UnderlayQuad> = project
+        .underlays_on(storey)
+        .filter_map(|(_, u)| {
+            let r = lot_io::raster::decode_png(attachments.get(&u.source)?).ok()?;
+            let image =
+                std::sync::Arc::new(lot_render::UnderlayImage { width: r.width, height: r.height, rgba: r.rgba });
+            let corners = u.corners().map(|p| {
+                let q = viewport.to_paper(p.x, p.y);
+                [q.x, q.y]
+            });
+            Some(lot_render::UnderlayQuad { corners, image, opacity: u.opacity as f32 })
+        })
+        .collect();
+    renderer.set_underlays(&quads);
     renderer.set_mode(lot_render::ViewMode::Plan);
     renderer.plan_zoom_to_fit();
     encode_png(renderer.render_image()?, width, height)

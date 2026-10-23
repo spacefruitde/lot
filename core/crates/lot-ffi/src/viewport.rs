@@ -4,6 +4,7 @@
 //! Ansicht, y nach oben. Hier werden sie in Blattmillimeter und Modellmeter
 //! umgerechnet und an den Editor (lot-edit) gegeben.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -12,7 +13,7 @@ use lot_model::{Point2, Project};
 use lot_plan::floor_plan::{DEFAULT_CUT_HEIGHT, FloorPlanView, floor_plan};
 use lot_plan::standard::OfficeStandard;
 use lot_plan::{PaperPoint, Viewport as PlanViewport};
-use lot_render::{OverlayItem, Renderer, ViewMode};
+use lot_render::{OverlayItem, Renderer, UnderlayImage, UnderlayQuad, ViewMode};
 
 use crate::{LotDocument, LotError};
 
@@ -87,6 +88,23 @@ struct State {
     model_stale: bool,
     /// Die 3D-Kamera wurde schon einmal auf ein nicht leeres Modell eingestellt.
     model_fitted: bool,
+    /// Bilder der Unterlagen, nach Datei und Seite (siehe `underlay_key`).
+    images: HashMap<String, Arc<UnderlayImage>>,
+    /// Linien der Unterlagen aus DXF und DWG, nach Datei.
+    vectors: HashMap<String, Arc<lot_io::cad::CadVectors>>,
+    /// Bauteile der Referenzmodelle (IFC), nach Datei.
+    references: HashMap<String, Arc<Vec<lot_io::ifc::IfcPart>>>,
+}
+
+/// Eine Unterlage, deren Bild die App liefern muss (PDF-Seite oder Bild).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct UnderlayRef {
+    pub source: String,
+    pub page: u32,
+}
+
+fn underlay_key(source: &str, page: u32) -> String {
+    format!("{source}#{page}")
 }
 
 #[derive(uniffi::Object)]
@@ -123,6 +141,9 @@ impl Viewport {
                 plan_scale: 100.0,
                 model_stale: true,
                 model_fitted: false,
+                images: HashMap::new(),
+                vectors: HashMap::new(),
+                references: HashMap::new(),
             }),
         }))
     }
@@ -137,11 +158,142 @@ impl Viewport {
         s.editor = Some(Editor::new(document.lock().project()));
         s.document = Some(document);
         s.model_fitted = false;
+        s.images.clear();
+        s.vectors.clear();
+        s.references.clear();
+        load_png_underlays(&mut s);
         let ms = rebuild(&mut s, true);
         build_model(&mut s);
         s.renderer.zoom_to_fit();
         s.renderer.plan_zoom_to_fit();
         ms
+    }
+
+    /// Bild einer Unterlage, von der App gerendert (PDF-Seite mit PDFKit oder ein Bild).
+    /// RGBA mit 8 Bit je Kanal, Zeilen von oben.
+    pub fn set_underlay_image(&self, source: String, page: u32, width: u32, height: u32, rgba: Vec<u8>) {
+        let mut s = self.lock();
+        s.images.insert(underlay_key(&source, page), Arc::new(UnderlayImage { width, height, rgba }));
+        rebuild(&mut s, false);
+    }
+
+    /// Unterlagen ohne Bild, die die App rendern muss. PNG liest der Kern selbst.
+    pub fn missing_underlay_images(&self) -> Vec<UnderlayRef> {
+        let mut s = self.lock();
+        load_png_underlays(&mut s);
+        let Some(doc) = s.document.clone() else { return Vec::new() };
+        let doc = doc.lock();
+        let mut out: Vec<UnderlayRef> = doc
+            .project()
+            .elements
+            .values()
+            .filter_map(|e| match e {
+                lot_model::Element::Underlay(u)
+                    if !lot_io::cad::is_cad(&u.source) && !s.images.contains_key(&underlay_key(&u.source, u.page)) =>
+                {
+                    Some(UnderlayRef { source: u.source.clone(), page: u.page })
+                }
+                _ => None,
+            })
+            .collect();
+        out.dedup();
+        out
+    }
+
+    /// Legt eine Unterlage aus einer DXF- oder DWG-Datei im Projekt an (vorher
+    /// mit `add_attachment` abgelegt). Maßstab nach den Einheiten der Datei;
+    /// liegen ihre Koordinaten nahe am Ursprung, bleiben sie, sonst kommt die
+    /// Zeichnung in die Mitte der Ansicht.
+    pub fn add_cad_underlay(&self, source: String) -> Result<u64, LotError> {
+        let mut s = self.lock();
+        let (Some(doc), Some(editor)) = (s.document.clone(), s.editor.as_ref()) else {
+            return Err(LotError::Failed("Kein Projekt geöffnet".into()));
+        };
+        let bytes =
+            doc.attachment_bytes(&source).ok_or_else(|| LotError::Failed(format!("{source} fehlt im Projekt")))?;
+        let vectors = lot_io::cad::read_vectors(&bytes).map_err(LotError::from_display)?;
+        let Some((lo, hi)) = vectors.bounds() else {
+            return Err(LotError::Failed(format!("{source} enthält keine Linien")));
+        };
+        let scale = vectors.metres_per_unit();
+        let (width, height) = ((hi[0] - lo[0]).max(1e-6), (hi[1] - lo[1]).max(1e-6));
+        let origin = if lo[0].abs().max(lo[1].abs()) * scale < 1000.0 {
+            Point2::new(lo[0] * scale, lo[1] * scale)
+        } else {
+            let center = s.renderer.plan_camera().center;
+            let m = s.plan_scale / 1000.0;
+            Point2::new(center[0] * m - width * scale / 2.0, center[1] * m - height * scale / 2.0)
+        };
+        let underlay = lot_model::Underlay {
+            storey: editor.storey,
+            source: source.clone(),
+            page: 0,
+            origin,
+            scale,
+            width,
+            height,
+            rotation: 0.0,
+            opacity: 0.45,
+        };
+        let id = doc.lock().insert(lot_model::Element::Underlay(underlay)).map_err(LotError::from_display)?;
+        s.vectors.insert(source, Arc::new(vectors));
+        rebuild(&mut s, false);
+        Ok(id.0)
+    }
+
+    /// Legt ein Referenzmodell aus einer IFC-Datei im Projekt an (vorher mit
+    /// `add_attachment` abgelegt). Gibt die Zahl der Bauteile zurück.
+    pub fn add_reference_model(&self, source: String) -> Result<u32, LotError> {
+        let mut s = self.lock();
+        let Some(doc) = s.document.clone() else { return Err(LotError::Failed("Kein Projekt geöffnet".into())) };
+        let bytes =
+            doc.attachment_bytes(&source).ok_or_else(|| LotError::Failed(format!("{source} fehlt im Projekt")))?;
+        let (parts, _) = lot_io::ifc::read_ifc(&bytes).map_err(LotError::from_display)?;
+        let count = parts.len() as u32;
+        let model = lot_model::ReferenceModel {
+            source: source.clone(),
+            origin: Point2::new(0.0, 0.0),
+            elevation: 0.0,
+            rotation: 0.0,
+        };
+        doc.lock().insert(lot_model::Element::ReferenceModel(model)).map_err(LotError::from_display)?;
+        s.references.insert(source, Arc::new(parts));
+        rebuild(&mut s, true);
+        Ok(count)
+    }
+
+    /// Legt eine Unterlage im aktuellen Geschoss an, mittig in der Ansicht.
+    /// `width` und `height` in Einheiten der Vorlage (PDF-Punkte oder Bildpunkte),
+    /// `scale` in Metern je Einheit (vor dem Kalibrieren geschätzt).
+    pub fn add_underlay(
+        &self,
+        source: String,
+        page: u32,
+        width: f64,
+        height: f64,
+        scale: f64,
+    ) -> Result<u64, LotError> {
+        let mut s = self.lock();
+        let (Some(doc), Some(editor)) = (s.document.clone(), s.editor.as_ref()) else {
+            return Err(LotError::Failed("Kein Projekt geöffnet".into()));
+        };
+        let center = s.renderer.plan_camera().center;
+        let m = s.plan_scale / 1000.0;
+        let origin = Point2::new(center[0] * m - width * scale / 2.0, center[1] * m - height * scale / 2.0);
+        let underlay = lot_model::Underlay {
+            storey: editor.storey,
+            source,
+            page,
+            origin,
+            scale,
+            width,
+            height,
+            rotation: 0.0,
+            opacity: 0.45,
+        };
+        let id = doc.lock().insert(lot_model::Element::Underlay(underlay)).map_err(LotError::from_display)?;
+        rebuild(&mut s, false);
+        Ok(id.0)
     }
 
     /// Das Modell hat sich außerhalb der Ansicht geändert (Eigenschaften, Menü).
@@ -330,6 +482,8 @@ impl Viewport {
                         Tool::SlabOpening => "slabOpening",
                         Tool::Line => "line",
                         Tool::Text => "text",
+                        Tool::CalibrateUnderlay => "calibrate",
+                        Tool::AlignUnderlay => "align",
                     }
                     .to_string(),
                 )
@@ -405,21 +559,141 @@ fn rebuild(s: &mut State, model: bool) -> f64 {
     let standard = OfficeStandard::default_standard();
     let preview = s.editor.as_ref().and_then(|e| e.preview(doc.project()));
     let project: &Project = preview.as_ref().unwrap_or(doc.project());
+    // Gezeigt werden die aktiven Varianten (2.04).
+    let shown = project.variant_sets().next().is_some().then(|| project.variant_view());
+    let project: &Project = shown.as_ref().unwrap_or(project);
     if let Some(editor) = &s.editor {
         let view = FloorPlanView { storey: editor.storey, cut_height: DEFAULT_CUT_HEIGHT, scale: s.plan_scale };
         let viewport = PlanViewport { scale: s.plan_scale, origin: PaperPoint::new(0.0, 0.0) };
-        s.renderer.set_plan(floor_plan(project, view, standard, viewport));
+        // Unterlagen aus DXF und DWG als graue Linien unter dem Plan, ihre Endpunkte zum Fangen.
+        let mut objects = Vec::new();
+        let mut points = Vec::new();
+        for (_, u) in project.underlays_on(editor.storey).filter(|(_, u)| lot_io::cad::is_cad(&u.source)) {
+            let Some(v) = s.vectors.get(&u.source) else { continue };
+            objects.extend(lot_io::cad::underlay_objects(u, v, viewport));
+            points.extend(lot_io::cad::underlay_points(u, v));
+        }
+        // Referenzmodelle, geschnitten in der Schnittebene.
+        let z = project.storey(editor.storey).map_or(0.0, |st| st.elevation) + DEFAULT_CUT_HEIGHT;
+        let parts = reference_parts(project, &s.references);
+        lot_plan::reference::draw_reference_cut(&mut objects, &parts, z, viewport);
+        objects.extend(floor_plan(project, view, standard, viewport));
+        s.renderer.set_plan(objects);
+        let quads = underlay_quads(project, editor.storey, &s.images, viewport);
+        s.renderer.set_underlays(&quads);
+        if let Some(editor) = s.editor.as_mut() {
+            editor.underlay_points = points;
+        }
     }
     drop(doc);
     update_overlay(s);
     start.elapsed().as_secs_f64() * 1000.0
 }
 
+/// Geometrie aller Referenzmodelle, deren Datei gelesen ist.
+fn reference_parts(
+    project: &Project,
+    references: &HashMap<String, Arc<Vec<lot_io::ifc::IfcPart>>>,
+) -> Vec<lot_geom::ElementGeometry> {
+    project
+        .reference_models()
+        .filter_map(|(id, r)| Some(lot_io::ifc::reference_geometry(id, r, references.get(&r.source)?)))
+        .flatten()
+        .collect()
+}
+
+/// Unterlagen des Geschosses, deren Bild vorliegt, an ihrem Platz auf dem Blatt.
+pub(crate) fn underlay_quads(
+    project: &Project,
+    storey: lot_model::ElementId,
+    images: &HashMap<String, Arc<UnderlayImage>>,
+    viewport: PlanViewport,
+) -> Vec<UnderlayQuad> {
+    project
+        .underlays_on(storey)
+        .filter_map(|(_, u)| {
+            let image = images.get(&underlay_key(&u.source, u.page))?.clone();
+            let corners = u.corners().map(|p| {
+                let q = viewport.to_paper(p.x, p.y);
+                [q.x, q.y]
+            });
+            Some(UnderlayQuad { corners, image, opacity: u.opacity as f32 })
+        })
+        .collect()
+}
+
+/// Liest Unterlagen als PNG und aus DXF oder DWG sowie Referenzmodelle aus den Dateien des Projekts.
+fn load_png_underlays(s: &mut State) {
+    if let Some(doc) = s.document.clone() {
+        let ifc: Vec<String> = doc.lock().project().reference_models().map(|(_, r)| r.source.clone()).collect();
+        for source in ifc {
+            if s.references.contains_key(&source) {
+                continue;
+            }
+            if let Some((parts, _)) = doc.attachment_bytes(&source).and_then(|b| lot_io::ifc::read_ifc(&b).ok()) {
+                s.references.insert(source, Arc::new(parts));
+            }
+        }
+        let cad: Vec<String> = doc
+            .lock()
+            .project()
+            .elements
+            .values()
+            .filter_map(|e| match e {
+                lot_model::Element::Underlay(u) if lot_io::cad::is_cad(&u.source) => Some(u.source.clone()),
+                _ => None,
+            })
+            .collect();
+        for source in cad {
+            if s.vectors.contains_key(&source) {
+                continue;
+            }
+            if let Some(v) = doc.attachment_bytes(&source).and_then(|b| lot_io::cad::read_vectors(&b).ok()) {
+                s.vectors.insert(source, Arc::new(v));
+            }
+        }
+    }
+    let Some(doc) = s.document.clone() else { return };
+    let wanted: Vec<(String, u32)> = doc
+        .lock()
+        .project()
+        .elements
+        .values()
+        .filter_map(|e| match e {
+            lot_model::Element::Underlay(u) if u.source.to_lowercase().ends_with(".png") => {
+                Some((u.source.clone(), u.page))
+            }
+            _ => None,
+        })
+        .collect();
+    for (source, page) in wanted {
+        let key = underlay_key(&source, page);
+        if s.images.contains_key(&key) {
+            continue;
+        }
+        if let Some(r) = doc.attachment_bytes(&source).and_then(|b| lot_io::raster::decode_png(&b).ok()) {
+            s.images.insert(key, Arc::new(UnderlayImage { width: r.width, height: r.height, rgba: r.rgba }));
+        }
+    }
+}
+
 /// Rechnet das 3D-Modell.
 fn build_model(s: &mut State) {
     let Some(doc) = s.document.clone() else { return };
     let standard = OfficeStandard::default_standard();
-    if let Ok(geometry) = lot_geom::build(doc.lock().project()) {
+    // Bei Umbauten zeigt das 3D den Zustand nach dem Umbau.
+    let built = {
+        let guard = doc.lock();
+        let project = guard.project();
+        if project.has_phases() {
+            lot_geom::build(&project.variant_view().phase_view(lot_model::PhaseFilter::Planned))
+        } else {
+            lot_geom::build(&project.variant_view())
+        }
+    };
+    if let Ok(mut geometry) = built {
+        let parts = reference_parts(doc.lock().project(), &s.references);
+        geometry.elements.extend(parts);
         s.renderer.set_geometry(&geometry, &|m| standard.material(m).color);
         s.model_stale = false;
         // Beim ersten nicht leeren Modell die Kamera darauf einstellen.

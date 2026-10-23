@@ -5,7 +5,7 @@
 
 use std::fmt::Write;
 
-use lot_plan::{Anchor, Fill, Gray, Line, LineStyle, PaperPoint, PlanObject, Sheet, hatch_segments};
+use lot_plan::{Anchor, Color, Fill, Line, LineStyle, PaperPoint, PlanObject, Sheet, hatch_segments};
 
 use crate::plan_font::FAMILY;
 
@@ -105,9 +105,9 @@ fn path_data(points: &[PaperPoint], closed: bool, y: &impl Fn(&PaperPoint) -> f6
     d.trim_end().to_string()
 }
 
-fn color(gray: Gray) -> String {
-    let v = (gray.0.clamp(0.0, 1.0) * 255.0).round() as u8;
-    format!("#{v:02x}{v:02x}{v:02x}")
+fn color(color: Color) -> String {
+    let [r, g, b] = color.bytes();
+    format!("#{r:02x}{g:02x}{b:02x}")
 }
 
 /// Zahl mit höchstens drei Nachkommastellen, ohne überflüssige Nullen.

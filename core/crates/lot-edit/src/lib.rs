@@ -87,6 +87,10 @@ pub enum Tool {
     Line,
     /// 2D-Text: ein Klick
     Text,
+    /// Unterlage kalibrieren: zwei Punkte, dann der wahre Abstand
+    CalibrateUnderlay,
+    /// Unterlage ausrichten: zwei Punkte, die waagerecht oder senkrecht liegen sollen
+    AlignUnderlay,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -119,6 +123,9 @@ pub struct Overlay {
 
 pub struct Editor {
     pub storey: ElementId,
+    /// Endpunkte der Linien in Unterlagen aus DXF oder DWG, in Modellmetern;
+    /// gesetzt von der Ansicht, die die Dateien liest. Der Zeiger rastet daran ein.
+    pub underlay_points: Vec<Point2>,
     pub tool: Tool,
     pub wall_type: Option<ElementId>,
     pub alignment: WallAlignment,
@@ -139,6 +146,7 @@ impl Editor {
             project.storeys().iter().find(|(_, s)| s.elevation >= 0.0).or(project.storeys().first()).map(|(id, _)| *id);
         Self {
             storey: storey.unwrap_or(ElementId(0)),
+            underlay_points: Vec::new(),
             tool: Tool::Select,
             wall_type: project.wall_types().next().map(|(id, _)| id),
             alignment: WallAlignment::Center,
@@ -172,7 +180,7 @@ impl Editor {
                 Response::redraw()
             }
             Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column | Tool::SlabOpening | Tool::Line => {
-                self.pointer = Some(snap::snap(
+                self.pointer = Some(self.snap(
                     project,
                     self.storey,
                     input.point,
@@ -183,7 +191,7 @@ impl Editor {
                 ));
                 Response::redraw()
             }
-            Tool::Door | Tool::Window | Tool::Text => {
+            Tool::Door | Tool::Window | Tool::Text | Tool::CalibrateUnderlay | Tool::AlignUnderlay => {
                 self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
                 self.hover_tolerance = input.tolerance;
                 Response::redraw()
@@ -195,8 +203,9 @@ impl Editor {
     pub fn pointer_down(&mut self, doc: &mut Document, input: Input, clicks: u32) -> Response {
         match self.tool {
             Tool::Column => {
-                let p = snap::snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
+                let p = self.snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
                 let column = Column {
+                    phase: Default::default(),
                     storey: self.storey,
                     position: p,
                     profile: ColumnProfile::Rectangle { width: 0.3, depth: 0.3 },
@@ -220,7 +229,7 @@ impl Editor {
                 Response::from_result(doc.insert(Element::Space(space)).map(|_| ()))
             }
             Tool::SlabOpening => {
-                let p = snap::snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
+                let p = self.snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
                 self.pointer = None;
                 match self.chain_start {
                     None => {
@@ -234,16 +243,9 @@ impl Editor {
                 }
             }
             Tool::Grid => {
-                let p = snap::snap(
-                    doc.project(),
-                    self.storey,
-                    input.point,
-                    input.tolerance,
-                    self.chain_start,
-                    input.shift,
-                    &[],
-                )
-                .point;
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
                 self.pointer = None;
                 match self.chain_start {
                     None => {
@@ -269,16 +271,9 @@ impl Editor {
                     self.pointer = None;
                     return self.add_arc_wall(doc, start, end, sagitta_from(start, end, input.point));
                 }
-                let p = snap::snap(
-                    doc.project(),
-                    self.storey,
-                    input.point,
-                    input.tolerance,
-                    self.chain_start,
-                    input.shift,
-                    &[],
-                )
-                .point;
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
                 self.pointer = None;
                 match self.chain_start {
                     None => self.chain_start = Some(p),
@@ -286,6 +281,30 @@ impl Editor {
                     Some(_) => {}
                 }
                 Response::redraw()
+            }
+            Tool::CalibrateUnderlay | Tool::AlignUnderlay => {
+                let Some(id) = self.underlay(doc.project()) else {
+                    return Response {
+                        error: Some("Auf diesem Geschoss liegt keine Unterlage".into()),
+                        ..Response::redraw()
+                    };
+                };
+                match (self.chain_start, self.arc_end) {
+                    (None, _) => {
+                        self.chain_start = Some(input.point);
+                        Response::redraw()
+                    }
+                    (Some(a), None) if self.tool == Tool::AlignUnderlay => {
+                        self.end_chain();
+                        self.change_underlay(doc, id, "Unterlage ausrichten", |u| u.aligned(a, input.point))
+                    }
+                    (Some(_), None) => {
+                        // Der zweite Punkt; der wahre Abstand wird getippt.
+                        self.arc_end = Some(input.point);
+                        Response::redraw()
+                    }
+                    (Some(_), Some(_)) => Response::redraw(),
+                }
             }
             Tool::Text => {
                 let p = Point2::new((input.point.x / 0.01).round() * 0.01, (input.point.y / 0.01).round() * 0.01);
@@ -311,16 +330,9 @@ impl Editor {
                     self.end_chain();
                     return Response::redraw();
                 }
-                let p = snap::snap(
-                    doc.project(),
-                    self.storey,
-                    input.point,
-                    input.tolerance,
-                    self.chain_start,
-                    input.shift,
-                    &[],
-                )
-                .point;
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
                 self.pointer = None;
                 match self.chain_start {
                     None => {
@@ -335,16 +347,9 @@ impl Editor {
                     self.end_chain();
                     return Response::redraw();
                 }
-                let p = snap::snap(
-                    doc.project(),
-                    self.storey,
-                    input.point,
-                    input.tolerance,
-                    self.chain_start,
-                    input.shift,
-                    &[],
-                )
-                .point;
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
                 self.pointer = None;
                 match self.chain_start {
                     None => {
@@ -366,7 +371,9 @@ impl Editor {
                         }
                     }
                 }
-                match element_at(project, self.storey, input.point, input.tolerance) {
+                // Bauteile anderer Varianten sind nicht zu sehen und nicht zu treffen.
+                let shown = project.variant_view();
+                match element_at(&shown, self.storey, input.point, input.tolerance) {
                     Some(id) => {
                         if input.shift {
                             if let Some(pos) = self.selection.iter().position(|s| *s == id) {
@@ -377,16 +384,9 @@ impl Editor {
                         } else if !self.selection.contains(&id) {
                             self.selection = vec![id];
                         }
-                        let start = snap::snap(
-                            project,
-                            self.storey,
-                            input.point,
-                            input.tolerance,
-                            None,
-                            false,
-                            &self.selection,
-                        )
-                        .point;
+                        let start = self
+                            .snap(project, self.storey, input.point, input.tolerance, None, false, &self.selection)
+                            .point;
                         self.drag = Some(Drag::Selection { start, current: start });
                     }
                     None => {
@@ -401,17 +401,23 @@ impl Editor {
     }
 
     pub fn pointer_dragged(&mut self, project: &Project, input: Input) -> Response {
-        match &mut self.drag {
-            Some(Drag::Selection { current, .. }) => {
-                *current =
-                    snap::snap(project, self.storey, input.point, input.tolerance, None, false, &self.selection).point;
+        match self.drag.clone() {
+            Some(Drag::Selection { .. }) => {
+                let p =
+                    self.snap(project, self.storey, input.point, input.tolerance, None, false, &self.selection).point;
+                if let Some(Drag::Selection { current, .. }) = &mut self.drag {
+                    *current = p;
+                }
                 Response::redraw()
             }
-            Some(Drag::Endpoint { wall, end, current }) => {
+            Some(Drag::Endpoint { wall, end, .. }) => {
                 let other =
-                    project.wall(*wall).map(|w| end_point(w, if *end == End::Start { End::End } else { End::Start }));
-                *current =
-                    snap::snap(project, self.storey, input.point, input.tolerance, other, input.shift, &[*wall]).point;
+                    project.wall(wall).map(|w| end_point(w, if end == End::Start { End::End } else { End::Start }));
+                let p =
+                    self.snap(project, self.storey, input.point, input.tolerance, other, input.shift, &[wall]).point;
+                if let Some(Drag::Endpoint { current, .. }) = &mut self.drag {
+                    *current = p;
+                }
                 Response::redraw()
             }
             None => self.pointer_moved(project, input),
@@ -470,6 +476,15 @@ impl Editor {
                 Response::redraw()
             }
             Key::Enter => {
+                if self.tool == Tool::CalibrateUnderlay
+                    && let (Some(a), Some(b), Some(distance)) =
+                        (self.chain_start, self.arc_end, parse_length(&self.typed))
+                    && let Some(id) = self.underlay(doc.project())
+                {
+                    self.typed.clear();
+                    self.end_chain();
+                    return self.change_underlay(doc, id, "Unterlage kalibrieren", |u| u.calibrated(a, b, distance));
+                }
                 if let (Some(start), Some(end), Some(height)) =
                     (self.chain_start, self.arc_end, parse_length(&self.typed))
                 {
@@ -531,6 +546,8 @@ impl Editor {
             Command::SlabOpeningTool => self.set_tool(Tool::SlabOpening),
             Command::LineTool => self.set_tool(Tool::Line),
             Command::TextTool => self.set_tool(Tool::Text),
+            Command::CalibrateUnderlayTool => self.set_tool(Tool::CalibrateUnderlay),
+            Command::AlignUnderlayTool => self.set_tool(Tool::AlignUnderlay),
             Command::FlipDoorSwing => self.change_doors(doc, "Aufschlag wechseln", |d| {
                 // Die Bänder bleiben, wo sie sind: mit der Seite wechselt auch DIN links und rechts.
                 d.opens_to = d.opens_to.other();
@@ -553,6 +570,20 @@ impl Editor {
                 self.alignment = *a;
                 let a = *a;
                 self.change_selected(doc, "Bezugslinie ändern", |w| w.alignment = a)
+            }
+            Command::SetPhase(phase) => {
+                let changes: Vec<(ElementId, Element)> = self
+                    .selection
+                    .iter()
+                    .filter_map(|id| {
+                        let mut e = doc.project().elements.get(id)?.clone();
+                        e.set_phase(*phase).then_some((*id, e))
+                    })
+                    .collect();
+                if changes.is_empty() {
+                    return Response::redraw();
+                }
+                Response::from_result(replace_all(doc, "Bauzustand ändern", changes))
             }
             Command::SetStorey(id) => {
                 if doc.project().storey(ElementId(*id)).is_some() {
@@ -577,6 +608,48 @@ impl Editor {
                 }
             }
             Command::DeleteSelection => self.delete_selection(doc),
+            Command::NewVariantSet => {
+                let n = doc.project().variant_sets().count() + 1;
+                let set = lot_model::VariantSet {
+                    name: format!("Varianten {n}"),
+                    variants: ["A", "B"]
+                        .map(|name| lot_model::Variant { name: name.into(), elements: Vec::new() })
+                        .to_vec(),
+                    active: 0,
+                };
+                Response::from_result(doc.insert(Element::VariantSet(set)).map(|_| ()))
+            }
+            Command::AddSelectionToVariant(set) => {
+                let id = ElementId(*set);
+                let Some(Element::VariantSet(old)) = doc.project().elements.get(&id).cloned() else {
+                    return Response {
+                        error: Some("Diese Variantengruppe gibt es nicht".into()),
+                        ..Default::default()
+                    };
+                };
+                let mut new = old.clone();
+                for v in &mut new.variants {
+                    v.elements.retain(|e| !self.selection.contains(e));
+                }
+                if let Some(v) = new.variants.get_mut(new.active) {
+                    v.elements.extend(self.selection.iter().copied().filter(|e| *e != id));
+                    v.elements.sort();
+                }
+                Response::from_result(replace_all(doc, "Auswahl in Variante", vec![(id, Element::VariantSet(new))]))
+            }
+            Command::SwitchVariant(set) => {
+                let id = ElementId(*set);
+                let Some(Element::VariantSet(old)) = doc.project().elements.get(&id).cloned() else {
+                    return Response {
+                        error: Some("Diese Variantengruppe gibt es nicht".into()),
+                        ..Default::default()
+                    };
+                };
+                let mut new = old.clone();
+                new.active = (old.active + 1) % old.variants.len().max(1);
+                self.selection.clear();
+                Response::from_result(replace_all(doc, "Variante wechseln", vec![(id, Element::VariantSet(new))]))
+            }
             Command::FlipWalls => self.flip_selection(doc),
             Command::SelectAll => {
                 self.tool = Tool::Select;
@@ -621,6 +694,8 @@ impl Editor {
             CommandInfo::new(Command::SlabOpeningTool, "Deckendurchbruch zeichnen", "D", "Werkzeug"),
             CommandInfo::new(Command::LineTool, "Linie zeichnen (2D)", "L", "Werkzeug"),
             CommandInfo::new(Command::TextTool, "Text setzen (2D)", "X", "Werkzeug"),
+            CommandInfo::new(Command::CalibrateUnderlayTool, "Unterlage kalibrieren", "K", "Unterlage"),
+            CommandInfo::new(Command::AlignUnderlayTool, "Unterlage ausrichten (waagerecht)", "", "Unterlage"),
             CommandInfo::new(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "", "Auswahl"),
             CommandInfo::new(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "", "Auswahl"),
             CommandInfo::new(Command::DimensionWalls, "Bemaßen: Maßketten an den gewählten Wänden", "M", "Auswahl"),
@@ -635,9 +710,28 @@ impl Editor {
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
             CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "⇧F", "Auswahl"),
+            CommandInfo::new(Command::SetPhase(lot_model::Phase::Existing), "Bauzustand: Bestand", "", "Auswahl"),
+            CommandInfo::new(Command::SetPhase(lot_model::Phase::Demolished), "Bauzustand: Abbruch", "", "Auswahl"),
+            CommandInfo::new(Command::SetPhase(lot_model::Phase::New), "Bauzustand: Neubau", "", "Auswahl"),
             CommandInfo::new(Command::Undo, "Widerrufen", "⌘Z", "Bearbeiten"),
             CommandInfo::new(Command::Redo, "Wiederholen", "⇧⌘Z", "Bearbeiten"),
         ];
+        list.push(CommandInfo::new(Command::NewVariantSet, "Neue Variantengruppe (A und B)", "", "Varianten"));
+        for (id, v) in project.variant_sets() {
+            let next = v.variants.get((v.active + 1) % v.variants.len().max(1)).map_or("", |x| x.name.as_str());
+            list.push(CommandInfo::new(
+                Command::SwitchVariant(id.0),
+                format!("{}: Variante {} zeigen (jetzt {})", v.name, next, v.active_name()),
+                "",
+                "Varianten",
+            ));
+            list.push(CommandInfo::new(
+                Command::AddSelectionToVariant(id.0),
+                format!("{}: Auswahl nur in Variante {}", v.name, v.active_name()),
+                "",
+                "Varianten",
+            ));
+        }
         for (id, t) in project.wall_types() {
             let mark = if Some(id) == self.wall_type { " ✓" } else { "" };
             list.push(CommandInfo::new(Command::SetWallType(id.0), format!("{}{mark}", t.name), "", "Wandaufbau"));
@@ -676,6 +770,7 @@ impl Editor {
         {
             overlay.snap = Some(p);
             overlay.preview = Some(column_outline(&Column {
+                phase: Default::default(),
                 storey: self.storey,
                 position: p.point,
                 profile: ColumnProfile::Rectangle { width: 0.3, depth: 0.3 },
@@ -697,6 +792,20 @@ impl Editor {
                 let b = p.point;
                 overlay.preview = Some(vec![[a.x, a.y], [b.x, a.y], [b.x, b.y], [a.x, b.y]]);
             }
+        }
+        if matches!(self.tool, Tool::CalibrateUnderlay | Tool::AlignUnderlay)
+            && let Some(a) = self.chain_start
+            && let Some(b) = self.arc_end.or(self.pointer.map(|p| p.point))
+        {
+            let (dx, dy) = (b.x - a.x, b.y - a.y);
+            let len = dx.hypot(dy).max(1e-9);
+            let (nx, ny) = (-dy / len * 0.01, dx / len * 0.01);
+            overlay.preview =
+                Some(vec![[a.x - nx, a.y - ny], [b.x - nx, b.y - ny], [b.x + nx, b.y + ny], [a.x + nx, a.y + ny]]);
+            let mid = Point2::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+            let text =
+                if self.typed.is_empty() { format!("jetzt {}", format_m(len)) } else { format!("{} m", self.typed) };
+            overlay.label = Some((mid, text));
         }
         if self.tool == Tool::Line {
             overlay.snap = self.pointer;
@@ -800,6 +909,19 @@ impl Editor {
                 "Nächsten Punkt klicken oder Länge tippen. ⇧: nur rechte Winkel. Doppelklick oder Esc: fertig.".into()
             }
             (Tool::Text, _, _) => "Text: Stelle klicken, den Text im Inspektor ändern. Esc: zurück.".into(),
+            (Tool::CalibrateUnderlay, None, _) => {
+                "Unterlage kalibrieren: Anfang einer bekannten Strecke auf der Unterlage klicken.".into()
+            }
+            (Tool::CalibrateUnderlay, Some(_), _) if self.arc_end.is_none() => "Ende der Strecke klicken.".into(),
+            (Tool::CalibrateUnderlay, Some(_), _) if self.typed.is_empty() => {
+                "Wahren Abstand in m tippen und ⏎. Esc: neu beginnen.".into()
+            }
+            (Tool::CalibrateUnderlay, Some(_), _) => format!("Abstand {} m, ⏎ übernimmt.", self.typed),
+            (Tool::AlignUnderlay, None, _) => {
+                "Unterlage ausrichten: zwei Punkte einer Linie klicken, die waagerecht oder senkrecht liegen soll."
+                    .into()
+            }
+            (Tool::AlignUnderlay, Some(_), _) => "Zweiten Punkt der Linie klicken.".into(),
             (Tool::Space, _, _) => {
                 "Raum: in den Bereich klicken, dort steht der Raumstempel. Esc: zurück zum Auswählen.".into()
             }
@@ -829,6 +951,7 @@ impl Editor {
 
     fn new_wall(&self, start: Point2, end: Point2) -> Option<Wall> {
         Some(Wall {
+            phase: Default::default(),
             storey: self.storey,
             wall_type: self.wall_type?,
             start,
@@ -852,6 +975,53 @@ impl Editor {
             self.chain_start = Some(end);
         }
         Response::from_result(result)
+    }
+
+    /// Fangpunkt wie [`snap::snap`], dazu Endpunkte in Unterlagen, wenn kein
+    /// Wandende oder Achsschnittpunkt näher liegt.
+    #[allow(clippy::too_many_arguments)]
+    fn snap(
+        &self,
+        project: &Project,
+        storey: ElementId,
+        p: Point2,
+        tolerance: f64,
+        from: Option<Point2>,
+        orthogonal: bool,
+        exclude: &[ElementId],
+    ) -> Snap {
+        let s = snap::snap(project, storey, p, tolerance, from, orthogonal, exclude);
+        if matches!(s.kind, SnapKind::Endpoint | SnapKind::GridIntersection) {
+            return s;
+        }
+        self.underlay_points
+            .iter()
+            .map(|q| (*q, q.distance(p)))
+            .filter(|(_, d)| *d <= tolerance)
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map_or(s, |(q, _)| Snap { point: q, kind: SnapKind::Underlay })
+    }
+
+    /// Die Unterlage, auf die Kalibrieren und Ausrichten wirken: die gewählte,
+    /// sonst die zuletzt angelegte des Geschosses.
+    fn underlay(&self, project: &Project) -> Option<ElementId> {
+        self.selection
+            .iter()
+            .copied()
+            .find(|id| matches!(project.elements.get(id), Some(Element::Underlay(_))))
+            .or_else(|| project.underlays_on(self.storey).map(|(id, _)| id).last())
+    }
+
+    fn change_underlay(
+        &mut self,
+        doc: &mut Document,
+        id: ElementId,
+        label: &str,
+        change: impl Fn(&lot_model::Underlay) -> lot_model::Underlay,
+    ) -> Response {
+        let Some(Element::Underlay(u)) = doc.project().elements.get(&id) else { return Response::redraw() };
+        let new = change(u);
+        Response::from_result(replace_all(doc, label, vec![(id, Element::Underlay(new))]))
     }
 
     fn add_line(&mut self, doc: &mut Document, start: Point2, end: Point2) -> Response {
@@ -889,6 +1059,7 @@ impl Editor {
     fn new_space(&self, project: &Project, position: Point2, skip: u32) -> Space {
         let below_ground = project.storey(self.storey).is_some_and(|s| s.elevation < -0.01);
         Space {
+            phase: Default::default(),
             storey: self.storey,
             position,
             number: next_space_number(project, self.storey, skip),
@@ -953,7 +1124,7 @@ impl Editor {
         } else {
             OpeningKind::Window
         };
-        Some(Opening { host, offset, width, height, sill_height: sill, kind })
+        Some(Opening { phase: Default::default(), host, offset, width, height, sill_height: sill, kind })
     }
 
     /// Maßketten außen an den gewählten geraden Wänden (Vorschlag): in 1,00 m
@@ -1041,6 +1212,7 @@ impl Editor {
             .map(|(i, ring)| Operation::Insert {
                 id: ElementId(first + i as u64),
                 element: Element::Slab(Slab {
+                    phase: Default::default(),
                     storey: self.storey,
                     slab_type,
                     outline: ring.into_iter().map(|p| Point2::new(p[0], p[1])).collect(),
@@ -1069,7 +1241,7 @@ impl Editor {
             };
         };
         let outline = vec![a, Point2::new(b.x, a.y), b, Point2::new(a.x, b.y)];
-        let opening = lot_model::SlabOpening { host, outline };
+        let opening = lot_model::SlabOpening { phase: Default::default(), host, outline };
         Response::from_result(doc.insert(Element::SlabOpening(opening)).map(|_| ()))
     }
 
@@ -1129,6 +1301,7 @@ impl Editor {
         let knee = if knee.is_finite() { knee } else { storey.height };
         let thickness = project.slab_type(roof_type).map_or(0.0, |t| t.thickness());
         let roof = Roof {
+            phase: Default::default(),
             storey: self.storey,
             roof_type,
             outline,

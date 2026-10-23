@@ -299,6 +299,7 @@ final class MetalViewportNSView: NSView {
             case "d": model?.run("SlabOpeningTool")
             case "l": model?.run("LineTool")
             case "x": model?.run("TextTool")
+            case "k": model?.run("CalibrateUnderlayTool")
             case "f": model?.run(event.modifierFlags.contains(.shift) ? "FlipWalls" : "WindowTool")
             case "0"..."9", ",", ".": deliver(viewport.key(key: .character(text: String(c))))
             default: super.keyDown(with: event)

@@ -1,0 +1,148 @@
+// Testprojekt Umbau (PLAN.md, Abschnitt 7): Altbau von 1962 nach altem
+// Bestandsplan, mit Abbruch und Neubau. Ausgedacht für Tests, kein echtes Projekt.
+//
+// Bestand: eingeschossig mit Satteldach, Außenmaß 10,24 x 8,49 m, Ziegel 36,5.
+// Umbau: Wand zwischen Wohnzimmer und Küche und Kamin abbrechen, Küchenfenster
+// Ost zumauern, Anbau im Osten mit Durchbruch von der Küche.
+Project(
+    name: "Umbau Testprojekt",
+    elements: {
+        1: Storey(name: "EG", elevation: 0.0, height: 2.75),
+        2: Storey(name: "DG", elevation: 2.75, height: 2.5),
+        10: WallType(
+            name: "Außenwand Ziegel 36,5 (Bestand)",
+            layers: [
+                (material: "putz", thickness: 0.02, function: Finish),
+                (material: "ziegel", thickness: 0.365, function: Structure),
+                (material: "putz", thickness: 0.015, function: Finish),
+            ],
+        ),
+        11: WallType(
+            name: "Innenwand Ziegel 24 (Bestand)",
+            layers: [
+                (material: "putz", thickness: 0.015, function: Finish),
+                (material: "ziegel", thickness: 0.24, function: Structure),
+                (material: "putz", thickness: 0.015, function: Finish),
+            ],
+        ),
+        12: WallType(
+            name: "Innenwand Ziegel 11,5 (Bestand)",
+            layers: [
+                (material: "putz", thickness: 0.015, function: Finish),
+                (material: "ziegel", thickness: 0.115, function: Structure),
+                (material: "putz", thickness: 0.015, function: Finish),
+            ],
+        ),
+        13: WallType(
+            name: "Außenwand Anbau KS 17,5 mit WDVS 14",
+            layers: [
+                (material: "putz", thickness: 0.01, function: Finish),
+                (material: "daemmung_hart", thickness: 0.14, function: Insulation),
+                (material: "kalksandstein", thickness: 0.175, function: Structure),
+                (material: "putz", thickness: 0.015, function: Finish),
+            ],
+        ),
+        14: SlabType(
+            name: "Bodenplatte Bestand",
+            layers: [
+                (material: "estrich", thickness: 0.05, function: Finish),
+                (material: "beton", thickness: 0.15, function: Structure),
+            ],
+        ),
+        15: SlabType(
+            name: "Holzbalkendecke Bestand",
+            layers: [
+                (material: "holz", thickness: 0.22, function: Structure),
+                (material: "putz", thickness: 0.02, function: Finish),
+            ],
+        ),
+        16: SlabType(
+            name: "Bodenplatte Anbau",
+            layers: [
+                (material: "estrich", thickness: 0.06, function: Finish),
+                (material: "daemmung_hart", thickness: 0.08, function: Insulation),
+                (material: "stahlbeton", thickness: 0.2, function: Structure),
+            ],
+        ),
+        17: SlabType(
+            name: "Flachdach Anbau",
+            layers: [
+                (material: "daemmung_hart", thickness: 0.2, function: Insulation),
+                (material: "stahlbeton", thickness: 0.2, function: Structure),
+                (material: "putz", thickness: 0.015, function: Finish),
+            ],
+        ),
+        18: SlabType(
+            name: "Steildach Bestand",
+            layers: [
+                (material: "dachziegel", thickness: 0.06, function: Finish),
+                (material: "holz", thickness: 0.16, function: Structure),
+            ],
+        ),
+        // Bestand EG, Außenwände im Uhrzeigersinn, Bezugslinie außen.
+        20: Wall(storey: 1, wall_type: 10, start: (x: 0.0, y: 0.0), end: (x: 0.0, y: 8.49), alignment: Exterior, top: Storey(offset: 0.0), phase: Existing),
+        21: Wall(storey: 1, wall_type: 10, start: (x: 0.0, y: 8.49), end: (x: 10.24, y: 8.49), alignment: Exterior, top: Storey(offset: 0.0), phase: Existing),
+        22: Wall(storey: 1, wall_type: 10, start: (x: 10.24, y: 8.49), end: (x: 10.24, y: 0.0), alignment: Exterior, top: Storey(offset: 0.0), phase: Existing),
+        23: Wall(storey: 1, wall_type: 10, start: (x: 10.24, y: 0.0), end: (x: 0.0, y: 0.0), alignment: Exterior, top: Storey(offset: 0.0), phase: Existing),
+        24: Wall(storey: 1, wall_type: 11, start: (x: 0.0, y: 4.6), end: (x: 10.24, y: 4.6), alignment: Center, top: Storey(offset: 0.0), phase: Existing), // Mittelwand
+        25: Wall(storey: 1, wall_type: 11, start: (x: 5.8, y: 0.0), end: (x: 5.8, y: 4.6), alignment: Center, top: Storey(offset: 0.0), phase: Demolished), // Wohnzimmer | Küche
+        26: Wall(storey: 1, wall_type: 12, start: (x: 3.6, y: 4.6), end: (x: 3.6, y: 8.49), alignment: Center, top: Storey(offset: 0.0), phase: Existing),
+        27: Wall(storey: 1, wall_type: 12, start: (x: 5.6, y: 4.6), end: (x: 5.6, y: 8.49), alignment: Center, top: Storey(offset: 0.0), phase: Existing),
+        28: Wall(storey: 1, wall_type: 12, start: (x: 7.2, y: 4.6), end: (x: 7.2, y: 8.49), alignment: Center, top: Storey(offset: 0.0), phase: Existing),
+        29: Column(storey: 1, position: (x: 7.0, y: 4.255), profile: Rectangle(width: 0.38, depth: 0.38), rotation: 0.0, material: "mauerwerk", base_offset: 0.0, top: Storey(offset: 0.0), phase: Demolished), // Kamin
+        // Fenster und Türen im Bestand.
+        30: Opening(host: 23, offset: 7.73, width: 1.51, height: 1.385, sill_height: 0.885, kind: Window, phase: Existing), // Wohnzimmer Süd 1
+        31: Opening(host: 23, offset: 5.23, width: 1.51, height: 1.385, sill_height: 0.885, kind: Window, phase: Existing), // Wohnzimmer Süd 2
+        32: Opening(host: 23, offset: 1.48, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window, phase: Existing), // Küche Süd
+        33: Opening(host: 22, offset: 1.23, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window, phase: Existing), // Kinder Ost
+        34: Opening(host: 22, offset: 5.48, width: 1.01, height: 1.385, sill_height: 0.885, kind: Window, phase: Demolished), // Küche Ost, wird zugemauert
+        35: Opening(host: 21, offset: 1.2, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window, phase: Existing), // Schlafen Nord
+        36: Opening(host: 21, offset: 4.1, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft), phase: Existing), // Haustür
+        37: Opening(host: 21, offset: 6.0, width: 0.76, height: 0.76, sill_height: 1.385, kind: Window, phase: Existing), // Bad
+        38: Opening(host: 21, offset: 8.2, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window, phase: Existing), // Kinder Nord
+        39: Opening(host: 20, offset: 2.0, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window, phase: Existing), // Wohnzimmer West
+        40: Opening(host: 24, offset: 4.2, width: 0.885, height: 2.01, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight), phase: Existing), // Flur - Wohnzimmer
+        41: Opening(host: 24, offset: 8.0, width: 0.885, height: 2.01, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft), phase: Existing), // Küche - Kinder
+        42: Opening(host: 25, offset: 2.0, width: 0.885, height: 2.01, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft), phase: Existing), // Wohnzimmer - Küche
+        43: Opening(host: 26, offset: 1.0, width: 0.885, height: 2.01, sill_height: 0.0, kind: Door(opens_to: Left, hinge: DinLeft), phase: Existing), // Flur - Schlafen
+        44: Opening(host: 27, offset: 1.0, width: 0.76, height: 2.01, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight), phase: Existing), // Flur - Bad
+        // Anbau (Neubau), im Uhrzeigersinn an die Ostwand.
+        50: Wall(storey: 1, wall_type: 13, start: (x: 10.24, y: 4.6), end: (x: 13.54, y: 4.6), alignment: Exterior, top: Roof(offset: 0.0)),
+        51: Wall(storey: 1, wall_type: 13, start: (x: 13.54, y: 4.6), end: (x: 13.54, y: 0.6), alignment: Exterior, top: Roof(offset: 0.0)),
+        52: Wall(storey: 1, wall_type: 13, start: (x: 13.54, y: 0.6), end: (x: 10.24, y: 0.6), alignment: Exterior, top: Roof(offset: 0.0)),
+        53: Opening(host: 22, offset: 4.18, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Durchbruch Küche - Anbau
+        54: Opening(host: 52, offset: 0.58, width: 1.76, height: 2.26, sill_height: 0.0, kind: Window), // Fenstertür Anbau
+        55: Opening(host: 51, offset: 1.49, width: 1.51, height: 1.385, sill_height: 0.885, kind: Window), // Anbau Ost
+        // Decken und Dächer.
+        60: Slab(storey: 1, slab_type: 14, outline: [(x: 0.02, y: 0.02), (x: 10.22, y: 0.02), (x: 10.22, y: 8.47), (x: 0.02, y: 8.47)], kind: Base, phase: Existing),
+        61: Slab(storey: 1, slab_type: 16, outline: [(x: 10.24, y: 0.75), (x: 13.39, y: 0.75), (x: 13.39, y: 4.6), (x: 10.24, y: 4.6)], kind: Base),
+        62: Slab(storey: 2, slab_type: 15, outline: [(x: 0.02, y: 0.02), (x: 10.22, y: 0.02), (x: 10.22, y: 8.47), (x: 0.02, y: 8.47)], phase: Existing),
+        63: Roof(storey: 1, roof_type: 17, outline: [(x: 10.24, y: 0.6), (x: 13.54, y: 0.6), (x: 13.54, y: 4.6), (x: 10.24, y: 4.6)], edges: [Verge(overhang: 0.1), Verge(overhang: 0.1), Verge(overhang: 0.1), Verge(overhang: 0.0)], eave_height: 3.2),
+        64: Roof(storey: 2, roof_type: 18, outline: [(x: 0.0, y: 0.0), (x: 10.24, y: 0.0), (x: 10.24, y: 8.49), (x: 0.0, y: 8.49)], edges: [Eave(slope: 45.0, overhang: 0.4), Verge(overhang: 0.2), Eave(slope: 45.0, overhang: 0.4), Verge(overhang: 0.2)], eave_height: 0.5, phase: Existing),
+        65: Wall(storey: 2, wall_type: 10, start: (x: 0.0, y: 0.0), end: (x: 0.0, y: 8.49), alignment: Exterior, top: Roof(offset: 0.0), phase: Existing),
+        66: Wall(storey: 2, wall_type: 10, start: (x: 0.0, y: 8.49), end: (x: 10.24, y: 8.49), alignment: Exterior, top: Roof(offset: 0.0), phase: Existing),
+        67: Wall(storey: 2, wall_type: 10, start: (x: 10.24, y: 8.49), end: (x: 10.24, y: 0.0), alignment: Exterior, top: Roof(offset: 0.0), phase: Existing),
+        68: Wall(storey: 2, wall_type: 10, start: (x: 10.24, y: 0.0), end: (x: 0.0, y: 0.0), alignment: Exterior, top: Roof(offset: 0.0), phase: Existing),
+        // Räume: Wohnzimmer und Küche werden zu Wohnen, Kochen; der Anbau ist neu.
+        70: Space(storey: 1, position: (x: 2.9, y: 2.3), number: "0.01", name: "Wohnzimmer", usage: Living, phase: Demolished),
+        71: Space(storey: 1, position: (x: 8.0, y: 2.3), number: "0.02", name: "Küche", usage: Living, phase: Demolished),
+        72: Space(storey: 1, position: (x: 4.6, y: 2.3), number: "0.01", name: "Wohnen, Kochen", usage: Living),
+        73: Space(storey: 1, position: (x: 1.8, y: 6.5), number: "0.03", name: "Schlafen", usage: Living, phase: Existing),
+        74: Space(storey: 1, position: (x: 4.6, y: 7.2), number: "0.04", name: "Flur", usage: Circulation, phase: Existing),
+        75: Space(storey: 1, position: (x: 6.4, y: 7.2), number: "0.05", name: "Bad", usage: Other, phase: Existing),
+        76: Space(storey: 1, position: (x: 8.7, y: 6.5), number: "0.06", name: "Kind", usage: Living, phase: Existing),
+        77: Space(storey: 1, position: (x: 11.9, y: 2.6), number: "0.07", name: "Arbeiten", usage: Living),
+        // Unterlage: der alte Bestandsplan des EG, kalibriert.
+        80: Underlay(storey: 1, source: "bestand-eg.png", origin: (x: -9.73, y: -6.855), scale: 0.0169333, width: 1754.0, height: 1240.0, rotation: 0.0, opacity: 0.45),
+        // Schnitt und Ansichten.
+        90: SectionView(name: "Schnitt A-A", mark: "A", start: (x: 12.6, y: -2.0), end: (x: 12.6, y: 10.5), look: Left, depth: 15.0),
+        91: SectionView(name: "Ansicht Süd", mark: "", start: (x: -2.0, y: -3.0), end: (x: 15.5, y: -3.0), look: Left, depth: 20.0, kind: Elevation),
+        92: SectionView(name: "Ansicht Ost", mark: "", start: (x: 16.0, y: -2.0), end: (x: 16.0, y: 10.5), look: Left, depth: 20.0, kind: Elevation),
+        94: Terrain(points: [
+            (x: -3.0, y: -3.0, z: -0.2), (x: 16.5, y: -3.0, z: -0.25), (x: 16.5, y: 11.5, z: -0.1), (x: -3.0, y: 11.5, z: -0.1),
+        ]),
+        // Referenzmodell: Tragwerk des Anbaus als IFC des Tragwerksplaners, Ursprung wie im Lot-Modell.
+        95: ReferenceModel(source: "tragwerk-anbau.ifc"),
+        93: ProjectInfo(client: "Familie Altbau (Testdaten)", site: "Altweg 3, 12345 Musterstadt", architect: "Lot Testbüro", building: SmallResidential),
+    },
+)

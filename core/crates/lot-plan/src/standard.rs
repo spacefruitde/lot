@@ -13,6 +13,36 @@ use serde::Deserialize;
 pub struct OfficeStandard {
     pub materials: BTreeMap<String, Material>,
     pub scales: Vec<ScaleStyle>,
+    /// Farben für Bestand, Abbruch und Neubau (2.05).
+    #[serde(default)]
+    pub phases: PhaseColors,
+}
+
+/// Füllfarben geschnittener Bauteile im Umbauplan, sRGB. Die Bauvorlagenverordnungen
+/// der Länder schreiben Bestand grau, Abbruch gelb und Neubau rot vor; die Töne
+/// selbst legt das Büro fest.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct PhaseColors {
+    pub existing: [u8; 3],
+    pub demolished: [u8; 3],
+    pub new: [u8; 3],
+}
+
+impl Default for PhaseColors {
+    fn default() -> Self {
+        PhaseColors { existing: [170, 170, 170], demolished: [255, 221, 0], new: [226, 35, 26] }
+    }
+}
+
+impl PhaseColors {
+    pub fn of(&self, phase: lot_model::Phase) -> crate::Color {
+        let [r, g, b] = match phase {
+            lot_model::Phase::Existing => self.existing,
+            lot_model::Phase::Demolished => self.demolished,
+            lot_model::Phase::New => self.new,
+        };
+        crate::Color::rgb8(r, g, b)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

@@ -15,16 +15,22 @@ mod operation;
 mod project;
 mod roof;
 mod stair;
+mod terrain;
+mod underlay;
+mod variant;
 
 pub use annotation::{Annotation, AnnotationShape, AnnotationView};
 pub use document::{Document, ModelError};
 pub use element::{
     BuildingClass, CircularArc, Column, ColumnProfile, DimRef, DimensionChain, Door, Element, ElementId, ElementKind,
-    GridLine, Handing, Layer, LayerFunction, Opening, OpeningKind, Param, PlacedView, PlanSheet, Point2, ProjectInfo,
-    SectionKind, SectionView, Slab, SlabKind, SlabOpening, SlabType, Space, SpaceUsage, Storey, Top, ViewContent, Wall,
-    WallAlignment, WallEnd, WallSide, WallType,
+    GridLine, Handing, Layer, LayerFunction, Opening, OpeningKind, Param, Phase, PhaseFilter, PlacedView, PlanSheet,
+    Point2, ProjectInfo, SectionKind, SectionView, Slab, SlabKind, SlabOpening, SlabType, Space, SpaceUsage, Storey,
+    Top, ViewContent, Wall, WallAlignment, WallEnd, WallSide, WallType,
 };
 pub use operation::Operation;
 pub use project::Project;
 pub use roof::{Dormer, DormerWindow, EavePlane, Roof, RoofEdge, RoofFace, RoofWindow};
 pub use stair::{FlightLayout, Landing, Railing, RailingPath, Stair, StairFlight, StairLayout, Tread};
+pub use terrain::{Terrain, TerrainPoint};
+pub use underlay::{ReferenceModel, Underlay, pdf_point_scale};
+pub use variant::{Variant, VariantSet};

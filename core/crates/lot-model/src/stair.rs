@@ -30,6 +30,9 @@ pub struct Stair {
     /// Baurechtlich notwendige Treppe; bestimmt die Grenzwerte der Prüfung.
     #[serde(default = "default_true")]
     pub necessary: bool,
+    /// Bestand, Abbruch oder Neubau (2.05).
+    #[serde(default, skip_serializing_if = "crate::Phase::is_new")]
+    pub phase: crate::Phase,
 }
 
 fn default_thickness() -> f64 {
@@ -237,6 +240,9 @@ pub struct Railing {
     /// Höhe der Oberkante des Handlaufs in m, über OKFF oder über der
     /// Stufenvorderkante.
     pub height: f64,
+    /// Bestand, Abbruch oder Neubau (2.05).
+    #[serde(default, skip_serializing_if = "crate::Phase::is_new")]
+    pub phase: crate::Phase,
 }
 
 /// Verlauf eines Geländers.
@@ -285,6 +291,7 @@ mod tests {
 
     fn u_stair() -> Stair {
         Stair {
+            phase: Default::default(),
             storey: ElementId(1),
             start: Point2::new(0.5, 0.0),
             direction: Point2::new(0.0, 1.0),

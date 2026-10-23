@@ -144,6 +144,7 @@ fn delete_removes_wall_with_openings() {
     let (mut doc, mut ed) = house();
     let inner = wall_with(&doc, Point2::new(3.0, 0.0), Point2::new(3.0, 4.0));
     doc.insert(lot_model::Element::Opening(Opening {
+        phase: Default::default(),
         host: inner,
         offset: 1.0,
         width: 1.0,
@@ -169,6 +170,7 @@ fn flip_keeps_openings_in_place() {
     let bottom = wall_with(&doc, Point2::new(6.0, 0.0), Point2::new(0.0, 0.0));
     let id = doc
         .insert(lot_model::Element::Opening(Opening {
+            phase: Default::default(),
             host: bottom,
             offset: 1.0,
             width: 1.5,
@@ -631,4 +633,95 @@ fn text_tool_places_and_selects_text_which_moves_with_the_selection() {
         }
         other => panic!("{other:?}"),
     }
+}
+
+#[test]
+fn set_phase_marks_selected_walls_and_undoes_in_one_step() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::WallTool);
+    for (x, y) in [(0.0, 0.0), (4.0, 0.0), (4.0, 3.0)] {
+        click(&mut doc, &mut ed, x, y);
+    }
+    ed.key(&mut doc, Key::Escape);
+    ed.run(&mut doc, &Command::SelectAll);
+    ed.run(&mut doc, &Command::SetPhase(lot_model::Phase::Demolished));
+    assert!(walls(&doc).iter().all(|w| w.phase == lot_model::Phase::Demolished));
+    assert!(doc.project().has_phases());
+    assert!(doc.undo().unwrap());
+    assert!(walls(&doc).iter().all(|w| w.phase == lot_model::Phase::New));
+    // Die Kennung ist lesbar für Befehlspalette und KI.
+    assert_eq!(Command::SetPhase(lot_model::Phase::Existing).id(), "SetPhase(Existing)");
+}
+
+fn with_underlay(doc: &mut Document, storey: ElementId) -> ElementId {
+    doc.insert(lot_model::Element::Underlay(lot_model::Underlay {
+        storey,
+        source: "bestand.pdf".into(),
+        page: 0,
+        origin: Point2::new(0.0, 0.0),
+        scale: lot_model::pdf_point_scale(100.0),
+        width: 842.0,
+        height: 595.0,
+        rotation: 0.0,
+        opacity: 0.45,
+    }))
+    .unwrap()
+}
+
+#[test]
+fn calibrating_the_underlay_stretches_it_about_the_first_point() {
+    let (mut doc, mut ed) = setup();
+    let id = with_underlay(&mut doc, ed.storey);
+    ed.run(&mut doc, &Command::CalibrateUnderlayTool);
+    click(&mut doc, &mut ed, 2.0, 1.0);
+    click(&mut doc, &mut ed, 6.0, 1.0);
+    for c in "5,00".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    ed.key(&mut doc, Key::Enter);
+    let Some(lot_model::Element::Underlay(u)) = doc.project().elements.get(&id) else { panic!() };
+    // 4 m gemessen, 5 m wahr: alles um den Faktor 1,25 größer, (2 | 1) bleibt.
+    assert!((u.scale - lot_model::pdf_point_scale(100.0) * 1.25).abs() < 1e-12);
+    let (s, t) = u.to_source(Point2::new(2.0, 1.0));
+    assert!((u.to_model(s, t).distance(Point2::new(2.0, 1.0))) < 1e-9);
+    assert!((u.origin.x - (2.0 - 2.0 * 1.25)).abs() < 1e-9);
+    // Ein Undo-Schritt.
+    assert!(doc.undo().unwrap());
+}
+
+#[test]
+fn aligning_the_underlay_levels_a_skewed_line() {
+    let (mut doc, mut ed) = setup();
+    let id = with_underlay(&mut doc, ed.storey);
+    ed.run(&mut doc, &Command::AlignUnderlayTool);
+    click(&mut doc, &mut ed, 1.0, 1.0);
+    click(&mut doc, &mut ed, 9.0, 1.1);
+    let Some(lot_model::Element::Underlay(u)) = doc.project().elements.get(&id) else { panic!() };
+    assert!((u.rotation + (0.1f64).atan2(8.0).to_degrees()).abs() < 1e-9, "{}", u.rotation);
+}
+
+#[test]
+fn variants_hide_the_other_variant_and_switch() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::WallTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    click(&mut doc, &mut ed, 4.0, 0.0);
+    ed.key(&mut doc, Key::Escape);
+    let wall = doc.project().walls().next().map(|(id, _)| id).unwrap();
+    ed.run(&mut doc, &Command::NewVariantSet);
+    let set = doc.project().variant_sets().next().map(|(id, _)| id).unwrap();
+    // Wand in Variante A, dann B zeigen: Die Wand ist weg und nicht mehr zu treffen.
+    ed.run(&mut doc, &Command::SelectTool);
+    ed.selection = vec![wall];
+    ed.run(&mut doc, &Command::AddSelectionToVariant(set.0));
+    assert!(doc.project().variant_view().wall(wall).is_some());
+    ed.run(&mut doc, &Command::SwitchVariant(set.0));
+    assert!(doc.project().variant_view().wall(wall).is_none());
+    assert!(doc.project().wall(wall).is_some(), "im Modell bleibt sie");
+    ed.pointer_down(&mut doc, input(2.0, 0.0), 1);
+    assert!(ed.selection.is_empty());
+    // Zurück zu A: wieder da.
+    ed.run(&mut doc, &Command::SwitchVariant(set.0));
+    assert!(doc.project().variant_view().wall(wall).is_some());
+    assert!(ed.commands(doc.project()).iter().any(|c| c.title.contains("Variante B zeigen")));
 }

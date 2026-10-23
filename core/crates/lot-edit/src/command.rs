@@ -2,7 +2,7 @@
 //! „KI-Assistent“). Die Befehlspalette (8.04) zeigt sie, später ruft die KI
 //! dieselben Befehle auf.
 
-use lot_model::WallAlignment;
+use lot_model::{Phase, WallAlignment};
 use serde::{Deserialize, Serialize};
 
 /// Ein Befehl des Editors. Die Kennung ist seine RON-Schreibweise, etwa
@@ -22,6 +22,10 @@ pub enum Command {
     LineTool,
     /// 2D-Text im Grundriss
     TextTool,
+    /// Unterlage kalibrieren: zwei Punkte, dann den wahren Abstand tippen
+    CalibrateUnderlayTool,
+    /// Unterlage ausrichten: zwei Punkte, die waagerecht oder senkrecht liegen sollen
+    AlignUnderlayTool,
     /// Gewählte Türen schlagen zur anderen Wandseite auf.
     FlipDoorSwing,
     /// Gewählte Türen: DIN links und DIN rechts tauschen.
@@ -36,10 +40,18 @@ pub enum Command {
     DetectSpaces,
     SetWallType(u64),
     SetAlignment(WallAlignment),
+    /// Bauzustand der gewählten Bauteile: Bestand, Abbruch oder Neubau.
+    SetPhase(Phase),
     SetStorey(u64),
     /// Neues Geschoss über dem obersten.
     AddStorey,
     DeleteSelection,
+    /// Neue Variantengruppe mit den Varianten A und B (2.04).
+    NewVariantSet,
+    /// Gewählte Bauteile in die aktive Variante der Gruppe.
+    AddSelectionToVariant(u64),
+    /// Nächste Variante der Gruppe zeigen.
+    SwitchVariant(u64),
     /// Zeichenrichtung der gewählten Wände umkehren: innen und außen tauschen.
     FlipWalls,
     SelectAll,

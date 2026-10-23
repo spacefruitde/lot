@@ -5,7 +5,7 @@
 
 use bytemuck::{Pod, Zeroable};
 use lot_io::plan_font::{OutlineSink, plan_font};
-use lot_plan::{Fill, Gray, Line, LineStyle, PaperPoint, PlanObject, hatch_segments};
+use lot_plan::{Color, Fill, Line, LineStyle, PaperPoint, PlanObject, hatch_segments};
 use lyon_tessellation::path::Path;
 use lyon_tessellation::path::builder::NoAttributes;
 use lyon_tessellation::path::path::BuilderImpl;
@@ -115,14 +115,14 @@ pub fn tessellate(objects: &[PlanObject], min_width_mm: f32) -> PlanMesh {
                     for [a, c] in hatch_segments(&area.rings, *angle_deg, *spacing_mm) {
                         add_ring(&mut b, [[a.x, a.y], [c.x, c.y]], false);
                     }
-                    t.stroke(&b.build(), (pen.width_mm as f32).max(min_width_mm), color(Gray::BLACK));
+                    t.stroke(&b.build(), (pen.width_mm as f32).max(min_width_mm), color(Color::BLACK));
                 }
             },
             PlanObject::Text(text) => {
                 let mut sink = LyonSink(Path::builder(), false);
                 plan_font().outline(text, &mut sink);
                 sink.finish_open();
-                t.fill(&sink.0.build(), color(Gray::BLACK), FillRule::NonZero);
+                t.fill(&sink.0.build(), color(Color::BLACK), FillRule::NonZero);
             }
         }
     }
@@ -265,9 +265,9 @@ fn point(p: [f64; 2]) -> lyon_tessellation::math::Point {
     lyon_tessellation::math::point(p[0] as f32, p[1] as f32)
 }
 
-fn color(gray: Gray) -> [f32; 4] {
-    let v = crate::srgb_component_to_linear(gray.0.clamp(0.0, 1.0) as f32);
-    [v, v, v, 1.0]
+fn color(color: Color) -> [f32; 4] {
+    let c = |v: f64| crate::srgb_component_to_linear(v.clamp(0.0, 1.0) as f32);
+    [c(color.r), c(color.g), c(color.b), 1.0]
 }
 
 /// Umrisse von Zeichen als lyon-Pfad.

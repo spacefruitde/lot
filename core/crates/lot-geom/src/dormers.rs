@@ -249,6 +249,7 @@ mod tests {
         p.elements.insert(
             ElementId(4),
             Element::Roof(Roof {
+                phase: Default::default(),
                 storey: ElementId(1),
                 roof_type: ElementId(2),
                 outline: vec![

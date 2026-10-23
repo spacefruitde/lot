@@ -8,6 +8,7 @@
 //! - [`roofs`]: Dächer und lichte Höhen darunter
 //! - [`stairs`]: Treppen und Geländer
 //! - [`dormers`]: Gauben und Dachfenster
+//! - [`terrain`]: Gelände als Erdreich
 //! - [`build`]: 3D-Körper aus den Schichtflächen, Höhenabschnitt für
 //!   Höhenabschnitt hochgezogen und mit manifold-rust vereinigt (ADR 0004)
 
@@ -21,6 +22,7 @@ pub mod roofs;
 pub mod slabs;
 pub mod spaces;
 pub mod stairs;
+pub mod terrain;
 
 use std::collections::BTreeMap;
 
@@ -212,9 +214,26 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
         };
         ElementGeometry { id: *id, layer: *layer, material: material.clone(), mesh: to_trimesh(&solid) }
     });
+    // Gelände als Erdreich, ohne die Baugrube.
+    let terrain_elements: Vec<ElementGeometry> = project
+        .elements
+        .iter()
+        .find_map(|(id, e)| match e {
+            lot_model::Element::Terrain(t) => terrain::terrain_solid(project, t).map(|m| (*id, m)),
+            _ => None,
+        })
+        .map(|(id, m)| ElementGeometry {
+            id,
+            layer: 0,
+            material: terrain::TERRAIN_MATERIAL.to_string(),
+            mesh: to_trimesh(&m),
+        })
+        .into_iter()
+        .collect();
     Ok(ModelGeometry {
         elements: elements
             .into_iter()
+            .chain(terrain_elements)
             .chain(slab_elements)
             .chain(roof_elements)
             .chain(opening_elements)

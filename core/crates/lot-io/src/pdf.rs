@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use krilla::color::luma;
+use krilla::color::rgb;
 use krilla::geom::{PathBuilder, Point};
 use krilla::metadata::Metadata;
 use krilla::num::NormalizedF32;
@@ -15,7 +15,7 @@ use krilla::paint::{Fill, FillRule, LineCap, LineJoin, Stroke, StrokeDash};
 use krilla::surface::Surface;
 use krilla::text::{Font, TextDirection};
 use krilla::{Document, SerializeSettings};
-use lot_plan::{Fill as PlanFill, Gray, Line, LineStyle, PaperPoint, PlanObject, Sheet, hatch_segments};
+use lot_plan::{Color, Fill as PlanFill, Line, LineStyle, PaperPoint, PlanObject, Sheet, hatch_segments};
 
 use crate::IoError;
 use crate::plan_font::plan_font;
@@ -67,7 +67,7 @@ fn draw_page(document: &mut Document, sheet: &Sheet, font: &Font) -> Result<(), 
                     if let Some(path) = builder.finish() {
                         surface.set_stroke(None);
                         surface.set_fill(Some(Fill {
-                            paint: luma::Color::new(gray_byte(*gray)).into(),
+                            paint: rgb_paint(*gray),
                             opacity: NormalizedF32::ONE,
                             rule: FillRule::EvenOdd,
                         }));
@@ -81,7 +81,7 @@ fn draw_page(document: &mut Document, sheet: &Sheet, font: &Font) -> Result<(), 
                     }
                     if let Some(path) = builder.finish() {
                         surface.set_fill(None);
-                        surface.set_stroke(Some(stroke(pen.width_mm, Gray::BLACK, None)));
+                        surface.set_stroke(Some(stroke(pen.width_mm, Color::BLACK, None)));
                         surface.draw_path(&path);
                     }
                 }
@@ -132,9 +132,9 @@ fn stroke_line(surface: &mut Surface<'_>, line: &Line, pt: &impl Fn(&PaperPoint)
     surface.draw_path(&path);
 }
 
-fn stroke(width_mm: f64, color: Gray, dash: Option<StrokeDash>) -> Stroke {
+fn stroke(width_mm: f64, color: Color, dash: Option<StrokeDash>) -> Stroke {
     Stroke {
-        paint: luma::Color::new(gray_byte(color)).into(),
+        paint: rgb_paint(color),
         width: (width_mm * PT_PER_MM) as f32,
         miter_limit: 10.0,
         line_cap: LineCap::Butt,
@@ -158,8 +158,9 @@ fn add_points(builder: &mut PathBuilder, points: &[PaperPoint], closed: bool, pt
     }
 }
 
-fn gray_byte(gray: Gray) -> u8 {
-    (gray.0.clamp(0.0, 1.0) * 255.0).round() as u8
+fn rgb_paint(color: Color) -> krilla::paint::Paint {
+    let [r, g, b] = color.bytes();
+    rgb::Color::new(r, g, b).into()
 }
 
 #[cfg(test)]

@@ -222,6 +222,7 @@ mod tests {
         let mut p = Project::sample();
         let storey = p.storeys()[0].0;
         let stair = Stair {
+            phase: Default::default(),
             storey,
             start: Point2::new(0.5, 0.0),
             direction: Point2::new(0.0, 1.0),
@@ -260,6 +261,7 @@ mod tests {
         let (mut p, _) = project_with_stair();
         let storey = p.storeys()[0].0;
         let railing = Railing {
+            phase: Default::default(),
             storey,
             path: RailingPath::Flight { stair: ElementId(900), flight: 0, side: WallSide::Left },
             height: 0.9,

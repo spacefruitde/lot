@@ -7,7 +7,7 @@ use lot_model::{Element, ElementId, Project};
 
 use crate::floor_plan::{DEFAULT_CUT_HEIGHT, FloorPlanView, floor_plan};
 use crate::standard::OfficeStandard;
-use crate::{Anchor, PaperPoint, Pen, Sheet, Viewport, format_de, rect_points};
+use crate::{Anchor, PaperPoint, Pen, PlanObject, Sheet, Viewport, format_de, rect_points};
 
 /// Blattformate nach DIN EN ISO 216, quer: (Name, Breite, Höhe) in mm.
 const FORMATS: [(&str, f64, f64); 4] =
@@ -18,6 +18,18 @@ const FOOTER: f64 = 12.0;
 
 /// Grundriss eines Geschosses auf dem kleinsten Blatt, auf das er passt.
 pub fn floor_plan_sheet(project: &Project, storey: ElementId, scale: f64, standard: &OfficeStandard) -> Sheet {
+    floor_plan_sheet_with(project, storey, scale, standard, |_| Vec::new())
+}
+
+/// Wie [`floor_plan_sheet`], mit Planobjekten unter dem Grundriss (etwa
+/// Referenzmodelle), gezeichnet mit dem Viewport des Blatts.
+pub fn floor_plan_sheet_with(
+    project: &Project,
+    storey: ElementId,
+    scale: f64,
+    standard: &OfficeStandard,
+    below: impl Fn(Viewport) -> Vec<PlanObject>,
+) -> Sheet {
     let extent = lot_geom::plan_extent(project).unwrap_or(([0.0, 0.0], [10.0, 10.0]));
     // Platz für Achskreise rundherum.
     let pad = 2.0 * standard.style_for(scale).grid_bubble * scale / 1000.0 + 0.5;
@@ -47,14 +59,16 @@ pub fn floor_plan_sheet(project: &Project, storey: ElementId, scale: f64, standa
         origin: PaperPoint::new(center_paper.x - center_model[0] * f, center_paper.y - center_model[1] * f),
     };
     let view = FloorPlanView { storey, cut_height: DEFAULT_CUT_HEIGHT, scale };
+    sheet.objects.extend(below(viewport));
     sheet.objects.extend(floor_plan(project, view, standard, viewport));
 
     footer(
         &mut sheet,
         &format!("{}  ·  Grundriss {storey_name}  ·  M 1:{}  ·  {format}", project.name, scale),
         &format!(
-            "Schnitthöhe +{} m über OKFF. Darstellung nach Bürostandard, Vorschlag.",
-            format_de(DEFAULT_CUT_HEIGHT, 2)
+            "Schnitthöhe +{} m über OKFF. {}Darstellung nach Bürostandard, Vorschlag.",
+            format_de(DEFAULT_CUT_HEIGHT, 2),
+            if project.has_phases() { "Bestand grau, Abbruch gelb, Neubau rot. " } else { "" }
         ),
     );
     sheet
@@ -98,10 +112,15 @@ pub fn section_sheet(
     footer(
         &mut sheet,
         &format!("{}  ·  {}  ·  M 1:{}  ·  {format}", project.name, view.name, scale),
-        &format!(
-            "Gelände vorläufig {} m. Darstellung nach Bürostandard, Vorschlag.",
-            crate::section::format_height(crate::section::GROUND)
-        ),
+        &match project.terrain() {
+            Some(t) => {
+                format!("Gelände nach {} Höhenpunkten. Darstellung nach Bürostandard, Vorschlag.", t.points.len())
+            }
+            None => format!(
+                "Gelände vorläufig {} m. Darstellung nach Bürostandard, Vorschlag.",
+                crate::section::format_height(crate::section::GROUND)
+            ),
+        },
     );
     sheet
 }
@@ -184,6 +203,10 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
             | Element::Railing(_)
             | Element::SectionView(_)
             | Element::Annotation(_)
+            | Element::Underlay(_)
+            | Element::Terrain(_)
+            | Element::VariantSet(_)
+            | Element::ReferenceModel(_)
             | Element::ProjectInfo(_)
             | Element::PlanSheet(_) => false,
             Element::Wall(w) => {
@@ -220,7 +243,7 @@ fn frame(sheet: &mut Sheet) {
         closed: true,
         pen: Pen::mm(0.35),
         style: crate::LineStyle::Solid,
-        color: crate::Gray::BLACK,
+        color: crate::Color::BLACK,
     }));
 }
 

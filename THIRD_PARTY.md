@@ -2,7 +2,7 @@
 
 Jede Abhängigkeit und jedes übernommene Stück Code steht hier mit Lizenz. Regeln siehe CLAUDE.md, Punkt 12.
 
-Stand M1 (23.10.2026). Die Tabelle nennt die direkten Abhängigkeiten. Insgesamt zieht der Kern 254 Crates nach. Alle stehen unter MIT, Apache-2.0, BSD, Zlib, ISC, BSL-1.0, Unicode-3.0 oder sind gemeinfrei, einzige Ausnahme ist UniFFI (MPL-2.0, nur als Bibliothek). GPL oder AGPL kommt nicht vor. Prüfen mit `cargo metadata` (Auswertung im Prüfpaket M0).
+Stand M4 (23.10.2026). Die Tabelle nennt die direkten Abhängigkeiten. Insgesamt zieht der Kern 317 Crates nach. Alle stehen unter MIT, Apache-2.0, BSD, Zlib, ISC, BSL-1.0, Unicode-3.0 oder sind gemeinfrei; MPL-2.0 haben UniFFI, acadrust und IFClite (nur als Bibliothek, unverändert). r-efi steht unter MIT oder Apache-2.0 oder LGPL; wir nutzen es unter MIT. GPL oder AGPL kommt nicht vor. Prüfen mit `cargo metadata` (Auswertung im Prüfpaket M0).
 
 ## Kern (`core/`)
 
@@ -28,6 +28,10 @@ Stand M1 (23.10.2026). Die Tabelle nennt die direkten Abhängigkeiten. Insgesamt
 | ron | 0.12.2 | MIT OR Apache-2.0 | Testprojekte als Textdateien | Bibliothek |
 | thiserror | 2.0.21 | MIT OR Apache-2.0 | Fehlertypen | Bibliothek |
 | clap | 4.6.7 | MIT OR Apache-2.0 | Kommandozeile `lot-cli` | Bibliothek |
+| acadrust | 0.6.6 | MPL-2.0 | DXF und DWG lesen und schreiben (ADR 0012) | Bibliothek (MPL: nur als Bibliothek, nicht verändert), fest gepinnt |
+| ifc-lite-core | 20.4.0 | MPL-2.0 | IFC lesen (ADR 0013) | Bibliothek (MPL: nur als Bibliothek, nicht verändert), fest gepinnt |
+| ifc-lite-geometry | 20.4.0 | MPL-2.0 | Geometrie aus IFC, mit Öffnungen | Bibliothek (MPL: nur als Bibliothek, nicht verändert), fest gepinnt |
+| rustc-hash | 2.1 | Apache-2.0 OR MIT | Übergabe des Öffnungsverzeichnisses an IFClite | Bibliothek |
 | anyhow | 1.0.104 | MIT OR Apache-2.0 | Fehlermeldungen in `lot-cli` | Bibliothek |
 | tempfile | 3.27.0 | MIT OR Apache-2.0 | nur in Tests | Bibliothek |
 

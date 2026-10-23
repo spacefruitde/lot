@@ -15,9 +15,9 @@ use std::collections::HashMap;
 use lot_geom::{Area, Band, LayerRegion, ModelGeometry, TriMesh};
 use lot_model::{Element, ElementId, LayerFunction, Project, SectionKind, SectionView};
 
-use crate::floor_plan::draw_cut;
+use crate::floor_plan::draw_cut_for;
 use crate::standard::{OfficeStandard, ScaleStyle};
-use crate::{Anchor, Gray, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
+use crate::{Anchor, Color, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
 
 /// Geländehöhe über ±0,00, bis das Gelände im Modell ist (M4). Vorschlag, Ben prüft.
 pub const GROUND: f64 = -0.30;
@@ -42,6 +42,11 @@ impl Frame {
         Self { origin: [view.start.x, view.start.y], look: [look.0, look.1], right: [right.0, right.1] }
     }
 
+    /// Punkt im Grundriss zu (u, w).
+    fn point(&self, u: f64, w: f64) -> [f64; 2] {
+        [self.origin[0] + self.right[0] * u + self.look[0] * w, self.origin[1] + self.right[1] * u + self.look[1] * w]
+    }
+
     /// (u, v, w): nach rechts im Bild, Höhe, Tiefe hinter der Schnittebene.
     fn uvw(&self, p: [f64; 3]) -> [f64; 3] {
         let d = [p[0] - self.origin[0], p[1] - self.origin[1]];
@@ -54,7 +59,9 @@ pub fn section_extent(geometry: &ModelGeometry, view: &SectionView) -> Option<([
     let frame = Frame::new(view);
     let mut lo = [f64::INFINITY; 2];
     let mut hi = [f64::NEG_INFINITY; 2];
-    for e in &geometry.elements {
+    // In Ansichten zählt das Erdreich nicht mit, sein Rand liegt weit draußen.
+    let terrain = |e: &&lot_geom::ElementGeometry| e.material == lot_geom::terrain::TERRAIN_MATERIAL;
+    for e in geometry.elements.iter().filter(|e| view.kind == SectionKind::Section || !terrain(e)) {
         for p in &e.mesh.positions {
             let [u, v, w] = frame.uvw(*p);
             if (-1e-6..=view.depth).contains(&w) {
@@ -68,6 +75,17 @@ pub fn section_extent(geometry: &ModelGeometry, view: &SectionView) -> Option<([
     }
     lo[1] = lo[1].min(GROUND);
     Some(([lo[0] - MARK_SPACE, lo[1]], [hi[0], hi[1]]))
+}
+
+/// Tiefe der vordersten Fläche des Gebäudes (ohne Erdreich), für die Geländelinie in Ansichten.
+fn building_front(meshes: &[(&lot_geom::ElementGeometry, Vec<[f64; 3]>)], depth: f64) -> f64 {
+    meshes
+        .iter()
+        .filter(|(e, _)| e.material != lot_geom::terrain::TERRAIN_MATERIAL)
+        .flat_map(|(_, uvw)| uvw.iter().map(|p| p[2]))
+        .filter(|w| (0.0..=depth).contains(w))
+        .fold(f64::INFINITY, f64::min)
+        .min(depth)
 }
 
 /// Platz links neben dem Bild für die Höhenkoten, in Metern.
@@ -116,39 +134,76 @@ pub fn section(
 
     // 2. Sichtbare Kanten dahinter.
     let mut buffer = DepthBuffer::new(&meshes, view.depth);
-    buffer.underground = cut_all.bounds().map(|(lo, hi)| (lo[0], hi[0]));
+    // Mit Gelände verdeckt das Erdreich selbst, was darunter liegt.
+    let terrain = project.terrain();
+    buffer.underground = match (terrain, view.kind) {
+        // Im Schnitt mit Gelände zeigt das geschnittene Erdreich, was unter dem Gelände liegt.
+        (Some(_), SectionKind::Section) => Some((f64::NEG_INFINITY, f64::INFINITY)),
+        (Some(_), SectionKind::Elevation) => None,
+        (None, _) => cut_all.bounds().map(|(lo, hi)| (lo[0], hi[0])),
+    };
     for (e, uvw) in &meshes {
         for t in &e.mesh.triangles {
             buffer.fill(t.map(|i| uvw[i as usize]));
         }
     }
+    // Geländelinie: ohne Geländemodell auf -0,30 m; mit Gelände in Ansichten
+    // vor dem Gebäude, im Schnitt keine (das Erdreich ist selbst geschnitten).
+    let ground: Vec<[f64; 2]> = match (buffer.extent(), terrain) {
+        (None, _) => Vec::new(),
+        (Some((lo, hi)), None) => vec![[lo[0] - 1.0, GROUND], [hi[0] + 1.0, GROUND]],
+        (Some(_), Some(_)) if view.kind == SectionKind::Section => Vec::new(),
+        (Some((lo, hi)), Some(t)) => {
+            let (from, to) = (lo[0] - 1.0, hi[0] + 1.0);
+            let front = building_front(&meshes, view.depth);
+            let tris = t.triangles();
+            let steps = ((to - from) / 0.1).ceil().max(1.0) as usize;
+            (0..=steps)
+                .filter_map(|i| {
+                    let u = from + (to - from) * i as f64 / steps as f64;
+                    let p = frame.point(u, front);
+                    t.height_with(&tris, lot_model::Point2::new(p[0], p[1])).map(|z| [u, z])
+                })
+                .collect()
+        }
+    };
+    if terrain.is_some() && view.kind == SectionKind::Elevation {
+        buffer.ground = Some(ground.clone());
+    }
     let view_pen = Pen::mm(style.pens.view);
-    for [a, b] in feature_edges(&meshes) {
+    // Kanten des Erdreichs zeichnet nur der Schnitt (als Schnittfläche) und die Geländelinie.
+    let edge_meshes: Vec<(&lot_geom::ElementGeometry, Vec<[f64; 3]>)> = meshes
+        .iter()
+        .filter(|(e, _)| e.material != lot_geom::terrain::TERRAIN_MATERIAL)
+        .map(|(e, uvw)| (*e, uvw.clone()))
+        .collect();
+    for [a, b] in feature_edges(&edge_meshes) {
         for [p, q] in buffer.visible_parts(a, b) {
             objects.push(PlanObject::Line(Line {
                 points: vec![viewport.to_paper(p[0], p[1]), viewport.to_paper(q[0], q[1])],
                 closed: false,
                 pen: view_pen,
                 style: LineStyle::Solid,
-                color: Gray::BLACK,
+                color: Color::BLACK,
             }));
         }
     }
 
     // 3. Schnittflächen über den Ansichtskanten.
-    draw_cut(&mut objects, &cut, standard, style, viewport);
+    draw_cut_for(&mut objects, project, &cut, None, standard, style, viewport);
 
-    // 4. Gelände, außerhalb der geschnittenen Bauteile.
-    if let Some((lo, hi)) = buffer.extent() {
-        let (from, to) = (lo[0] - 1.0, hi[0] + 1.0);
-        for [a, b] in outside_segments([from, GROUND], [to, GROUND], &cut_all) {
-            objects.push(PlanObject::Line(Line {
-                points: vec![viewport.to_paper(a[0], a[1]), viewport.to_paper(b[0], b[1])],
-                closed: false,
-                pen: Pen::mm(style.pens.cut),
-                style: LineStyle::Solid,
-                color: Gray::BLACK,
-            }));
+    // 4. Geländelinie, außerhalb der geschnittenen Bauteile.
+    if let Some((lo, _)) = buffer.extent() {
+        for w in ground.windows(2) {
+            for [a, b] in outside_segments(w[0], w[1], &cut_all) {
+                objects.push(PlanObject::Line(Line {
+                    points: vec![viewport.to_paper(a[0], a[1]), viewport.to_paper(b[0], b[1])],
+                    closed: false,
+                    pen: Pen::mm(style.pens.cut),
+                    style: LineStyle::Solid,
+                    color: Color::BLACK,
+                }));
+            }
         }
         // 5. Höhenkoten.
         draw_level_marks(&mut objects, project, view.kind, lo[0] - 0.8, style, viewport);
@@ -260,7 +315,7 @@ fn band_of(area: &Area) -> Option<Band> {
 }
 
 /// Schnitt eines geschlossenen Netzes mit der Ebene w = 0, als Fläche in (u, v).
-fn slice(mesh: &TriMesh, uvw: &[[f64; 3]]) -> Area {
+pub(crate) fn slice(mesh: &TriMesh, uvw: &[[f64; 3]]) -> Area {
     // Punkte genau auf der Ebene leicht verschieben, damit jede Kante eindeutig schneidet.
     let w: Vec<f64> = uvw.iter().map(|p| if p[2].abs() < 1e-9 { 1e-9 } else { p[2] }).collect();
     let mut next: HashMap<(u32, u32), (u32, u32)> = HashMap::new();
@@ -324,6 +379,9 @@ struct DepthBuffer {
     /// Bereich in u, in dem Kanten unter dem Gelände sichtbar sind: im Schnitt
     /// innerhalb des geschnittenen Gebäudes (Kellerräume), in Ansichten nirgends.
     underground: Option<(f64, f64)>,
+    /// Geländelinie (u, Höhe) in Ansichten mit Gelände; darunter ist nichts zu sehen.
+    /// Ohne sie gilt die feste Linie auf -0,30 m.
+    ground: Option<Vec<[f64; 2]>>,
 }
 
 impl DepthBuffer {
@@ -346,6 +404,7 @@ impl DepthBuffer {
                 depth: Vec::new(),
                 max_w,
                 underground: None,
+                ground: None,
             };
         }
         // Rand für Dreiecke, die erst nach dem Kappen an der Ebene hineinreichen.
@@ -353,7 +412,15 @@ impl DepthBuffer {
         let (lo, hi) = ([lo[0] - pad, lo[1] - pad], [hi[0] + pad, hi[1] + pad]);
         let res = RESOLUTION.max((hi[0] - lo[0]).max(hi[1] - lo[1]) / 4000.0);
         let size = [((hi[0] - lo[0]) / res).ceil() as usize + 1, ((hi[1] - lo[1]) / res).ceil() as usize + 1];
-        Self { origin: lo, size, res, depth: vec![f64::INFINITY; size[0] * size[1]], max_w, underground: None }
+        Self {
+            origin: lo,
+            size,
+            res,
+            depth: vec![f64::INFINITY; size[0] * size[1]],
+            max_w,
+            underground: None,
+            ground: None,
+        }
     }
 
     /// Ausdehnung der gezeichneten Fläche (ohne Rand).
@@ -373,6 +440,20 @@ impl DepthBuffer {
         }
         let at = |i: usize, j: usize| [self.origin[0] + i as f64 * self.res, self.origin[1] + j as f64 * self.res];
         Some((at(lo[0], lo[1]), at(hi[0], hi[1])))
+    }
+
+    /// Höhe des Geländes an der Stelle u.
+    fn ground_at(&self, u: f64) -> f64 {
+        let Some(g) = &self.ground else { return GROUND };
+        match g.iter().position(|p| p[0] >= u) {
+            Some(0) => g[0][1],
+            Some(i) => {
+                let (a, b) = (g[i - 1], g[i]);
+                let t = if (b[0] - a[0]).abs() < 1e-12 { 0.0 } else { (u - a[0]) / (b[0] - a[0]) };
+                a[1] + (b[1] - a[1]) * t
+            }
+            None => g.last().map_or(GROUND, |p| p[1]),
+        }
     }
 
     /// Zeichnet ein Dreieck, gekappt auf 0 ≤ w ≤ Blicktiefe.
@@ -454,7 +535,7 @@ impl DepthBuffer {
             let s = k as f64 / steps as f64;
             let r = [p[0] + (q[0] - p[0]) * s, p[1] + (q[1] - p[1]) * s, p[2] + (q[2] - p[2]) * s];
             let underground = self.underground.is_some_and(|(u0, u1)| r[0] > u0 && r[0] < u1);
-            let shown = (r[1] >= GROUND - 1e-6 || underground) && self.visible(r);
+            let shown = (r[1] >= self.ground_at(r[0]) - 1e-6 || underground) && self.visible(r);
             match (shown, run) {
                 (true, None) => run = Some(s),
                 (false, Some(s0)) => {
@@ -586,32 +667,40 @@ fn draw_level_marks(
                 })
                 .map(|p| roof.top_at(p))
                 .fold(f64::NEG_INFINITY, f64::max);
-        marks.push((eave, format!("Traufe {}", format_height(eave))));
+        // Flachdächer haben keine Traufe, die Höhe ist die Oberkante der Dachhaut.
+        let label = if roof.eave_planes().is_empty() { "OK Dach" } else { "Traufe" };
+        marks.push((eave, format!("{label} {}", format_height(eave))));
         if ridge > eave + 0.01 {
             marks.push((ridge, format!("First {}", format_height(ridge))));
         }
     }
     let pen = Pen::mm(style.pens.annotation);
+    marks.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // Liegen zwei Höhen dicht beieinander, rückt die obere Beschriftung nach oben.
+    let gap = style.space_text * 1.6;
+    let mut last_text = f64::NEG_INFINITY;
     for (z, text) in marks {
         let p = viewport.to_paper(u, z);
+        let text_y = (p.y + 0.8).max(last_text + gap);
+        last_text = text_y;
         // Waagerechter Strich und offenes Dreieck, das mit der Spitze auf der Höhe steht.
         objects.push(PlanObject::Line(Line {
             points: vec![PaperPoint::new(p.x - 4.0, p.y), PaperPoint::new(p.x + 4.0, p.y)],
             closed: false,
             pen,
             style: LineStyle::Solid,
-            color: Gray::BLACK,
+            color: Color::BLACK,
         }));
         objects.push(PlanObject::Line(Line {
             points: vec![p, PaperPoint::new(p.x - 1.2, p.y + 2.0), PaperPoint::new(p.x + 1.2, p.y + 2.0)],
             closed: true,
             pen,
             style: LineStyle::Solid,
-            color: Gray::BLACK,
+            color: Color::BLACK,
         }));
         // Beschriftung links vom Dreieck, damit sie nicht ins Bild läuft.
         objects.push(PlanObject::Text(Text {
-            position: PaperPoint::new(p.x - 2.0, p.y + 0.8),
+            position: PaperPoint::new(p.x - 2.0, text_y),
             text,
             height_mm: style.space_text,
             anchor: Anchor::Right,
@@ -666,6 +755,7 @@ mod tests {
         p.elements.insert(
             id,
             Element::Wall(Wall {
+                phase: Default::default(),
                 storey: ElementId(1),
                 wall_type: ElementId(2),
                 start: Point2::new(1.0, 2.0),

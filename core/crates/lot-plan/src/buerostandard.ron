@@ -94,12 +94,25 @@ OfficeStandard(
             color: (96, 100, 106),
             cut: Solid(gray: 0.0),
         ),
+        "erdreich": Material(
+            name: "Erdreich (gewachsener Boden)",
+            color: (132, 150, 96),
+            cut: Lines(angle: 135.0, spacing: 2.5),
+        ),
+        "referenz": Material(
+            name: "Referenzmodell (IFC eines Fachplaners)",
+            color: (176, 196, 214),
+            cut: Solid(gray: 0.82),
+        ),
         "klinker": Material(
             name: "Klinker (Vormauerschale)",
             color: (176, 108, 84),
             cut: Lines(angle: 45.0, spacing: 1.25),
         ),
     },
+    // Bestand, Abbruch, Neubau (2.05): Füllfarben im Umbauplan. VORSCHLAG M4,
+    // die Bauvorlagenverordnungen der Länder verlangen grau, gelb und rot.
+    phases: PhaseColors(existing: (170, 170, 170), demolished: (255, 221, 0), new: (226, 35, 26)),
     // Je Maßstabsbereich: Detailgrad und Stifte. Es gilt der erste Eintrag,
     // dessen `up_to` mindestens so groß ist wie die Maßstabszahl.
     scales: [

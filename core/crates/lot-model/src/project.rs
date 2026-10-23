@@ -193,6 +193,71 @@ impl Project {
         })
     }
 
+    /// Referenzmodelle (IFC von Fachplanern).
+    pub fn reference_models(&self) -> impl Iterator<Item = (ElementId, &crate::ReferenceModel)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::ReferenceModel(r) => Some((*id, r)),
+            _ => None,
+        })
+    }
+
+    /// Variantengruppen, nach Kennung.
+    pub fn variant_sets(&self) -> impl Iterator<Item = (ElementId, &crate::VariantSet)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::VariantSet(v) => Some((*id, v)),
+            _ => None,
+        })
+    }
+
+    /// Bauteile, die in einer gerade nicht gezeigten Variante stehen.
+    pub fn hidden_by_variants(&self) -> std::collections::BTreeSet<ElementId> {
+        self.variant_sets().flat_map(|(_, v)| v.hidden()).collect()
+    }
+
+    /// Das Projekt, wie die aktiven Varianten es zeigen: ohne die Bauteile der
+    /// anderen Varianten und ohne Öffnungen in Wänden, die damit wegfallen.
+    pub fn variant_view(&self) -> Project {
+        let hidden = self.hidden_by_variants();
+        if hidden.is_empty() {
+            return self.clone();
+        }
+        let mut out = self.clone();
+        out.elements.retain(|id, e| {
+            !hidden.contains(id)
+                && match e {
+                    Element::Opening(o) => !hidden.contains(&o.host),
+                    Element::SlabOpening(o) => !hidden.contains(&o.host),
+                    _ => true,
+                }
+        });
+        out
+    }
+
+    /// Wie [`Project::variant_view`], mit der Variante `index` der Gruppe `set` aktiv.
+    pub fn with_variant(&self, set: ElementId, index: usize) -> Project {
+        let mut p = self.clone();
+        if let Some(Element::VariantSet(v)) = p.elements.get_mut(&set) {
+            v.active = index.min(v.variants.len().saturating_sub(1));
+        }
+        p.variant_view()
+    }
+
+    /// Das Gelände des Projekts, falls es eins gibt.
+    pub fn terrain(&self) -> Option<&crate::Terrain> {
+        self.elements.values().find_map(|e| match e {
+            Element::Terrain(t) => Some(t),
+            _ => None,
+        })
+    }
+
+    /// Unterlagen unter dem Grundriss eines Geschosses.
+    pub fn underlays_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Underlay)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Underlay(u) if u.storey == storey => Some((*id, u)),
+            _ => None,
+        })
+    }
+
     pub fn stairs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Stair)> {
         self.elements.iter().filter_map(move |(id, e)| match e {
             Element::Stair(s) if s.storey == storey => Some((*id, s)),
@@ -217,6 +282,91 @@ impl Project {
             Element::Railing(r) if r.storey == storey => Some((*id, r)),
             _ => None,
         })
+    }
+
+    /// Bauzustand eines Elements; Elemente ohne Bauzustand gelten als Neubau.
+    pub fn phase_of(&self, id: ElementId) -> crate::Phase {
+        self.elements.get(&id).and_then(Element::phase).unwrap_or_default()
+    }
+
+    /// Gibt es Bestand oder Abbruch? Dann werden Pläne farbig (2.05).
+    pub fn has_phases(&self) -> bool {
+        self.elements.keys().any(|id| !self.phase_of(*id).is_new())
+    }
+
+    /// Das Projekt in einem Bauzustand. `Existing`: der Bestand vor dem Umbau,
+    /// als gewöhnlicher Plan ohne Farben. `Planned`: Bestand und Neubau, ohne
+    /// Abbruch. `All`: unverändert.
+    pub fn phase_view(&self, filter: crate::PhaseFilter) -> Project {
+        let mut out = self.clone();
+        if filter == crate::PhaseFilter::All {
+            return out;
+        }
+        let gone: Vec<ElementId> = self
+            .elements
+            .iter()
+            .filter(|(_, e)| e.phase().is_some_and(|p| !p.shown_in(filter)))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in &gone {
+            out.elements.remove(id);
+        }
+        // Öffnungen und Durchbrüche in entfernten Bauteilen fallen mit weg.
+        out.elements.retain(|_, e| match e {
+            Element::Opening(o) => !gone.contains(&o.host),
+            Element::SlabOpening(o) => !gone.contains(&o.host),
+            _ => true,
+        });
+        if filter == crate::PhaseFilter::Existing {
+            for e in out.elements.values_mut() {
+                e.set_phase(crate::Phase::New);
+            }
+        }
+        if filter == crate::PhaseFilter::Planned {
+            // Nach dem Umbau sind Ausbrüche offen: Neue Öffnungen in Bestand
+            // durchbrechen die Wand wie Öffnungen im Bestand.
+            let existing: Vec<ElementId> = out
+                .elements
+                .iter()
+                .filter(|(_, e)| e.phase() == Some(crate::Phase::Existing))
+                .map(|(id, _)| *id)
+                .collect();
+            for e in out.elements.values_mut() {
+                if let Element::Opening(o) = e
+                    && existing.contains(&o.host)
+                {
+                    o.phase = crate::Phase::Existing;
+                }
+            }
+        }
+        out
+    }
+
+    /// Für den Umbauplan: ohne die Öffnungen, die die Wand nicht durchbrechen,
+    /// weil sie zugemauert werden (Abbruch) oder erst neu in Bestand entstehen.
+    /// Ihre Fläche wird dort farbig angelegt.
+    pub fn without_phase_openings(&self) -> Project {
+        let mut out = self.clone();
+        out.elements.retain(|id, e| match e {
+            Element::Opening(_) => self.opening_cuts_in_plan(*id),
+            _ => true,
+        });
+        out
+    }
+
+    /// Ob eine Öffnung im Umbauplan die Wand durchbricht: ja, wenn sie zum
+    /// gleichen Bauzustand gehört wie ihre Wand, oder als Bestand in einer Wand
+    /// sitzt, die abgebrochen wird. Eine neue Öffnung in Bestand (Ausbruch) und
+    /// eine zugemauerte Öffnung durchbrechen sie nicht.
+    pub fn opening_cuts_in_plan(&self, id: ElementId) -> bool {
+        use crate::Phase::{Demolished, Existing};
+        match self.elements.get(&id) {
+            Some(Element::Opening(o)) => {
+                let host = self.phase_of(o.host);
+                o.phase == host || (host == Demolished && o.phase == Existing)
+            }
+            _ => true,
+        }
     }
 
     /// Angaben für den Plankopf; leer, wenn das Projekt keine hat.
@@ -375,6 +525,7 @@ impl Project {
         p.elements.insert(
             ElementId(3),
             Element::Wall(Wall {
+                phase: Default::default(),
                 storey: ElementId(1),
                 wall_type: ElementId(2),
                 start: Point2::new(0.0, 0.0),
@@ -388,6 +539,7 @@ impl Project {
         p.elements.insert(
             ElementId(4),
             Element::Opening(Opening {
+                phase: Default::default(),
                 host: ElementId(3),
                 offset: 1.75,
                 width: 1.5,

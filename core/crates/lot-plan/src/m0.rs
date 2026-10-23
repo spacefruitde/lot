@@ -11,7 +11,7 @@ use crate::floor_plan::{FloorPlanView, floor_plan};
 use crate::standard::OfficeStandard;
 
 use crate::{
-    Anchor, Area, Fill, Gray, PEN_WIDTHS_MM, PaperPoint, Pen, PlanObject, Sheet, Viewport, format_de, rect_points,
+    Anchor, Area, Color, Fill, PEN_WIDTHS_MM, PaperPoint, Pen, PlanObject, Sheet, Viewport, format_de, rect_points,
 };
 
 /// Höhe des Grundrissschnitts über Unterkante Wand, in Metern.
@@ -52,7 +52,7 @@ pub fn sheet(project: &Project, source: &str) -> Sheet {
         let q = bar.to_paper(m as f64 + 1.0, 0.0);
         let ring = rect_points(p.x, p.y, q.x - p.x, 2.0);
         if m % 2 == 0 {
-            s.objects.push(PlanObject::Area(Area { rings: vec![ring.clone()], fill: Fill::Solid(Gray::BLACK) }));
+            s.objects.push(PlanObject::Area(Area { rings: vec![ring.clone()], fill: Fill::Solid(Color::BLACK) }));
         }
         s.polygon(ring, Pen::mm(0.18));
     }
@@ -105,7 +105,7 @@ pub fn sheet(project: &Project, source: &str) -> Sheet {
     }));
     s.polygon(hatch, Pen::mm(0.35));
     let gray = rect_points(200.0, 72.0, 30.0, 20.0);
-    s.objects.push(PlanObject::Area(Area { rings: vec![gray.clone()], fill: Fill::Solid(Gray(0.8)) }));
+    s.objects.push(PlanObject::Area(Area { rings: vec![gray.clone()], fill: Fill::Solid(Color::gray(0.8)) }));
     s.polygon(gray, Pen::mm(0.35));
 
     // F: Schrift
