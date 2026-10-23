@@ -1,0 +1,82 @@
+// Landesrecht als Daten (CLAUDE.md, Regel 8): Musterbauordnung (MBO) und
+// Muster-Bauvorlagenverordnung (MBauVorlV) als Voreinstellung, solange das
+// Bundesland des Büros nicht feststeht.
+//
+// VORSCHLAG für M5, von Ben zu prüfen (Prüfpaket M5). Grundlage:
+// MBO, Fassung November 2002 mit den späteren Änderungen der
+// Bauministerkonferenz (welcher Stand genau, prüft Ben); MBauVorlV, Fassung
+// Februar 2007.
+// Die Paragrafen stehen bei jedem Wert. Für ein Bundesland entsteht eine
+// eigene Datei mit dessen Werten und Paragrafen (etwa `nw.ron`).
+StateRules(
+    code: "MBO",
+    name: "Musterbauordnung (MBO 2002)",
+    setbacks: SetbackRules(
+        source: "§ 6 MBO",
+        // § 6 Abs. 5 Satz 1: Tiefe 0,4 H, mindestens 3 m.
+        factor: 0.4,
+        minimum: 3.0,
+        // § 6 Abs. 5 Satz 3: Wohngebäude der Gebäudeklassen 1 und 2 mit höchstens
+        // drei oberirdischen Geschossen: 3 m genügen.
+        small_buildings: Some(SmallBuildings(max_class: 2, max_storeys: 3, depth: 3.0)),
+        // § 6 Abs. 4 Satz 3 und 4: Dächer über 70° voll, über 45° zu einem Drittel.
+        roof_full_above: 70.0,
+        roof_third_above: 45.0,
+        // § 6 Abs. 2 Satz 2: auf öffentlichen Verkehrs-, Grün- und Wasserflächen bis zu deren Mitte.
+        public_to_center: true,
+    ),
+    building_classes: BuildingClassRules(
+        source: "§ 2 Abs. 3 MBO",
+        // Höhe: Fußbodenoberkante des höchsten Geschosses mit Aufenthaltsraum über
+        // der Geländeoberfläche im Mittel.
+        low: 7.0,
+        medium: 13.0,
+        // Gebäudeklassen 1 und 2: höchstens zwei Nutzungseinheiten mit zusammen höchstens 400 m².
+        small_units: 2,
+        small_area: 400.0,
+        // Gebäudeklasse 4: Nutzungseinheiten mit jeweils höchstens 400 m².
+        unit_area: 400.0,
+        // § 2 Abs. 6: oberirdisch, wenn die Deckenoberkante im Mittel mehr als 1,40 m über dem Gelände liegt.
+        above_ground: 1.4,
+    ),
+    escape: EscapeRules(
+        // § 35 Abs. 2: Ausgang in einen notwendigen Treppenraum oder ins Freie in höchstens 35 m.
+        max_distance: 35.0,
+        distance_source: "§ 35 Abs. 2 MBO",
+        // § 33 Abs. 3: Brüstung zum Anleitern höher als 8 m: nur mit Hubrettungsfahrzeug.
+        ladder_height: 8.0,
+        ladder_source: "§ 33 Abs. 3 MBO",
+        // § 37 Abs. 5: Fenster als Rettungsweg im Lichten mindestens 0,90 x 1,20 m,
+        // Unterkante höchstens 1,20 m über dem Fußboden.
+        window_width: 0.9,
+        window_height: 1.2,
+        window_sill: 1.2,
+        window_source: "§ 37 Abs. 5 MBO",
+        // § 35 Abs. 8: notwendiger Treppenraum mit Fenster je oberirdischem Geschoss
+        // (mindestens 0,5 m² zu öffnen) oder Rauchableitung oben (mindestens 1 m²).
+        stair_window_area: 0.5,
+        smoke_vent_area: 1.0,
+        stair_source: "§ 35 Abs. 8 MBO",
+    ),
+    accessible: AccessibleRules(
+        // § 50 Abs. 1: In Gebäuden mit mehr als zwei Wohnungen müssen die Wohnungen
+        // eines Geschosses barrierefrei erreichbar sein; dort Wohn- und Schlafräume,
+        // Toilette, Bad und Küche mit dem Rollstuhl zugänglich.
+        min_dwellings: 3,
+        source: "§ 50 Abs. 1 MBO",
+    ),
+    land_use: LandUseRules(
+        // Vollgeschoss für die Geschossfläche (§ 20 BauNVO verweist auf das Landesrecht):
+        // oberirdisches Geschoss, das über mindestens zwei Dritteln seiner Grundfläche
+        // mindestens 2,30 m hoch ist (§ 2 Abs. 5 MBO in der Fassung bis 2012).
+        full_storey_height: 2.3,
+        full_storey_share: 0.6667,
+        source: "§ 2 Abs. 5 MBO (Fassung bis 2012), §§ 19, 20 BauNVO",
+    ),
+    submission: SubmissionRules(
+        source: "§§ 7, 8 MBauVorlV",
+        // § 7 Abs. 1: Lageplan nicht kleiner als 1:500; § 8 Abs. 1: Bauzeichnungen 1:100.
+        site_plan_scale: 500.0,
+        drawing_scale: 100.0,
+    ),
+)

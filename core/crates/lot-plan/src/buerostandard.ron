@@ -104,6 +104,16 @@ OfficeStandard(
             color: (176, 196, 214),
             cut: Solid(gray: 0.82),
         ),
+        "kies": Material(
+            name: "Kies",
+            color: (190, 186, 178),
+            cut: Empty,
+        ),
+        "abdichtung": Material(
+            name: "Abdichtung",
+            color: (60, 60, 60),
+            cut: Solid(gray: 0.0),
+        ),
         "klinker": Material(
             name: "Klinker (Vormauerschale)",
             color: (176, 108, 84),

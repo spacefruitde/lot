@@ -15,6 +15,7 @@ pub mod m0;
 pub mod reference;
 pub mod section;
 pub mod sheets;
+pub mod site_plan;
 pub mod stairs;
 pub mod standard;
 

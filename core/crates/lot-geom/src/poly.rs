@@ -109,6 +109,34 @@ impl Area {
         self == other || canonical(&self.0) == canonical(&other.0)
     }
 
+    /// Fläche um `delta` Meter vergrößert (negativ: verkleinert), mit spitzen
+    /// Ecken. Bei achsparallelen Kanten ist das Verkleinern genau das Abtragen
+    /// eines Quadrats: Übrig bleiben die Mittelpunkte aller Quadrate mit der
+    /// Kantenlänge 2·|delta|, die ganz in die Fläche passen.
+    pub fn offset(&self, delta: f64) -> Area {
+        let paths = clipper2_rust::inflate_paths_64(
+            &self.0,
+            delta * SCALE,
+            clipper2_rust::JoinType::Miter,
+            clipper2_rust::EndType::Polygon,
+            4.0,
+            0.0,
+        );
+        Area(clipper2_rust::union_subjects_64(&paths, FillRule::NonZero))
+    }
+
+    /// Um den Ursprung gedreht, Winkel in Grad gegen den Uhrzeigersinn.
+    pub fn rotated(&self, degrees: f64) -> Area {
+        let (sin, cos) = degrees.to_radians().sin_cos();
+        let rings: Vec<Ring> = self
+            .rings()
+            .into_iter()
+            .map(|r| r.into_iter().map(|p| [p[0] * cos - p[1] * sin, p[0] * sin + p[1] * cos]).collect())
+            .collect();
+        let paths: Paths64 = rings.iter().map(|r| r.iter().map(|p| to_point(*p)).collect()).collect();
+        Area(clipper2_rust::union_subjects_64(&paths, FillRule::NonZero))
+    }
+
     /// Achsparalleler Hüllquader (min, max).
     pub fn bounds(&self) -> Option<([f64; 2], [f64; 2])> {
         let mut points = self.0.iter().flatten().map(from_point);
@@ -166,6 +194,17 @@ mod tests {
         assert!((a.intersection(&b).area() - 0.3).abs() < 1e-9);
         assert!((a.union(&b).area() - (1.5 + 2.0 - 0.3)).abs() < 1e-9);
         assert!((a.difference(&b).area() - 1.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn offset_shrinks_and_grows_with_square_corners() {
+        let sq = Area::from_ring(&[[0.0, 0.0], [3.0, 0.0], [3.0, 2.0], [0.0, 2.0]]);
+        assert!((sq.offset(-0.75).area() - 1.5 * 0.5).abs() < 1e-6);
+        assert!(sq.offset(-1.0).is_empty());
+        assert!((sq.offset(0.5).area() - 4.0 * 3.0).abs() < 1e-6);
+        let turned = sq.rotated(90.0);
+        assert!((turned.area() - 6.0).abs() < 1e-6);
+        assert!(turned.contains([-1.0, 1.5]));
     }
 
     #[test]

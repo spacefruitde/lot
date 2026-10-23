@@ -1,0 +1,17 @@
+// Ausgaben von lot-cli render für dieses Testprojekt.
+[
+    SitePlan(name: "lageplan", scale: 250.0),
+    SitePlan(name: "lageplan-probe", scale: 250.0, variant: Some((45, 1))),
+    FloorPlan(name: "eg-100", storey: 1, scale: 100.0),
+    FloorPlan(name: "1og-100", storey: 2, scale: 100.0),
+    FloorPlan(name: "3og-100", storey: 4, scale: 100.0),
+    Section(name: "schnitt-a", view: 60, scale: 100.0),
+    Section(name: "schnitt-b", view: 61, scale: 100.0),
+    Section(name: "ansicht-sued", view: 62, scale: 100.0),
+    Section(name: "ansicht-ost", view: 63, scale: 100.0),
+    Section(name: "ansicht-nord", view: 64, scale: 100.0),
+    Section(name: "ansicht-west", view: 65, scale: 100.0),
+    View3d(name: "mfh-3d"),
+    AreaTable(name: "flaechen"),
+    PlanSheets(name: "bauantrag"),
+]

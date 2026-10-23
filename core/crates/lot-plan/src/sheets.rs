@@ -125,6 +125,46 @@ pub fn section_sheet(
     sheet
 }
 
+/// Lageplan mit Abstandsflächen auf dem kleinsten Blatt, auf das er passt.
+pub fn site_plan_sheet(
+    project: &Project,
+    geometry: &lot_geom::ModelGeometry,
+    scale: f64,
+    standard: &OfficeStandard,
+) -> Sheet {
+    let report = crate::site_plan::setback_report(project, geometry);
+    let viewport = Viewport { scale, origin: PaperPoint::new(0.0, 0.0) };
+    let objects = crate::site_plan::site_plan_with(project, &report, standard, viewport);
+    let class = report.rules.building_classes.source.clone();
+    let mut sheet = fitted(format!("{}, Lageplan, 1:{}", project.name, scale), objects);
+    let first = format!("{}  ·  Lageplan mit Abstandsflächen  ·  M 1:{}", project.name, scale);
+    let second = format!(
+        "{}. Gebäudeklasse nach {class}. Darstellung nach Bürostandard, Vorschlag.",
+        if report.ok() { "Abstandsflächen eingehalten" } else { "Abstandsflächen NICHT eingehalten (rot)" }
+    );
+    footer(&mut sheet, &first, &second);
+    sheet
+}
+
+/// Blatt in der kleinsten passenden Größe, Planobjekte in der Mitte über der Fußzeile.
+fn fitted(title: String, mut objects: Vec<PlanObject>) -> Sheet {
+    let (lo, hi) = crate::bounds(&objects).unwrap_or((PaperPoint::new(0.0, 0.0), PaperPoint::new(100.0, 100.0)));
+    let (paper_w, paper_h) = (hi.x - lo.x + 10.0, hi.y - lo.y + 10.0);
+    let (_, width, height) = FORMATS
+        .iter()
+        .copied()
+        .find(|(_, w, h)| paper_w + 2.0 * MARGIN <= *w && paper_h + 2.0 * MARGIN + FOOTER <= *h)
+        .unwrap_or(FORMATS[FORMATS.len() - 1]);
+    let (dx, dy) = (width / 2.0 - (lo.x + hi.x) / 2.0, (height + FOOTER) / 2.0 - (lo.y + hi.y) / 2.0);
+    for o in &mut objects {
+        o.translate(dx, dy);
+    }
+    let mut sheet = Sheet { title, width_mm: width, height_mm: height, objects: Vec::new() };
+    frame(&mut sheet);
+    sheet.objects.extend(objects);
+    sheet
+}
+
 /// Eine Zelle im Wandknoten-Katalog.
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct CatalogCell {
@@ -207,6 +247,8 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
             | Element::Terrain(_)
             | Element::VariantSet(_)
             | Element::ReferenceModel(_)
+            | Element::Plot(_)
+            | Element::Elevator(_)
             | Element::ProjectInfo(_)
             | Element::PlanSheet(_) => false,
             Element::Wall(w) => {

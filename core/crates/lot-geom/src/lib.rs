@@ -318,12 +318,31 @@ pub fn plan_extent(project: &Project) -> Option<([f64; 2], [f64; 2])> {
     )
 }
 
+/// Dreiecksnetz eines Körpers, nur mit den Eckpunkten, die Dreiecke benutzen.
+/// Booleans lassen sonst alte Punkte stehen, die etwa die Ausdehnung verfälschen.
 fn to_trimesh(solid: &Manifold) -> TriMesh {
     let mesh = solid.get_mesh_gl64(0);
-    TriMesh {
-        positions: mesh.vert_properties.chunks_exact(mesh.num_prop as usize).map(|v| [v[0], v[1], v[2]]).collect(),
-        triangles: mesh.tri_verts.as_chunks::<3>().0.iter().map(|t| t.map(|i| i as u32)).collect(),
-    }
+    let all: Vec<[f64; 3]> =
+        mesh.vert_properties.chunks_exact(mesh.num_prop as usize).map(|v| [v[0], v[1], v[2]]).collect();
+    let mut index = vec![u32::MAX; all.len()];
+    let mut positions = Vec::new();
+    let triangles = mesh
+        .tri_verts
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|t| {
+            t.map(|i| {
+                let i = i as usize;
+                if index[i] == u32::MAX {
+                    index[i] = positions.len() as u32;
+                    positions.push(all[i]);
+                }
+                index[i]
+            })
+        })
+        .collect();
+    TriMesh { positions, triangles }
 }
 
 #[cfg(test)]

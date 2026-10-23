@@ -63,6 +63,14 @@ pub enum Output {
         #[serde(default)]
         cad: bool,
     },
+    /// Lageplan mit Abstandsflächen (5.01); `variant` zeigt eine andere
+    /// Variante einer Gruppe, etwa ein anderes Grundstück.
+    SitePlan {
+        name: String,
+        scale: f64,
+        #[serde(default)]
+        variant: Option<(u64, usize)>,
+    },
     /// Alle Planblätter des Projekts, eine Seite je Blatt; mit `cad` je Blatt
     /// auch als DXF und DWG in Millimetern.
     PlanSheets {
@@ -82,6 +90,7 @@ impl Output {
             | Output::PlanView { name, .. }
             | Output::AreaTable { name, .. }
             | Output::Section { name, .. }
+            | Output::SitePlan { name, .. }
             | Output::PlanSheets { name, .. } => name,
         }
     }
@@ -116,8 +125,7 @@ pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &At
                 None => project.clone(),
             };
             let project = phase_project(&base, *phase);
-            let references =
-                if *references { lot_io::ifc::references(&project, attachments) } else { Vec::new() };
+            let references = if *references { lot_io::ifc::references(&project, attachments) } else { Vec::new() };
             let z = project.storey(ElementId(*storey)).map_or(0.0, |s| s.elevation)
                 + lot_plan::floor_plan::DEFAULT_CUT_HEIGHT;
             vec![lot_plan::sheets::floor_plan_sheet_with(&project, ElementId(*storey), *scale, standard, |viewport| {
@@ -139,6 +147,17 @@ pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &At
                 Ok(geometry) => {
                     vec![lot_plan::sheets::section_sheet(&project, &geometry, ElementId(*view), *scale, standard)]
                 }
+                Err(_) => Vec::new(),
+            }
+        }
+        Output::SitePlan { scale, variant, .. } => {
+            let base = match variant {
+                Some((set, index)) => project.with_variant(ElementId(*set), *index),
+                None => project.clone(),
+            };
+            let project = base.variant_view();
+            match geometry(&project, attachments) {
+                Ok(geometry) => vec![lot_plan::sheets::site_plan_sheet(&project, &geometry, *scale, standard)],
                 Err(_) => Vec::new(),
             }
         }

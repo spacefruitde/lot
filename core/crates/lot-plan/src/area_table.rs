@@ -215,6 +215,7 @@ mod tests {
                     number: "0.01".into(),
                     name: "Wohnen; Essen".into(),
                     usage: lot_model::SpaceUsage::Living,
+                    unit: String::new(),
                     net: Some(24.345),
                     living: Some(24.5),
                 }],

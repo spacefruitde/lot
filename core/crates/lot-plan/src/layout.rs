@@ -69,6 +69,9 @@ fn drawings(project: &Project, geometry: &ModelGeometry, sheet: &PlanSheet, stan
                 }
                 _ => (Vec::new(), "Ansicht fehlt".to_string()),
             },
+            ViewContent::SitePlan => {
+                (crate::site_plan::site_plan(project, geometry, standard, viewport), "Lageplan".to_string())
+            }
         };
         let Some((lo, hi)) = bounds(&objects) else { continue };
         let (dx, dy) = (placed.center.x - (lo.x + hi.x) / 2.0, placed.center.y - (lo.y + hi.y) / 2.0);

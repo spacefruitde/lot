@@ -290,6 +290,16 @@ impl LotDocument {
                 lot_model::AnnotationShape::Circle { .. } => "Kreis".into(),
             },
             Some(lot_model::Element::ProjectInfo(_)) => "Projektangaben".into(),
+            Some(lot_model::Element::Plot(p)) => {
+                if p.neighbour {
+                    format!("Nachbargrundstück {}", p.name)
+                } else {
+                    format!("Grundstück {}", p.name)
+                }
+            }
+            Some(lot_model::Element::Elevator(e)) => {
+                format!("Aufzug · Fahrkorb {:.2} x {:.2} m", e.cabin_width, e.cabin_depth).replace('.', ",")
+            }
             Some(lot_model::Element::PlanSheet(s)) => format!("Planblatt {} {}", s.number, s.title),
             Some(lot_model::Element::Space(r)) => format!("Raum {} {}", r.number, r.name).trim_end().to_string(),
             Some(lot_model::Element::GridLine(g)) => format!("Achse {}", g.label),
@@ -512,6 +522,7 @@ mod tests {
                 name: "Raum".into(),
                 usage: lot_model::SpaceUsage::Living,
                 living_space: true,
+                unit: String::new(),
             }))
             .unwrap();
         doc.set_space(id.0, " 0.07 ".into(), "Küche".into(), 8, false).unwrap();
