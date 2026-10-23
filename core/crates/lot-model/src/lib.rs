@@ -15,6 +15,7 @@ mod operation;
 mod project;
 mod roof;
 mod stair;
+mod terrain;
 mod underlay;
 
 pub use annotation::{Annotation, AnnotationShape, AnnotationView};
@@ -29,4 +30,5 @@ pub use operation::Operation;
 pub use project::Project;
 pub use roof::{Dormer, DormerWindow, EavePlane, Roof, RoofEdge, RoofFace, RoofWindow};
 pub use stair::{FlightLayout, Landing, Railing, RailingPath, Stair, StairFlight, StairLayout, Tread};
+pub use terrain::{Terrain, TerrainPoint};
 pub use underlay::{Underlay, pdf_point_scale};

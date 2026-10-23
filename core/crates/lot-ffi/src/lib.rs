@@ -280,6 +280,7 @@ impl LotDocument {
             Some(lot_model::Element::Railing(_)) => "Geländer".into(),
             Some(lot_model::Element::SectionView(v)) => v.name.clone(),
             Some(lot_model::Element::Underlay(u)) => format!("Unterlage · {}", u.source),
+            Some(lot_model::Element::Terrain(t)) => format!("Gelände · {} Höhenpunkte", t.points.len()),
             Some(lot_model::Element::Annotation(a)) => match &a.shape {
                 lot_model::AnnotationShape::Text { text, .. } => format!("Text · {text}"),
                 lot_model::AnnotationShape::Polyline(_) => "Linie".into(),

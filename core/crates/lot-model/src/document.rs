@@ -321,6 +321,15 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     ));
                 }
             }
+            Element::Terrain(t) => {
+                if t.points.len() < 3 {
+                    return Err(invalid("Gelände: mindestens drei Höhenpunkte"));
+                }
+                let others = project.elements.iter().any(|(other, e)| other != id && matches!(e, Element::Terrain(_)));
+                if others {
+                    return Err(invalid("Ein Projekt hat ein Gelände"));
+                }
+            }
             Element::Underlay(u) => {
                 if project.storey(u.storey).is_none() {
                     return Err(invalid("Unterlage: Das Geschoss fehlt"));

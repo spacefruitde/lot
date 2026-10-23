@@ -138,6 +138,9 @@ Project(
         90: SectionView(name: "Schnitt A-A", mark: "A", start: (x: 12.6, y: -2.0), end: (x: 12.6, y: 10.5), look: Left, depth: 15.0),
         91: SectionView(name: "Ansicht Süd", mark: "", start: (x: -2.0, y: -3.0), end: (x: 15.5, y: -3.0), look: Left, depth: 20.0, kind: Elevation),
         92: SectionView(name: "Ansicht Ost", mark: "", start: (x: 16.0, y: -2.0), end: (x: 16.0, y: 10.5), look: Left, depth: 20.0, kind: Elevation),
+        94: Terrain(points: [
+            (x: -3.0, y: -3.0, z: -0.2), (x: 16.5, y: -3.0, z: -0.25), (x: 16.5, y: 11.5, z: -0.1), (x: -3.0, y: 11.5, z: -0.1),
+        ]),
         93: ProjectInfo(client: "Familie Altbau (Testdaten)", site: "Altweg 3, 12345 Musterstadt", architect: "Lot Testbüro", building: SmallResidential),
     },
 )

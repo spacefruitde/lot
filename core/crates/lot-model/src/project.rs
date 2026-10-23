@@ -193,6 +193,14 @@ impl Project {
         })
     }
 
+    /// Das Gelände des Projekts, falls es eins gibt.
+    pub fn terrain(&self) -> Option<&crate::Terrain> {
+        self.elements.values().find_map(|e| match e {
+            Element::Terrain(t) => Some(t),
+            _ => None,
+        })
+    }
+
     /// Unterlagen unter dem Grundriss eines Geschosses.
     pub fn underlays_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Underlay)> {
         self.elements.iter().filter_map(move |(id, e)| match e {

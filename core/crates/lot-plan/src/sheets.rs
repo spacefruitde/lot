@@ -99,10 +99,15 @@ pub fn section_sheet(
     footer(
         &mut sheet,
         &format!("{}  ·  {}  ·  M 1:{}  ·  {format}", project.name, view.name, scale),
-        &format!(
-            "Gelände vorläufig {} m. Darstellung nach Bürostandard, Vorschlag.",
-            crate::section::format_height(crate::section::GROUND)
-        ),
+        &match project.terrain() {
+            Some(t) => {
+                format!("Gelände nach {} Höhenpunkten. Darstellung nach Bürostandard, Vorschlag.", t.points.len())
+            }
+            None => format!(
+                "Gelände vorläufig {} m. Darstellung nach Bürostandard, Vorschlag.",
+                crate::section::format_height(crate::section::GROUND)
+            ),
+        },
     );
     sheet
 }
@@ -186,6 +191,7 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
             | Element::SectionView(_)
             | Element::Annotation(_)
             | Element::Underlay(_)
+            | Element::Terrain(_)
             | Element::ProjectInfo(_)
             | Element::PlanSheet(_) => false,
             Element::Wall(w) => {

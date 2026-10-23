@@ -45,6 +45,7 @@ pub enum Element {
     SectionView(SectionView),
     Annotation(crate::Annotation),
     Underlay(crate::Underlay),
+    Terrain(crate::Terrain),
     ProjectInfo(ProjectInfo),
     PlanSheet(PlanSheet),
 }
@@ -71,6 +72,7 @@ pub enum ElementKind {
     SectionView,
     Annotation,
     Underlay,
+    Terrain,
     ProjectInfo,
     PlanSheet,
 }
@@ -97,6 +99,7 @@ impl Element {
             Element::SectionView(_) => ElementKind::SectionView,
             Element::Annotation(_) => ElementKind::Annotation,
             Element::Underlay(_) => ElementKind::Underlay,
+            Element::Terrain(_) => ElementKind::Terrain,
             Element::ProjectInfo(_) => ElementKind::ProjectInfo,
             Element::PlanSheet(_) => ElementKind::PlanSheet,
         }

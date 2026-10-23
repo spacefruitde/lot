@@ -94,6 +94,11 @@ OfficeStandard(
             color: (96, 100, 106),
             cut: Solid(gray: 0.0),
         ),
+        "erdreich": Material(
+            name: "Erdreich (gewachsener Boden)",
+            color: (132, 150, 96),
+            cut: Lines(angle: 135.0, spacing: 2.5),
+        ),
         "klinker": Material(
             name: "Klinker (Vormauerschale)",
             color: (176, 108, 84),
