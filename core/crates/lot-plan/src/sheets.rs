@@ -175,7 +175,12 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
     for (id, e) in &project.elements {
         let keep = match e {
             Element::Storey(_) | Element::WallType(_) | Element::SlabType(_) => true,
-            Element::Slab(_) | Element::SlabOpening(_) | Element::Roof(_) | Element::SectionView(_) => false,
+            Element::Slab(_)
+            | Element::SlabOpening(_)
+            | Element::Roof(_)
+            | Element::SectionView(_)
+            | Element::ProjectInfo(_)
+            | Element::PlanSheet(_) => false,
             Element::Wall(w) => {
                 let k = inside(w.start.x, w.start.y) || inside(w.end.x, w.end.y);
                 if k {

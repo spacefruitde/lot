@@ -33,6 +33,8 @@ pub enum Output {
     AreaTable { name: String },
     /// Schnitt oder Ansicht (Element `view` im Projekt).
     Section { name: String, view: u64, scale: f64 },
+    /// Alle Planblätter des Projekts, eine Seite je Blatt.
+    PlanSheets { name: String },
 }
 
 impl Output {
@@ -44,7 +46,8 @@ impl Output {
             | Output::View3d { name }
             | Output::PlanView { name, .. }
             | Output::AreaTable { name }
-            | Output::Section { name, .. } => name,
+            | Output::Section { name, .. }
+            | Output::PlanSheets { name } => name,
         }
     }
 }
@@ -75,6 +78,10 @@ pub fn sheets(project: &Project, output: &Output, source: &str) -> Vec<Sheet> {
             Ok(geometry) => {
                 vec![lot_plan::sheets::section_sheet(project, &geometry, ElementId(*view), *scale, standard)]
             }
+            Err(_) => Vec::new(),
+        },
+        Output::PlanSheets { .. } => match lot_geom::build(project) {
+            Ok(geometry) => lot_plan::layout::plan_sheets(project, &geometry, standard),
             Err(_) => Vec::new(),
         },
         Output::View3d { .. } | Output::PlanView { .. } => Vec::new(),

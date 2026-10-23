@@ -39,6 +39,8 @@ pub enum Element {
     SlabOpening(SlabOpening),
     Roof(crate::Roof),
     SectionView(SectionView),
+    ProjectInfo(ProjectInfo),
+    PlanSheet(PlanSheet),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -57,6 +59,8 @@ pub enum ElementKind {
     SlabOpening,
     Roof,
     SectionView,
+    ProjectInfo,
+    PlanSheet,
 }
 
 impl Element {
@@ -75,6 +79,8 @@ impl Element {
             Element::SlabOpening(_) => ElementKind::SlabOpening,
             Element::Roof(_) => ElementKind::Roof,
             Element::SectionView(_) => ElementKind::SectionView,
+            Element::ProjectInfo(_) => ElementKind::ProjectInfo,
+            Element::PlanSheet(_) => ElementKind::PlanSheet,
         }
     }
 
@@ -751,6 +757,51 @@ impl SectionView {
         };
         (n, (n.1, -n.0))
     }
+}
+
+/// Angaben für den Plankopf, einmal je Projekt.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct ProjectInfo {
+    #[serde(default)]
+    pub client: String,
+    /// Bauort, etwa Straße und Ort.
+    #[serde(default)]
+    pub site: String,
+    /// Entwurfsverfasser (Büro).
+    #[serde(default)]
+    pub architect: String,
+}
+
+/// Planblatt (3.07) mit Plankopf und darauf platzierten Ansichten.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlanSheet {
+    /// Plannummer, etwa „101“.
+    pub number: String,
+    /// Planinhalt, etwa „Grundrisse“.
+    pub title: String,
+    /// Blattformat nach DIN EN ISO 216, quer: „A4“ bis „A0“.
+    pub format: String,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub index: String,
+    pub views: Vec<PlacedView>,
+}
+
+/// Eine Ansicht auf einem Planblatt: Inhalt, Maßstab und Mitte auf dem Blatt in mm.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlacedView {
+    pub content: ViewContent,
+    pub scale: f64,
+    pub center: Point2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ViewContent {
+    /// Grundriss eines Geschosses.
+    FloorPlan { storey: ElementId },
+    /// Schnitt oder Ansicht (Element `SectionView`).
+    Section { view: ElementId },
 }
 
 /// Querschnitt einer Stütze.

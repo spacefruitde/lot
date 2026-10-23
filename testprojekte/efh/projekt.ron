@@ -142,5 +142,39 @@ Project(
         111: SectionView(name: "Ansicht Ost", start: (x: 14.0, y: -1.0), end: (x: 14.0, y: 10.0), look: Left, depth: 30.0, kind: Elevation),
         112: SectionView(name: "Ansicht Nord", start: (x: 12.0, y: 12.0), end: (x: -1.0, y: 12.0), look: Left, depth: 30.0, kind: Elevation),
         113: SectionView(name: "Ansicht West", start: (x: -3.0, y: 10.0), end: (x: -3.0, y: -1.0), look: Left, depth: 30.0, kind: Elevation),
+        114: ProjectInfo(client: "Familie Muster (Testdaten)", site: "Musterweg 1, 12345 Musterstadt", architect: "Lot Testbüro"),
+        115: PlanSheet(
+            number: "101",
+            title: "Grundrisse KG und EG",
+            format: "A2",
+            date: "23.10.2026",
+            views: [
+                (content: FloorPlan(storey: 1), scale: 100.0, center: (x: 150.0, y: 260.0)),
+                (content: FloorPlan(storey: 2), scale: 100.0, center: (x: 380.0, y: 260.0)),
+            ],
+        ),
+        116: PlanSheet(
+            number: "102",
+            title: "Grundriss DG und Schnitte",
+            format: "A2",
+            date: "23.10.2026",
+            views: [
+                (content: FloorPlan(storey: 3), scale: 100.0, center: (x: 150.0, y: 260.0)),
+                (content: Section(view: 108), scale: 100.0, center: (x: 400.0, y: 320.0)),
+                (content: Section(view: 109), scale: 100.0, center: (x: 400.0, y: 150.0)),
+            ],
+        ),
+        117: PlanSheet(
+            number: "103",
+            title: "Ansichten",
+            format: "A2",
+            date: "23.10.2026",
+            views: [
+                (content: Section(view: 110), scale: 100.0, center: (x: 160.0, y: 310.0)),
+                (content: Section(view: 112), scale: 100.0, center: (x: 410.0, y: 310.0)),
+                (content: Section(view: 111), scale: 100.0, center: (x: 160.0, y: 140.0)),
+                (content: Section(view: 113), scale: 100.0, center: (x: 380.0, y: 140.0)),
+            ],
+        ),
     },
 )

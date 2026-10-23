@@ -289,6 +289,15 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     return Err(invalid("Eine Decke braucht einen Umriss mit mindestens 0,01 m²"));
                 }
             }
+            Element::ProjectInfo(_) => {}
+            Element::PlanSheet(s) => {
+                if !["A4", "A3", "A2", "A1", "A0"].contains(&s.format.as_str()) {
+                    return Err(invalid("Planblatt: Format A4 bis A0"));
+                }
+                if s.views.iter().any(|v| v.scale <= 0.0) {
+                    return Err(invalid("Planblatt: Der Maßstab muss größer als null sein"));
+                }
+            }
             Element::SectionView(v) => {
                 if v.start.distance(v.end) < MIN_LENGTH || v.depth <= 0.0 {
                     return Err(invalid("Schnitt: Linie und Blicktiefe müssen größer als null sein"));

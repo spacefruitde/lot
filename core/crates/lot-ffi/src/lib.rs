@@ -249,6 +249,8 @@ impl LotDocument {
             Some(lot_model::Element::SlabOpening(_)) => "Deckendurchbruch".into(),
             Some(lot_model::Element::Roof(_)) => "Dach".into(),
             Some(lot_model::Element::SectionView(v)) => v.name.clone(),
+            Some(lot_model::Element::ProjectInfo(_)) => "Projektangaben".into(),
+            Some(lot_model::Element::PlanSheet(s)) => format!("Planblatt {} {}", s.number, s.title),
             Some(lot_model::Element::Space(r)) => format!("Raum {} {}", r.number, r.name).trim_end().to_string(),
             Some(lot_model::Element::GridLine(g)) => format!("Achse {}", g.label),
             Some(lot_model::Element::WallType(t)) => format!("Wandaufbau {}", t.name),

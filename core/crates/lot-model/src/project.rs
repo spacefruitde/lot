@@ -162,6 +162,31 @@ impl Project {
         self.vertical_extent(wall.storey, wall.base_offset, wall.top)
     }
 
+    /// Angaben für den Plankopf; leer, wenn das Projekt keine hat.
+    pub fn info(&self) -> crate::ProjectInfo {
+        self.elements
+            .values()
+            .find_map(|e| match e {
+                Element::ProjectInfo(i) => Some(i.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
+    /// Alle Planblätter, nach Plannummer.
+    pub fn plan_sheets(&self) -> Vec<(ElementId, &crate::PlanSheet)> {
+        let mut sheets: Vec<_> = self
+            .elements
+            .iter()
+            .filter_map(|(id, e)| match e {
+                Element::PlanSheet(s) => Some((*id, s)),
+                _ => None,
+            })
+            .collect();
+        sheets.sort_by(|a, b| a.1.number.cmp(&b.1.number));
+        sheets
+    }
+
     /// Alle Schnitte und Ansichten, nach Kennung.
     pub fn section_views(&self) -> impl Iterator<Item = (ElementId, &crate::SectionView)> {
         self.elements.iter().filter_map(|(id, e)| match e {

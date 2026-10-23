@@ -9,6 +9,7 @@ pub mod area_table;
 pub mod clip;
 pub mod dimensions;
 pub mod floor_plan;
+pub mod layout;
 pub mod m0;
 pub mod section;
 pub mod sheets;
@@ -111,6 +112,43 @@ pub enum PlanObject {
     Line(Line),
     Area(Area),
     Text(Text),
+}
+
+impl PlanObject {
+    /// Alle Punkte, für Ausdehnung und Verschieben.
+    fn points_mut(&mut self) -> Vec<&mut PaperPoint> {
+        match self {
+            PlanObject::Line(l) => l.points.iter_mut().collect(),
+            PlanObject::Area(a) => a.rings.iter_mut().flatten().collect(),
+            PlanObject::Text(t) => vec![&mut t.position],
+        }
+    }
+
+    pub fn translate(&mut self, dx: f64, dy: f64) {
+        for p in self.points_mut() {
+            p.x += dx;
+            p.y += dy;
+        }
+    }
+}
+
+/// Ausdehnung von Planobjekten auf dem Blatt (min, max); Texte zählen mit
+/// ihrem Bezugspunkt und ihrer Höhe.
+pub fn bounds(objects: &[PlanObject]) -> Option<(PaperPoint, PaperPoint)> {
+    let mut lo = PaperPoint::new(f64::INFINITY, f64::INFINITY);
+    let mut hi = PaperPoint::new(f64::NEG_INFINITY, f64::NEG_INFINITY);
+    let mut add = |p: PaperPoint, r: f64| {
+        lo = PaperPoint::new(lo.x.min(p.x - r), lo.y.min(p.y - r));
+        hi = PaperPoint::new(hi.x.max(p.x + r), hi.y.max(p.y + r));
+    };
+    for o in objects {
+        match o {
+            PlanObject::Line(l) => l.points.iter().for_each(|p| add(*p, 0.0)),
+            PlanObject::Area(a) => a.rings.iter().flatten().for_each(|p| add(*p, 0.0)),
+            PlanObject::Text(t) => add(t.position, t.height_mm),
+        }
+    }
+    lo.x.is_finite().then_some((lo, hi))
 }
 
 /// Ein Planblatt.
