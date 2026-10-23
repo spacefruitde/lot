@@ -14,7 +14,7 @@ pub enum Command {
     ArcWallTool,
     GridTool,
     ColumnTool,
-    RoomTool,
+    SpaceTool,
     DoorTool,
     WindowTool,
     /// Gewählte Türen schlagen zur anderen Wandseite auf.
@@ -24,7 +24,7 @@ pub enum Command {
     /// Maßketten an den gewählten Wänden: Öffnungen und Gesamtmaß, außen.
     DimensionWalls,
     /// Einen Raum in jeden umschlossenen Bereich ohne Raum setzen.
-    DetectRooms,
+    DetectSpaces,
     SetWallType(u64),
     SetAlignment(WallAlignment),
     SetStorey(u64),

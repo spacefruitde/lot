@@ -293,7 +293,7 @@ final class MetalViewportNSView: NSView {
             case "v": model?.run("SelectTool")
             case "a": model?.run("GridTool")
             case "s": model?.run("ColumnTool")
-            case "r": model?.run("RoomTool")
+            case "r": model?.run("SpaceTool")
             case "t": model?.run("DoorTool")
             case "m": model?.run("DimensionWalls")
             case "f": model?.run(event.modifierFlags.contains(.shift) ? "FlipWalls" : "WindowTool")

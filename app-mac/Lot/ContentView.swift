@@ -61,7 +61,7 @@ struct ContentView: View {
             toolButton("Stütze", systemImage: "square.fill", tool: "column", command: "ColumnTool", key: "S")
             toolButton("Tür", systemImage: "door.left.hand.open", tool: "door", command: "DoorTool", key: "T")
             toolButton("Fenster", systemImage: "squareshape.split.2x2", tool: "window", command: "WindowTool", key: "F")
-            toolButton("Raum", systemImage: "square.dashed", tool: "room", command: "RoomTool", key: "R")
+            toolButton("Raum", systemImage: "square.dashed", tool: "space", command: "SpaceTool", key: "R")
             commandMenu("Wandaufbau", systemImage: "square.stack.3d.up", group: "Wandaufbau")
             commandMenu("Geschoss", systemImage: "building.2", group: "Geschoss")
         }

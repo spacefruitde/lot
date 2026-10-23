@@ -335,7 +335,7 @@ fn snaps_onto_the_arc() {
 }
 
 /// Zeichnet ein Rechteck 6 × 4 m und eine Trennwand bei x = 2,5.
-fn two_rooms(doc: &mut Document, ed: &mut Editor) {
+fn two_spaces(doc: &mut Document, ed: &mut Editor) {
     ed.run(doc, &Command::WallTool);
     for (x, y) in [(0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0), (0.0, 0.0)] {
         click(doc, ed, x, y);
@@ -347,45 +347,45 @@ fn two_rooms(doc: &mut Document, ed: &mut Editor) {
     ed.key(doc, Key::Escape);
 }
 
-fn rooms(doc: &Document) -> Vec<lot_model::Room> {
-    doc.project().rooms_on(ElementId(1)).map(|(_, r)| r.clone()).collect()
+fn spaces(doc: &Document) -> Vec<lot_model::Space> {
+    doc.project().spaces_on(ElementId(1)).map(|(_, r)| r.clone()).collect()
 }
 
 #[test]
-fn room_tool_numbers_rooms_per_storey() {
+fn space_tool_numbers_spaces_per_storey() {
     let (mut doc, mut ed) = setup();
-    two_rooms(&mut doc, &mut ed);
-    ed.run(&mut doc, &Command::RoomTool);
+    two_spaces(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::SpaceTool);
     click(&mut doc, &mut ed, 1.2, 2.0);
     click(&mut doc, &mut ed, 4.0, 2.0);
-    let r = rooms(&doc);
+    let r = spaces(&doc);
     assert_eq!(r.iter().map(|r| r.number.as_str()).collect::<Vec<_>>(), ["0.01", "0.02"]);
     assert!(r.iter().all(|r| r.living_space));
 }
 
 #[test]
-fn detect_rooms_fills_every_enclosed_area_once() {
+fn detect_spaces_fills_every_enclosed_area_once() {
     let (mut doc, mut ed) = setup();
-    two_rooms(&mut doc, &mut ed);
-    ed.run(&mut doc, &Command::RoomTool);
+    two_spaces(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::SpaceTool);
     click(&mut doc, &mut ed, 1.2, 2.0);
-    let response = ed.run(&mut doc, &Command::DetectRooms);
+    let response = ed.run(&mut doc, &Command::DetectSpaces);
     assert!(response.model_changed);
-    let r = rooms(&doc);
+    let r = spaces(&doc);
     assert_eq!(r.len(), 2);
     assert_eq!(r[1].number, "0.02");
     assert!(r[1].position.x > 2.6, "neuer Raum im rechten Bereich: {:?}", r[1].position);
     // Ein zweites Mal gibt es nichts mehr zu tun, und ein Undo nimmt alle neuen Räume zurück.
-    assert!(ed.run(&mut doc, &Command::DetectRooms).error.is_some());
+    assert!(ed.run(&mut doc, &Command::DetectSpaces).error.is_some());
     doc.undo().unwrap();
-    assert_eq!(rooms(&doc).len(), 1);
+    assert_eq!(spaces(&doc).len(), 1);
 }
 
 #[test]
-fn room_stamp_can_be_picked_and_moved() {
+fn space_tag_can_be_picked_and_moved() {
     let (mut doc, mut ed) = setup();
-    two_rooms(&mut doc, &mut ed);
-    ed.run(&mut doc, &Command::RoomTool);
+    two_spaces(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::SpaceTool);
     click(&mut doc, &mut ed, 4.0, 2.0);
     ed.run(&mut doc, &Command::SelectTool);
     // Klick neben den Stempel wählt den Raum, Ziehen verschiebt ihn.
@@ -393,7 +393,7 @@ fn room_stamp_can_be_picked_and_moved() {
     assert_eq!(ed.selection.len(), 1);
     ed.pointer_dragged(doc.project(), input(4.5, 3.2));
     ed.pointer_up(&mut doc);
-    assert_eq!(rooms(&doc)[0].position, Point2::new(4.0, 3.0));
+    assert_eq!(spaces(&doc)[0].position, Point2::new(4.0, 3.0));
     // Die Auswahl zeigt die Fläche des Raums.
     let overlay = ed.overlay(doc.project());
     let ring = &overlay.selected[0];
@@ -402,15 +402,15 @@ fn room_stamp_can_be_picked_and_moved() {
 }
 
 #[test]
-fn cellar_rooms_are_not_living_space() {
+fn cellar_spaces_are_not_living_space() {
     let (mut doc, mut ed) = setup();
     doc.insert(lot_model::Element::Storey(lot_model::Storey { name: "KG".into(), elevation: -2.5, height: 2.5 }))
         .unwrap();
     let kg = doc.project().storeys()[0].0;
     ed.run(&mut doc, &Command::SetStorey(kg.0));
-    ed.run(&mut doc, &Command::RoomTool);
+    ed.run(&mut doc, &Command::SpaceTool);
     click(&mut doc, &mut ed, 1.0, 1.0);
-    let r: Vec<_> = doc.project().rooms_on(kg).map(|(_, r)| r.clone()).collect();
+    let r: Vec<_> = doc.project().spaces_on(kg).map(|(_, r)| r.clone()).collect();
     assert_eq!(r[0].number, "-1.01");
     assert!(!r[0].living_space);
 }
@@ -510,7 +510,7 @@ fn dimension_chain_follows_the_wall() {
     assert!(r.model_changed, "{:?}", r.error);
     let dims: Vec<_> = doc.project().dimensions_on(ElementId(1)).map(|(_, d)| d.clone()).collect();
     assert_eq!(dims.len(), 2, "Öffnungskette und Gesamtmaß");
-    let measures = |doc: &Document, d: &lot_model::Dimension| -> Vec<f64> {
+    let measures = |doc: &Document, d: &lot_model::DimensionChain| -> Vec<f64> {
         let p = lot_geom::dimensions::resolve(doc.project(), d);
         p.windows(2).map(|w| ((w[1].along - w[0].along) * 1000.0).round() / 1000.0).collect()
     };

@@ -7,7 +7,7 @@ struct InspectorView: View {
 
     var body: some View {
         Form {
-            if model.parameters.isEmpty && model.rooms.isEmpty {
+            if model.parameters.isEmpty && model.spaces.isEmpty {
                 Section {
                     Text("Nichts gewählt. Eine Wand oder einen Raumstempel anklicken zeigt die Eigenschaften.")
                         .foregroundStyle(.secondary)
@@ -27,7 +27,7 @@ struct InspectorView: View {
                     }
                 }
             } else {
-                ForEach(model.rooms, id: \.element) { RoomSection(room: $0) }
+                ForEach(model.spaces, id: \.element) { SpaceSection(space: $0) }
                 ForEach(groups, id: \.0) { element, parameters in
                     Section(model.label(for: element)) {
                         ForEach(parameters, id: \.kind) { ParameterRow(parameter: $0) }
@@ -76,50 +76,50 @@ func area(_ m2: Double) -> String {
 
 /// Raumstempel und Flächen eines Raums. Texte werden mit Return, beim
 /// Verlassen des Feldes oder mit der nächsten Änderung im Raum übernommen.
-private struct RoomSection: View {
+private struct SpaceSection: View {
     @Environment(AppModel.self) private var model
-    let room: RoomInfo
+    let space: SpaceInfo
     @State private var number = ""
     @State private var name = ""
     @FocusState private var focused: Bool
 
     var body: some View {
-        Section(model.label(for: room.element)) {
+        Section(model.label(for: space.element)) {
             TextField("Nummer", text: $number)
                 .focused($focused)
                 .onSubmit(commit)
             TextField("Name", text: $name)
                 .focused($focused)
                 .onSubmit(commit)
-            Picker("Nutzung", selection: Binding(get: { room.usage }, set: { model.setRoom(room, number: number, name: name, usage: $0) })) {
+            Picker("Nutzung", selection: Binding(get: { space.usage }, set: { model.setSpace(space, number: number, name: name, usage: $0) })) {
                 ForEach(Array(AppModel.usages.enumerated()), id: \.offset) { index, usage in
                     Text("\(usage.code) \(usage.title)").tag(UInt32(index))
                 }
             }
             Toggle(
                 "Zählt zur Wohnfläche",
-                isOn: Binding(get: { room.livingSpace }, set: { model.setRoom(room, number: number, name: name, livingSpace: $0) })
+                isOn: Binding(get: { space.livingSpace }, set: { model.setSpace(space, number: number, name: name, livingSpace: $0) })
             )
-            LabeledContent("Netto-Raumfläche", value: room.netArea.map(area) ?? "offen")
-            if let living = room.livingArea {
+            LabeledContent("Netto-Raumfläche", value: space.netArea.map(area) ?? "offen")
+            if let living = space.livingArea {
                 LabeledContent("Wohnfläche (WoFlV)", value: area(living))
             }
         }
         .onAppear(perform: load)
-        .onChange(of: room.element) { load() }
-        .onChange(of: room.number) { number = room.number }
-        .onChange(of: room.name) { name = room.name }
+        .onChange(of: space.element) { load() }
+        .onChange(of: space.number) { number = space.number }
+        .onChange(of: space.name) { name = space.name }
         .onChange(of: focused) { if !focused { commit() } }
     }
 
     private func load() {
-        number = room.number
-        name = room.name
+        number = space.number
+        name = space.name
     }
 
     private func commit() {
-        guard number != room.number || name != room.name else { return }
-        model.setRoom(room, number: number, name: name)
+        guard number != space.number || name != space.name else { return }
+        model.setSpace(space, number: number, name: name)
     }
 }
 

@@ -8,4 +8,4 @@
 
 pub mod areas;
 
-pub use areas::{AreaReport, RoomArea, StoreyAreas, area_report};
+pub use areas::{AreaReport, SpaceArea, StoreyAreas, area_report};

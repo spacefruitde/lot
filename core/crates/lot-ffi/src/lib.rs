@@ -86,11 +86,11 @@ const ALL_PARAMS: [ParamKind; 13] = [
 
 /// Raum mit Stempeltext und Flächen, für den Inspektor.
 #[derive(Debug, Clone, uniffi::Record)]
-pub struct RoomInfo {
+pub struct SpaceInfo {
     pub element: u64,
     pub number: String,
     pub name: String,
-    /// Index in [`room_usages`].
+    /// Index in [`space_usages`].
     pub usage: u32,
     /// Zählt zur Wohnfläche nach WoFlV.
     pub living_space: bool,
@@ -112,15 +112,18 @@ pub struct DoorInfo {
 
 /// Nutzungsgruppe nach DIN 277 zur Auswahl.
 #[derive(Debug, Clone, uniffi::Record)]
-pub struct RoomUsageItem {
+pub struct SpaceUsageItem {
     pub code: String,
     pub title: String,
 }
 
 /// Die Nutzungsgruppen nach DIN 277:2021-08, in der Reihenfolge der Norm.
 #[uniffi::export]
-pub fn room_usages() -> Vec<RoomUsageItem> {
-    lot_model::RoomUsage::ALL.iter().map(|u| RoomUsageItem { code: u.code().into(), title: u.title().into() }).collect()
+pub fn space_usages() -> Vec<SpaceUsageItem> {
+    lot_model::SpaceUsage::ALL
+        .iter()
+        .map(|u| SpaceUsageItem { code: u.code().into(), title: u.title().into() })
+        .collect()
 }
 
 /// Flächen eines Geschosses in m².
@@ -231,8 +234,8 @@ impl LotDocument {
             },
             Some(lot_model::Element::Storey(s)) => format!("Geschoss {}", s.name),
             Some(lot_model::Element::Column(_)) => "Stütze".into(),
-            Some(lot_model::Element::Dimension(_)) => "Maßkette".into(),
-            Some(lot_model::Element::Room(r)) => format!("Raum {} {}", r.number, r.name).trim_end().to_string(),
+            Some(lot_model::Element::DimensionChain(_)) => "Maßkette".into(),
+            Some(lot_model::Element::Space(r)) => format!("Raum {} {}", r.number, r.name).trim_end().to_string(),
             Some(lot_model::Element::GridLine(g)) => format!("Achse {}", g.label),
             Some(lot_model::Element::WallType(t)) => format!("Wandaufbau {}", t.name),
             None => String::new(),
@@ -240,13 +243,13 @@ impl LotDocument {
     }
 
     /// Raumdaten der gewählten Elemente, die Räume sind.
-    pub fn rooms(&self, ids: Vec<u64>) -> Vec<RoomInfo> {
+    pub fn spaces(&self, ids: Vec<u64>) -> Vec<SpaceInfo> {
         let doc = self.lock();
         let project = doc.project();
         let wanted: Vec<_> = ids
             .iter()
             .filter_map(|id| match project.elements.get(&ElementId(*id)) {
-                Some(lot_model::Element::Room(r)) => Some((*id, r)),
+                Some(lot_model::Element::Space(r)) => Some((*id, r)),
                 _ => None,
             })
             .collect();
@@ -257,12 +260,12 @@ impl LotDocument {
         wanted
             .into_iter()
             .map(|(id, r)| {
-                let area = report.rooms().find(|a| a.id == ElementId(id));
-                RoomInfo {
+                let area = report.spaces().find(|a| a.id == ElementId(id));
+                SpaceInfo {
                     element: id,
                     number: r.number.clone(),
                     name: r.name.clone(),
-                    usage: lot_model::RoomUsage::ALL.iter().position(|u| *u == r.usage).unwrap_or(0) as u32,
+                    usage: lot_model::SpaceUsage::ALL.iter().position(|u| *u == r.usage).unwrap_or(0) as u32,
                     living_space: r.living_space,
                     net_area: area.and_then(|a| a.net),
                     living_area: area.and_then(|a| a.living),
@@ -289,7 +292,7 @@ impl LotDocument {
     }
 
     /// Ändert Nummer, Name, Nutzung und Wohnflächen-Merkmal eines Raums, als eine Operation.
-    pub fn set_room(
+    pub fn set_space(
         &self,
         element: u64,
         number: String,
@@ -299,15 +302,15 @@ impl LotDocument {
     ) -> Result<(), LotError> {
         let mut doc = self.lock();
         let id = ElementId(element);
-        let Some(lot_model::Element::Room(old)) = doc.project().elements.get(&id).cloned() else {
+        let Some(lot_model::Element::Space(old)) = doc.project().elements.get(&id).cloned() else {
             return Err(LotError::Failed("Das ist kein Raum".into()));
         };
-        let usage = *lot_model::RoomUsage::ALL
+        let usage = *lot_model::SpaceUsage::ALL
             .get(usage as usize)
             .ok_or_else(|| LotError::Failed("Unbekannte Nutzung".into()))?;
         let new =
-            lot_model::Room { number: number.trim().into(), name: name.trim().into(), usage, living_space, ..old };
-        doc.replace(id, lot_model::Element::Room(new)).map_err(LotError::from_display)
+            lot_model::Space { number: number.trim().into(), name: name.trim().into(), usage, living_space, ..old };
+        doc.replace(id, lot_model::Element::Space(new)).map_err(LotError::from_display)
     }
 
     /// Flächen je Geschoss (NRF, BGF, Wohnfläche).
@@ -320,7 +323,7 @@ impl LotDocument {
                 name: s.name.clone(),
                 net: s.net,
                 gross: s.gross,
-                living: s.rooms.iter().filter_map(|r| r.living).sum(),
+                living: s.spaces.iter().filter_map(|r| r.living).sum(),
             })
             .collect()
     }
@@ -388,30 +391,30 @@ mod tests {
     }
 
     #[test]
-    fn room_can_be_renamed_and_undone() {
+    fn space_can_be_renamed_and_undone() {
         let doc = LotDocument::new_empty();
         let storey = doc.lock().project().storeys()[0].0;
         let id = doc
             .lock()
-            .insert(lot_model::Element::Room(lot_model::Room {
+            .insert(lot_model::Element::Space(lot_model::Space {
                 storey,
                 position: lot_model::Point2::new(1.0, 1.0),
                 number: "0.01".into(),
                 name: "Raum".into(),
-                usage: lot_model::RoomUsage::Living,
+                usage: lot_model::SpaceUsage::Living,
                 living_space: true,
             }))
             .unwrap();
-        doc.set_room(id.0, " 0.07 ".into(), "Küche".into(), 8, false).unwrap();
-        let info = &doc.rooms(vec![id.0])[0];
+        doc.set_space(id.0, " 0.07 ".into(), "Küche".into(), 8, false).unwrap();
+        let info = &doc.spaces(vec![id.0])[0];
         assert_eq!(
             (info.number.as_str(), info.name.as_str(), info.usage, info.living_space),
             ("0.07", "Küche", 8, false)
         );
         assert!(info.net_area.is_none(), "ohne Wände ist der Raum offen");
-        assert_eq!(room_usages()[8].code, "VF");
+        assert_eq!(space_usages()[8].code, "VF");
         doc.undo().unwrap();
-        assert_eq!(doc.rooms(vec![id.0])[0].name, "Raum");
-        assert!(doc.set_room(id.0, "1".into(), " ".into(), 0, true).is_err(), "Name darf nicht leer sein");
+        assert_eq!(doc.spaces(vec![id.0])[0].name, "Raum");
+        assert!(doc.set_space(id.0, "1".into(), " ".into(), 0, true).is_err(), "Name darf nicht leer sein");
     }
 }

@@ -68,9 +68,9 @@ pub struct ScaleStyle {
     /// Schrifthöhe für Beschriftungen, in mm.
     pub text: f64,
     /// Schrifthöhe des Raumnamens im Raumstempel, in mm.
-    pub room_name: f64,
+    pub space_name: f64,
     /// Schrifthöhe von Raumnummer und Fläche im Raumstempel, in mm.
-    pub room_text: f64,
+    pub space_text: f64,
     /// Schrifthöhe der Maßzahlen, in mm.
     pub dimension_text: f64,
     /// Durchmesser der Achskreise, in mm.

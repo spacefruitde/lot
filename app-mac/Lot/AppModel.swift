@@ -14,13 +14,13 @@ final class AppModel {
     /// Parameter der gewählten Elemente.
     private(set) var parameters: [ParamValue] = []
     /// Gewählte Räume mit Flächen.
-    private(set) var rooms: [RoomInfo] = []
+    private(set) var spaces: [SpaceInfo] = []
     /// Gewählte Türen.
     private(set) var doors: [DoorInfo] = []
     /// Flächen je Geschoss, für die Übersicht im Inspektor.
     private(set) var storeyAreas: [StoreyAreaInfo] = []
     /// Nutzungsgruppen nach DIN 277.
-    static let usages = roomUsages()
+    static let usages = spaceUsages()
     /// Werkzeug, Geschoss, Maßstab, Auswahl und Hinweis aus dem Kern.
     private(set) var viewState: ViewState?
     private(set) var commands: [CommandItem] = []
@@ -95,7 +95,7 @@ final class AppModel {
         viewState = state
         commands = viewport.commands()
         parameters = state.selection.isEmpty ? [] : document.parameters(ids: state.selection)
-        rooms = state.selection.isEmpty ? [] : document.rooms(ids: state.selection)
+        spaces = state.selection.isEmpty ? [] : document.spaces(ids: state.selection)
         doors = state.selection.isEmpty ? [] : document.doors(ids: state.selection)
     }
 
@@ -116,14 +116,14 @@ final class AppModel {
     }
 
     /// Ändert Stempeltext, Nutzung oder Wohnflächen-Merkmal eines Raums.
-    func setRoom(_ room: RoomInfo, number: String? = nil, name: String? = nil, usage: UInt32? = nil, livingSpace: Bool? = nil) {
+    func setSpace(_ space: SpaceInfo, number: String? = nil, name: String? = nil, usage: UInt32? = nil, livingSpace: Bool? = nil) {
         do {
-            try document.setRoom(
-                element: room.element,
-                number: number ?? room.number,
-                name: name ?? room.name,
-                usage: usage ?? room.usage,
-                livingSpace: livingSpace ?? room.livingSpace
+            try document.setSpace(
+                element: space.element,
+                number: number ?? space.number,
+                name: name ?? space.name,
+                usage: usage ?? space.usage,
+                livingSpace: livingSpace ?? space.livingSpace
             )
         } catch {
             errorMessage = Self.message(for: error)

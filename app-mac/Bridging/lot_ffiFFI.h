@@ -310,11 +310,6 @@ RustBuffer uniffi_lot_ffi_fn_method_lotdocument_parameters(uint64_t ptr, RustBuf
 int8_t uniffi_lot_ffi_fn_method_lotdocument_redo(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_ROOMS
-#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_ROOMS
-RustBuffer uniffi_lot_ffi_fn_method_lotdocument_rooms(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SAVE
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SAVE
 void uniffi_lot_ffi_fn_method_lotdocument_save(uint64_t ptr, RustBuffer path, RustCallStatus *_Nonnull out_status
@@ -325,9 +320,14 @@ void uniffi_lot_ffi_fn_method_lotdocument_save(uint64_t ptr, RustBuffer path, Ru
 void uniffi_lot_ffi_fn_method_lotdocument_set_param(uint64_t ptr, uint64_t element, RustBuffer kind, double value, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_ROOM
-#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_ROOM
-void uniffi_lot_ffi_fn_method_lotdocument_set_room(uint64_t ptr, uint64_t element, RustBuffer number, RustBuffer name, uint32_t usage, int8_t living_space, RustCallStatus *_Nonnull out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_SPACE
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_SPACE
+void uniffi_lot_ffi_fn_method_lotdocument_set_space(uint64_t ptr, uint64_t element, RustBuffer number, RustBuffer name, uint32_t usage, int8_t living_space, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SPACES
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SPACES
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_spaces(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_STOREY_AREAS
@@ -450,9 +450,9 @@ void uniffi_lot_ffi_fn_method_viewport_zoom(uint64_t ptr, float factor, float x,
 void uniffi_lot_ffi_fn_method_viewport_zoom_to_fit(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_ROOM_USAGES
-#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_ROOM_USAGES
-RustBuffer uniffi_lot_ffi_fn_func_room_usages(RustCallStatus *_Nonnull out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_SPACE_USAGES
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_SPACE_USAGES
+RustBuffer uniffi_lot_ffi_fn_func_space_usages(RustCallStatus *_Nonnull out_status
     
 );
 #endif
@@ -716,9 +716,9 @@ void ffi_lot_ffi_rust_future_free_void(uint64_t handle
 void ffi_lot_ffi_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_ROOM_USAGES
-#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_ROOM_USAGES
-uint16_t uniffi_lot_ffi_checksum_func_room_usages(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_SPACE_USAGES
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_SPACE_USAGES
+uint16_t uniffi_lot_ffi_checksum_func_space_usages(void
     
 );
 #endif
@@ -764,12 +764,6 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_redo(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ROOMS
-#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ROOMS
-uint16_t uniffi_lot_ffi_checksum_method_lotdocument_rooms(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SAVE
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SAVE
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_save(void
@@ -782,9 +776,15 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_param(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_ROOM
-#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_ROOM
-uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_room(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_SPACE
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_SPACE
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_space(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SPACES
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SPACES
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_spaces(void
     
 );
 #endif

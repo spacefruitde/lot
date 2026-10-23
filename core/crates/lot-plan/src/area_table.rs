@@ -20,7 +20,7 @@ const COL_LIVING: f64 = 196.0;
 enum Row {
     Heading(String),
     Columns,
-    Room { number: String, name: String, usage: String, net: String, living: String },
+    Space { number: String, name: String, usage: String, net: String, living: String },
     Sum { label: String, net: String, living: String },
     Value { label: String, value: String },
     Note(String),
@@ -36,8 +36,8 @@ fn rows(report: &AreaReport) -> Vec<Row> {
     for s in &report.storeys {
         rows.push(Row::Heading(format!("Geschoss {}", s.name)));
         rows.push(Row::Columns);
-        for r in &s.rooms {
-            rows.push(Row::Room {
+        for r in &s.spaces {
+            rows.push(Row::Space {
                 number: r.number.clone(),
                 name: r.name.clone(),
                 usage: r.usage.code().to_string(),
@@ -48,7 +48,7 @@ fn rows(report: &AreaReport) -> Vec<Row> {
         if s.unassigned > 0.005 {
             rows.push(Row::Sum { label: "Umschlossen ohne Raum".into(), net: m2(s.unassigned), living: String::new() });
         }
-        let living: f64 = s.rooms.iter().filter_map(|r| r.living).sum();
+        let living: f64 = s.spaces.iter().filter_map(|r| r.living).sum();
         rows.push(Row::Sum {
             label: format!("Summe {}", s.name),
             net: m2(s.net),
@@ -151,7 +151,7 @@ fn draw_row(sheet: &mut Sheet, row: &Row, y: f64) {
             }
             rule(sheet, 0.25);
         }
-        Row::Room { number, name, usage, net, living } => {
+        Row::Space { number, name, usage, net, living } => {
             sheet.text(COL_NUMBER, base, number.as_str(), TEXT, Anchor::Left);
             sheet.text(COL_NAME, base, name.as_str(), TEXT, Anchor::Left);
             sheet.text(COL_USAGE, base, usage.as_str(), TEXT, Anchor::Left);
@@ -178,7 +178,7 @@ fn draw_row(sheet: &mut Sheet, row: &Row, y: f64) {
 pub fn area_csv(report: &AreaReport) -> String {
     let mut out = String::from("Geschoss;Nr.;Raum;Nutzung;NRF m²;Wohnfläche m²\n");
     for s in &report.storeys {
-        for r in &s.rooms {
+        for r in &s.spaces {
             let field = |v: Option<f64>| v.map_or_else(String::new, m2);
             out.push_str(&format!(
                 "{};{};{};{};{};{}\n",
@@ -208,11 +208,11 @@ mod tests {
             storeys: vec![lot_rules::StoreyAreas {
                 storey: lot_model::ElementId(1),
                 name: "EG".into(),
-                rooms: vec![lot_rules::RoomArea {
+                spaces: vec![lot_rules::SpaceArea {
                     id: lot_model::ElementId(2),
                     number: "0.01".into(),
                     name: "Wohnen; Essen".into(),
-                    usage: lot_model::RoomUsage::Living,
+                    usage: lot_model::SpaceUsage::Living,
                     net: Some(24.345),
                     living: Some(24.5),
                 }],

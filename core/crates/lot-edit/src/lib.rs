@@ -15,7 +15,7 @@ use geometry::{
 };
 use lot_model::{
     Column, ColumnProfile, Document, Element, ElementId, GridLine, Handing, ModelError, Opening, OpeningKind,
-    Operation, Point2, Project, Room, Storey, Top, Wall, WallAlignment, WallSide,
+    Operation, Point2, Project, Space, Storey, Top, Wall, WallAlignment, WallSide,
 };
 pub use snap::{Snap, SnapKind};
 
@@ -75,7 +75,7 @@ pub enum Tool {
     /// Stütze: ein Klick
     Column,
     /// Raum: ein Klick in den Bereich
-    Room,
+    Space,
     /// Tür: ein Klick auf die Wand, zur Seite, zu der sie aufschlägt
     Door,
     /// Fenster: ein Klick auf die Wand
@@ -181,7 +181,7 @@ impl Editor {
                 self.hover_tolerance = input.tolerance;
                 Response::redraw()
             }
-            Tool::Room | Tool::Select => Response::default(),
+            Tool::Space | Tool::Select => Response::default(),
         }
     }
 
@@ -207,10 +207,10 @@ impl Editor {
                     ..Response::redraw()
                 },
             },
-            Tool::Room => {
+            Tool::Space => {
                 let p = Point2::new((input.point.x / 0.01).round() * 0.01, (input.point.y / 0.01).round() * 0.01);
-                let room = self.new_room(doc.project(), p, 0);
-                Response::from_result(doc.insert(Element::Room(room)).map(|_| ()))
+                let space = self.new_space(doc.project(), p, 0);
+                Response::from_result(doc.insert(Element::Space(space)).map(|_| ()))
             }
             Tool::Grid => {
                 let p = snap::snap(
@@ -458,7 +458,7 @@ impl Editor {
             Command::ArcWallTool => self.set_tool(Tool::ArcWall),
             Command::GridTool => self.set_tool(Tool::Grid),
             Command::ColumnTool => self.set_tool(Tool::Column),
-            Command::RoomTool => self.set_tool(Tool::Room),
+            Command::SpaceTool => self.set_tool(Tool::Space),
             Command::DoorTool => self.set_tool(Tool::Door),
             Command::WindowTool => self.set_tool(Tool::Window),
             Command::FlipDoorSwing => self.change_doors(doc, "Aufschlag wechseln", |d| {
@@ -468,7 +468,7 @@ impl Editor {
             }),
             Command::FlipDoorHinge => self.change_doors(doc, "Anschlag wechseln", |d| d.hinge = d.hinge.other()),
             Command::DimensionWalls => self.dimension_walls(doc),
-            Command::DetectRooms => self.detect_rooms(doc),
+            Command::DetectSpaces => self.detect_spaces(doc),
             Command::SetWallType(id) => {
                 let id = ElementId(*id);
                 if doc.project().wall_type(id).is_none() {
@@ -513,7 +513,7 @@ impl Editor {
                     .walls_on(self.storey)
                     .map(|(id, _)| id)
                     .chain(p.columns_on(self.storey).map(|(id, _)| id))
-                    .chain(p.rooms_on(self.storey).map(|(id, _)| id))
+                    .chain(p.spaces_on(self.storey).map(|(id, _)| id))
                     .collect();
                 Response::redraw()
             }
@@ -542,13 +542,13 @@ impl Editor {
             CommandInfo::new(Command::ArcWallTool, "Bogenwand zeichnen", "B", "Werkzeug"),
             CommandInfo::new(Command::GridTool, "Achse zeichnen", "A", "Werkzeug"),
             CommandInfo::new(Command::ColumnTool, "Stütze setzen", "S", "Werkzeug"),
-            CommandInfo::new(Command::RoomTool, "Raum setzen", "R", "Werkzeug"),
+            CommandInfo::new(Command::SpaceTool, "Raum setzen", "R", "Werkzeug"),
             CommandInfo::new(Command::DoorTool, "Tür setzen", "T", "Werkzeug"),
             CommandInfo::new(Command::WindowTool, "Fenster setzen", "F", "Werkzeug"),
             CommandInfo::new(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "", "Auswahl"),
             CommandInfo::new(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "", "Auswahl"),
             CommandInfo::new(Command::DimensionWalls, "Bemaßen: Maßketten an den gewählten Wänden", "M", "Auswahl"),
-            CommandInfo::new(Command::DetectRooms, "Räume erkennen (jeder umschlossene Bereich)", "", "Werkzeug"),
+            CommandInfo::new(Command::DetectSpaces, "Räume erkennen (jeder umschlossene Bereich)", "", "Werkzeug"),
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
             CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "⇧F", "Auswahl"),
@@ -684,7 +684,7 @@ impl Editor {
                 "Tür: auf die Wand klicken, auf der Seite, zu der sie aufschlägt. Esc: zurück zum Auswählen.".into()
             }
             (Tool::Window, _, _) => "Fenster: auf die Wand klicken. Esc: zurück zum Auswählen.".into(),
-            (Tool::Room, _, _) => {
+            (Tool::Space, _, _) => {
                 "Raum: in den Bereich klicken, dort steht der Raumstempel. Esc: zurück zum Auswählen.".into()
             }
             (Tool::Select, _, Some(_)) => "Loslassen setzt ab. Esc bricht ab.".into(),
@@ -753,31 +753,31 @@ impl Editor {
 
     /// Neuer Raum mit der nächsten freien Nummer im Geschoss. `skip` überspringt
     /// Nummern, wenn mehrere Räume auf einmal entstehen.
-    fn new_room(&self, project: &Project, position: Point2, skip: u32) -> Room {
+    fn new_space(&self, project: &Project, position: Point2, skip: u32) -> Space {
         let below_ground = project.storey(self.storey).is_some_and(|s| s.elevation < -0.01);
-        Room {
+        Space {
             storey: self.storey,
             position,
-            number: next_room_number(project, self.storey, skip),
+            number: next_space_number(project, self.storey, skip),
             name: "Raum".into(),
-            usage: lot_model::RoomUsage::default(),
+            usage: lot_model::SpaceUsage::default(),
             living_space: !below_ground,
         }
     }
 
-    fn detect_rooms(&mut self, doc: &mut Document) -> Response {
+    fn detect_spaces(&mut self, doc: &mut Document) -> Response {
         let project = doc.project();
-        let finder = lot_geom::rooms::RoomFinder::new(project, self.storey);
+        let finder = lot_geom::spaces::SpaceFinder::new(project, self.storey);
         let ops: Vec<Operation> = finder
             .unclaimed(project, self.storey)
             .into_iter()
-            .filter_map(lot_geom::rooms::interior_point)
+            .filter_map(lot_geom::spaces::interior_point)
             .enumerate()
             .map(|(i, p)| {
                 let p = Point2::new((p[0] / 0.01).round() * 0.01, (p[1] / 0.01).round() * 0.01);
                 Operation::Insert {
                     id: ElementId(project.next_id().0 + i as u64),
-                    element: Element::Room(self.new_room(project, p, i as u32)),
+                    element: Element::Space(self.new_space(project, p, i as u32)),
                 }
             })
             .collect();
@@ -827,7 +827,7 @@ impl Editor {
     /// Abstand Wandenden und Laibungen, in 1,70 m das Gesamtmaß. Ohne
     /// Öffnungen nur das Gesamtmaß in 1,00 m.
     fn dimension_walls(&mut self, doc: &mut Document) -> Response {
-        use lot_model::{DimRef, Dimension, WallEnd};
+        use lot_model::{DimRef, DimensionChain, WallEnd};
         let project = doc.project();
         let mut ops = Vec::new();
         let mut next = project.next_id().0;
@@ -858,7 +858,7 @@ impl Editor {
             chains.push((total, vec![ends(WallEnd::Start), ends(WallEnd::End)]));
             let (dx, dy) = wall.direction();
             for (distance, refs) in chains {
-                let element = Element::Dimension(Dimension {
+                let element = Element::DimensionChain(DimensionChain {
                     storey: self.storey,
                     position: wall.point_at(0.0, left + distance),
                     direction: Point2::new(dx, dy),
@@ -1001,13 +1001,13 @@ fn sagitta_from(start: Point2, end: Point2, p: Point2) -> f64 {
 /// Nächste Raumnummer im Geschoss: Ebene, Punkt, laufende Nummer, etwa „0.03“
 /// im Erdgeschoss, „1.01“ im ersten Obergeschoss, „-1.02“ im Keller. Die Ebene
 /// zählt ab dem untersten Geschoss mit OKFF auf oder über ±0,00.
-fn next_room_number(project: &Project, storey: ElementId, skip: u32) -> String {
+fn next_space_number(project: &Project, storey: ElementId, skip: u32) -> String {
     let storeys = project.storeys();
     let ground = storeys.iter().position(|(_, s)| s.elevation >= -0.01).unwrap_or(0) as i64;
     let level = storeys.iter().position(|(id, _)| *id == storey).map_or(0, |i| i as i64 - ground);
     let prefix = format!("{level}.");
     let highest = project
-        .rooms_on(storey)
+        .spaces_on(storey)
         .filter_map(|(_, r)| r.number.strip_prefix(&prefix)?.parse::<u32>().ok())
         .max()
         .unwrap_or(0);

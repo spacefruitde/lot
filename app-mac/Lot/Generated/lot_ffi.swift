@@ -624,11 +624,6 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     
     func redo() throws  -> Bool
     
-    /**
-     * Raumdaten der gewählten Elemente, die Räume sind.
-     */
-    func rooms(ids: [UInt64])  -> [RoomInfo]
-    
     func save(path: String) throws 
     
     func setParam(element: UInt64, kind: ParamKind, value: Double) throws 
@@ -636,7 +631,12 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     /**
      * Ändert Nummer, Name, Nutzung und Wohnflächen-Merkmal eines Raums, als eine Operation.
      */
-    func setRoom(element: UInt64, number: String, name: String, usage: UInt32, livingSpace: Bool) throws 
+    func setSpace(element: UInt64, number: String, name: String, usage: UInt32, livingSpace: Bool) throws 
+    
+    /**
+     * Raumdaten der gewählten Elemente, die Räume sind.
+     */
+    func spaces(ids: [UInt64])  -> [SpaceInfo]
     
     /**
      * Flächen je Geschoss (NRF, BGF, Wohnfläche).
@@ -817,19 +817,6 @@ open func redo()throws  -> Bool  {
 })
 }
     
-    /**
-     * Raumdaten der gewählten Elemente, die Räume sind.
-     */
-open func rooms(ids: [UInt64]) -> [RoomInfo]  {
-    return try!  FfiConverterSequenceTypeRoomInfo.lift(try! rustCall() {
-        uniffiCallStatus in
-    uniffi_lot_ffi_fn_method_lotdocument_rooms(
-            self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
-    )
-})
-}
-    
 open func save(path: String)throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_lotdocument_save(
@@ -853,9 +840,9 @@ open func setParam(element: UInt64, kind: ParamKind, value: Double)throws   {try
     /**
      * Ändert Nummer, Name, Nutzung und Wohnflächen-Merkmal eines Raums, als eine Operation.
      */
-open func setRoom(element: UInt64, number: String, name: String, usage: UInt32, livingSpace: Bool)throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
+open func setSpace(element: UInt64, number: String, name: String, usage: UInt32, livingSpace: Bool)throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
         uniffiCallStatus in
-    uniffi_lot_ffi_fn_method_lotdocument_set_room(
+    uniffi_lot_ffi_fn_method_lotdocument_set_space(
             self.uniffiCloneHandle(),
         FfiConverterUInt64.lower(element),
         FfiConverterString.lower(number),
@@ -864,6 +851,19 @@ open func setRoom(element: UInt64, number: String, name: String, usage: UInt32, 
         FfiConverterBool.lower(livingSpace),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * Raumdaten der gewählten Elemente, die Räume sind.
+     */
+open func spaces(ids: [UInt64]) -> [SpaceInfo]  {
+    return try!  FfiConverterSequenceTypeSpaceInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_spaces(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
 }
     
     /**
@@ -1617,12 +1617,12 @@ public func FfiConverterTypeParamValue_lower(_ value: ParamValue) -> RustBuffer 
 /**
  * Raum mit Stempeltext und Flächen, für den Inspektor.
  */
-public struct RoomInfo: Equatable, Hashable {
+public struct SpaceInfo: Equatable, Hashable {
     public var element: UInt64
     public var number: String
     public var name: String
     /**
-     * Index in [`room_usages`].
+     * Index in [`space_usages`].
      */
     public var usage: UInt32
     /**
@@ -1642,7 +1642,7 @@ public struct RoomInfo: Equatable, Hashable {
     // declare one manually.
     public init(element: UInt64, number: String, name: String, 
         /**
-         * Index in [`room_usages`].
+         * Index in [`space_usages`].
          */usage: UInt32, 
         /**
          * Zählt zur Wohnfläche nach WoFlV.
@@ -1668,16 +1668,16 @@ public struct RoomInfo: Equatable, Hashable {
 }
 
 #if compiler(>=6)
-extension RoomInfo: Sendable {}
+extension SpaceInfo: Sendable {}
 #endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeRoomInfo: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RoomInfo {
+public struct FfiConverterTypeSpaceInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SpaceInfo {
         return
-            try RoomInfo(
+            try SpaceInfo(
                 element: FfiConverterUInt64.read(from: &buf), 
                 number: FfiConverterString.read(from: &buf), 
                 name: FfiConverterString.read(from: &buf), 
@@ -1688,7 +1688,7 @@ public struct FfiConverterTypeRoomInfo: FfiConverterRustBuffer {
         )
     }
 
-    public static func write(_ value: RoomInfo, into buf: inout [UInt8]) {
+    public static func write(_ value: SpaceInfo, into buf: inout [UInt8]) {
         FfiConverterUInt64.write(value.element, into: &buf)
         FfiConverterString.write(value.number, into: &buf)
         FfiConverterString.write(value.name, into: &buf)
@@ -1703,22 +1703,22 @@ public struct FfiConverterTypeRoomInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeRoomInfo_lift(_ buf: RustBuffer) throws -> RoomInfo {
-    return try FfiConverterTypeRoomInfo.lift(buf)
+public func FfiConverterTypeSpaceInfo_lift(_ buf: RustBuffer) throws -> SpaceInfo {
+    return try FfiConverterTypeSpaceInfo.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeRoomInfo_lower(_ value: RoomInfo) -> RustBuffer {
-    return FfiConverterTypeRoomInfo.lower(value)
+public func FfiConverterTypeSpaceInfo_lower(_ value: SpaceInfo) -> RustBuffer {
+    return FfiConverterTypeSpaceInfo.lower(value)
 }
 
 
 /**
  * Nutzungsgruppe nach DIN 277 zur Auswahl.
  */
-public struct RoomUsageItem: Equatable, Hashable {
+public struct SpaceUsageItem: Equatable, Hashable {
     public var code: String
     public var title: String
 
@@ -1735,22 +1735,22 @@ public struct RoomUsageItem: Equatable, Hashable {
 }
 
 #if compiler(>=6)
-extension RoomUsageItem: Sendable {}
+extension SpaceUsageItem: Sendable {}
 #endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeRoomUsageItem: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RoomUsageItem {
+public struct FfiConverterTypeSpaceUsageItem: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SpaceUsageItem {
         return
-            try RoomUsageItem(
+            try SpaceUsageItem(
                 code: FfiConverterString.read(from: &buf), 
                 title: FfiConverterString.read(from: &buf)
         )
     }
 
-    public static func write(_ value: RoomUsageItem, into buf: inout [UInt8]) {
+    public static func write(_ value: SpaceUsageItem, into buf: inout [UInt8]) {
         FfiConverterString.write(value.code, into: &buf)
         FfiConverterString.write(value.title, into: &buf)
     }
@@ -1760,15 +1760,15 @@ public struct FfiConverterTypeRoomUsageItem: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeRoomUsageItem_lift(_ buf: RustBuffer) throws -> RoomUsageItem {
-    return try FfiConverterTypeRoomUsageItem.lift(buf)
+public func FfiConverterTypeSpaceUsageItem_lift(_ buf: RustBuffer) throws -> SpaceUsageItem {
+    return try FfiConverterTypeSpaceUsageItem.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeRoomUsageItem_lower(_ value: RoomUsageItem) -> RustBuffer {
-    return FfiConverterTypeRoomUsageItem.lower(value)
+public func FfiConverterTypeSpaceUsageItem_lower(_ value: SpaceUsageItem) -> RustBuffer {
+    return FfiConverterTypeSpaceUsageItem.lower(value)
 }
 
 
@@ -2443,23 +2443,23 @@ fileprivate struct FfiConverterSequenceTypeParamValue: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeRoomInfo: FfiConverterRustBuffer {
-    typealias SwiftType = [RoomInfo]
+fileprivate struct FfiConverterSequenceTypeSpaceInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [SpaceInfo]
 
-    public static func write(_ value: [RoomInfo], into buf: inout [UInt8]) {
+    public static func write(_ value: [SpaceInfo], into buf: inout [UInt8]) {
         let len = Int32(value.count)
         writeInt(&buf, len)
         for item in value {
-            FfiConverterTypeRoomInfo.write(item, into: &buf)
+            FfiConverterTypeSpaceInfo.write(item, into: &buf)
         }
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RoomInfo] {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SpaceInfo] {
         let len: Int32 = try readInt(&buf)
-        var seq = [RoomInfo]()
+        var seq = [SpaceInfo]()
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeRoomInfo.read(from: &buf))
+            seq.append(try FfiConverterTypeSpaceInfo.read(from: &buf))
         }
         return seq
     }
@@ -2468,23 +2468,23 @@ fileprivate struct FfiConverterSequenceTypeRoomInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeRoomUsageItem: FfiConverterRustBuffer {
-    typealias SwiftType = [RoomUsageItem]
+fileprivate struct FfiConverterSequenceTypeSpaceUsageItem: FfiConverterRustBuffer {
+    typealias SwiftType = [SpaceUsageItem]
 
-    public static func write(_ value: [RoomUsageItem], into buf: inout [UInt8]) {
+    public static func write(_ value: [SpaceUsageItem], into buf: inout [UInt8]) {
         let len = Int32(value.count)
         writeInt(&buf, len)
         for item in value {
-            FfiConverterTypeRoomUsageItem.write(item, into: &buf)
+            FfiConverterTypeSpaceUsageItem.write(item, into: &buf)
         }
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RoomUsageItem] {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SpaceUsageItem] {
         let len: Int32 = try readInt(&buf)
-        var seq = [RoomUsageItem]()
+        var seq = [SpaceUsageItem]()
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeRoomUsageItem.read(from: &buf))
+            seq.append(try FfiConverterTypeSpaceUsageItem.read(from: &buf))
         }
         return seq
     }
@@ -2517,10 +2517,10 @@ fileprivate struct FfiConverterSequenceTypeStoreyAreaInfo: FfiConverterRustBuffe
 /**
  * Die Nutzungsgruppen nach DIN 277:2021-08, in der Reihenfolge der Norm.
  */
-public func roomUsages() -> [RoomUsageItem]  {
-    return try!  FfiConverterSequenceTypeRoomUsageItem.lift(try! rustCall() {
+public func spaceUsages() -> [SpaceUsageItem]  {
+    return try!  FfiConverterSequenceTypeSpaceUsageItem.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_lot_ffi_fn_func_room_usages(uniffiCallStatus
+    uniffi_lot_ffi_fn_func_space_usages(uniffiCallStatus
     )
 })
 }
@@ -2540,7 +2540,7 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_lot_ffi_checksum_func_room_usages() != 9539) {
+    if (uniffi_lot_ffi_checksum_func_space_usages() != 26934) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_can_redo() != 21256) {
@@ -2564,16 +2564,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_redo() != 6291) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_lotdocument_rooms() != 60881) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_lot_ffi_checksum_method_lotdocument_save() != 29734) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_set_param() != 46565) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_lotdocument_set_room() != 31831) {
+    if (uniffi_lot_ffi_checksum_method_lotdocument_set_space() != 41848) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_spaces() != 30951) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_storey_areas() != 34722) {

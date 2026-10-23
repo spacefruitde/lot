@@ -15,7 +15,7 @@ use crate::poly::Area;
 const FLOOR_CUT: f64 = 0.05;
 
 /// Alle umschlossenen Bereiche eines Geschosses, einmal gerechnet.
-pub struct RoomFinder {
+pub struct SpaceFinder {
     /// Wände und Stützen in Fußbodenhöhe, vereinigt.
     pub footprint: Area,
     /// Jeder umschlossene Bereich, ohne Inseln (freistehende Wände, Stützen).
@@ -27,7 +27,7 @@ pub struct RoomFinder {
     small_columns: Area,
 }
 
-impl RoomFinder {
+impl SpaceFinder {
     pub fn new(project: &Project, storey: ElementId) -> Self {
         let z = project.storey(storey).map_or(0.0, |s| s.elevation) + FLOOR_CUT;
         let regions = solid_regions(project, storey, z);
@@ -56,7 +56,7 @@ impl RoomFinder {
         Self { footprint, enclosed, outlines, small_columns: Area::union_all(small.iter()) }
     }
 
-    /// Fläche des Bereichs um den Punkt nach WoFlV: wie [`RoomFinder::area_at`],
+    /// Fläche des Bereichs um den Punkt nach WoFlV: wie [`SpaceFinder::area_at`],
     /// aber kleine Stützen bleiben in der Fläche (§ 3 Abs. 3 Nr. 1).
     pub fn living_area_at(&self, p: [f64; 2]) -> Option<f64> {
         let i = self.index_at(p)?;
@@ -94,7 +94,7 @@ impl RoomFinder {
 
     /// Bereiche, in denen noch kein Raum steht.
     pub fn unclaimed(&self, project: &Project, storey: ElementId) -> Vec<&Area> {
-        let points: Vec<[f64; 2]> = project.rooms_on(storey).map(|(_, r)| [r.position.x, r.position.y]).collect();
+        let points: Vec<[f64; 2]> = project.spaces_on(storey).map(|(_, r)| [r.position.x, r.position.y]).collect();
         self.enclosed.iter().filter(|a| !points.iter().any(|p| a.contains(*p))).collect()
     }
 }

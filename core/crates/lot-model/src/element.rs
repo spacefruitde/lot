@@ -32,8 +32,8 @@ pub enum Element {
     Wall(Wall),
     Opening(Opening),
     Column(Column),
-    Room(Room),
-    Dimension(Dimension),
+    Space(Space),
+    DimensionChain(DimensionChain),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -45,8 +45,8 @@ pub enum ElementKind {
     Wall,
     Opening,
     Column,
-    Room,
-    Dimension,
+    Space,
+    DimensionChain,
 }
 
 impl Element {
@@ -58,8 +58,8 @@ impl Element {
             Element::Wall(_) => ElementKind::Wall,
             Element::Opening(_) => ElementKind::Opening,
             Element::Column(_) => ElementKind::Column,
-            Element::Room(_) => ElementKind::Room,
-            Element::Dimension(_) => ElementKind::Dimension,
+            Element::Space(_) => ElementKind::Space,
+            Element::DimensionChain(_) => ElementKind::DimensionChain,
         }
     }
 
@@ -507,7 +507,7 @@ pub struct Column {
 /// Raum (IfcSpace). Gespeichert wird nur ein Punkt im Raum; die Fläche ergibt
 /// sich aus den umgebenden Wänden (CLAUDE.md, Regel 6).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Room {
+pub struct Space {
     pub storey: ElementId,
     /// Ein Punkt im Raum, zugleich Lage des Raumstempels.
     pub position: Point2,
@@ -516,7 +516,7 @@ pub struct Room {
     pub number: String,
     pub name: String,
     #[serde(default)]
-    pub usage: RoomUsage,
+    pub usage: SpaceUsage,
     /// Ob der Raum zur Wohnfläche zählt. Zubehörräume wie Keller, Heizungs- und
     /// Abstellräume außerhalb der Wohnung zählen nicht (WoFlV vom 25.11.2003, § 2 Abs. 3).
     #[serde(default = "yes", skip_serializing_if = "is_true")]
@@ -534,7 +534,7 @@ fn is_true(v: &bool) -> bool {
 /// Nutzungsgruppe nach DIN 277:2021-08. Die Netto-Raumfläche (NRF) teilt sich
 /// in Nutzungsfläche (NUF 1 bis 7), Technikfläche (TF) und Verkehrsfläche (VF).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
-pub enum RoomUsage {
+pub enum SpaceUsage {
     /// NUF 1 Wohnen und Aufenthalt
     #[default]
     Living,
@@ -556,58 +556,58 @@ pub enum RoomUsage {
     Circulation,
 }
 
-impl RoomUsage {
-    pub const ALL: [RoomUsage; 9] = [
-        RoomUsage::Living,
-        RoomUsage::Office,
-        RoomUsage::Production,
-        RoomUsage::Storage,
-        RoomUsage::Education,
-        RoomUsage::Care,
-        RoomUsage::Other,
-        RoomUsage::Technical,
-        RoomUsage::Circulation,
+impl SpaceUsage {
+    pub const ALL: [SpaceUsage; 9] = [
+        SpaceUsage::Living,
+        SpaceUsage::Office,
+        SpaceUsage::Production,
+        SpaceUsage::Storage,
+        SpaceUsage::Education,
+        SpaceUsage::Care,
+        SpaceUsage::Other,
+        SpaceUsage::Technical,
+        SpaceUsage::Circulation,
     ];
 
     /// Kurzzeichen nach DIN 277:2021-08, etwa „NUF 1“ oder „VF“.
     pub fn code(self) -> &'static str {
         match self {
-            RoomUsage::Living => "NUF 1",
-            RoomUsage::Office => "NUF 2",
-            RoomUsage::Production => "NUF 3",
-            RoomUsage::Storage => "NUF 4",
-            RoomUsage::Education => "NUF 5",
-            RoomUsage::Care => "NUF 6",
-            RoomUsage::Other => "NUF 7",
-            RoomUsage::Technical => "TF",
-            RoomUsage::Circulation => "VF",
+            SpaceUsage::Living => "NUF 1",
+            SpaceUsage::Office => "NUF 2",
+            SpaceUsage::Production => "NUF 3",
+            SpaceUsage::Storage => "NUF 4",
+            SpaceUsage::Education => "NUF 5",
+            SpaceUsage::Care => "NUF 6",
+            SpaceUsage::Other => "NUF 7",
+            SpaceUsage::Technical => "TF",
+            SpaceUsage::Circulation => "VF",
         }
     }
 
     pub fn title(self) -> &'static str {
         match self {
-            RoomUsage::Living => "Wohnen und Aufenthalt",
-            RoomUsage::Office => "Büroarbeit",
-            RoomUsage::Production => "Produktion, Hand- und Maschinenarbeit, Forschung",
-            RoomUsage::Storage => "Lagern, Verteilen und Verkaufen",
-            RoomUsage::Education => "Bildung, Unterricht und Kultur",
-            RoomUsage::Care => "Heilen und Pflegen",
-            RoomUsage::Other => "Sonstige Nutzungen",
-            RoomUsage::Technical => "Technikfläche",
-            RoomUsage::Circulation => "Verkehrsfläche",
+            SpaceUsage::Living => "Wohnen und Aufenthalt",
+            SpaceUsage::Office => "Büroarbeit",
+            SpaceUsage::Production => "Produktion, Hand- und Maschinenarbeit, Forschung",
+            SpaceUsage::Storage => "Lagern, Verteilen und Verkaufen",
+            SpaceUsage::Education => "Bildung, Unterricht und Kultur",
+            SpaceUsage::Care => "Heilen und Pflegen",
+            SpaceUsage::Other => "Sonstige Nutzungen",
+            SpaceUsage::Technical => "Technikfläche",
+            SpaceUsage::Circulation => "Verkehrsfläche",
         }
     }
 
     /// Ob die Fläche zur Nutzungsfläche (NUF) gehört.
     pub fn is_usable(self) -> bool {
-        !matches!(self, RoomUsage::Technical | RoomUsage::Circulation)
+        !matches!(self, SpaceUsage::Technical | SpaceUsage::Circulation)
     }
 }
 
 /// Maßkette (3.05). Gespeichert werden die Bezüge, nicht die Maße: Ändert sich
 /// eine Wand oder Öffnung, ändert sich die Kette mit (assoziativ).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Dimension {
+pub struct DimensionChain {
     pub storey: ElementId,
     /// Ein Punkt auf der Maßlinie.
     pub position: Point2,

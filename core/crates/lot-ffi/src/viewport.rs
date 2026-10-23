@@ -324,7 +324,7 @@ impl Viewport {
                         Tool::ArcWall => "arc",
                         Tool::Grid => "grid",
                         Tool::Column => "column",
-                        Tool::Room => "room",
+                        Tool::Space => "space",
                         Tool::Door => "door",
                         Tool::Window => "window",
                     }

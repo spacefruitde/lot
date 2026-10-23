@@ -76,16 +76,16 @@ impl Project {
         })
     }
 
-    pub fn dimensions_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Dimension)> {
+    pub fn dimensions_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::DimensionChain)> {
         self.elements.iter().filter_map(move |(id, e)| match e {
-            Element::Dimension(d) if d.storey == storey => Some((*id, d)),
+            Element::DimensionChain(d) if d.storey == storey => Some((*id, d)),
             _ => None,
         })
     }
 
-    pub fn rooms_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Room)> {
+    pub fn spaces_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Space)> {
         self.elements.iter().filter_map(move |(id, e)| match e {
-            Element::Room(r) if r.storey == storey => Some((*id, r)),
+            Element::Space(r) if r.storey == storey => Some((*id, r)),
             _ => None,
         })
     }

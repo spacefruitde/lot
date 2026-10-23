@@ -3,7 +3,7 @@
 //! Geometrie ist immer abgeleitet und wird nie gespeichert (CLAUDE.md, Regel 6).
 //!
 //! - [`joins`]: Wandanschlüsse im Grundriss, je Schicht eine Fläche
-//! - [`rooms`]: Räume als von Wänden umschlossene Flächen
+//! - [`spaces`]: Räume als von Wänden umschlossene Flächen
 //! - [`build`]: 3D-Körper aus den Schichtflächen, Höhenabschnitt für
 //!   Höhenabschnitt hochgezogen und mit manifold-rust vereinigt (ADR 0004)
 
@@ -11,7 +11,7 @@ pub mod dimensions;
 pub mod joins;
 mod mesh;
 pub mod poly;
-pub mod rooms;
+pub mod spaces;
 
 use std::collections::BTreeMap;
 

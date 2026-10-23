@@ -1,6 +1,6 @@
 //! Maßketten: Bezüge auf Wände, Öffnungen und Achsen werden zu Punkten auf der Maßlinie.
 
-use lot_model::{DimRef, Dimension, Element, ElementId, Point2, Project, Wall, WallEnd, WallSide};
+use lot_model::{DimRef, DimensionChain, Element, ElementId, Point2, Project, Wall, WallEnd, WallSide};
 
 /// Toleranz, mit der Wandenden als verbunden gelten, in Metern (wie bei den Anschlüssen).
 const JOIN_TOLERANCE: f64 = 0.001;
@@ -8,7 +8,7 @@ const JOIN_TOLERANCE: f64 = 0.001;
 /// Ein aufgelöster Bezugspunkt.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DimPoint {
-    /// Lage entlang der Maßlinie, ab `Dimension::position`, in Metern.
+    /// Lage entlang der Maßlinie, ab `DimensionChain::position`, in Metern.
     pub along: f64,
     /// Der Bezugspunkt im Grundriss.
     pub point: [f64; 2],
@@ -17,14 +17,14 @@ pub struct DimPoint {
 }
 
 /// Einheitsvektor der Maßlinie.
-pub fn direction(d: &Dimension) -> [f64; 2] {
+pub fn direction(d: &DimensionChain) -> [f64; 2] {
     let len = d.direction.x.hypot(d.direction.y).max(1e-12);
     [d.direction.x / len, d.direction.y / len]
 }
 
 /// Alle Bezugspunkte der Kette, entlang der Maßlinie sortiert. Fehlende Bezüge
 /// (gelöschte Elemente) fallen weg, zusammenfallende Punkte zählen einmal.
-pub fn resolve(project: &Project, d: &Dimension) -> Vec<DimPoint> {
+pub fn resolve(project: &Project, d: &DimensionChain) -> Vec<DimPoint> {
     let dir = direction(d);
     let mut points: Vec<DimPoint> = d
         .refs

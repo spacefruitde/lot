@@ -97,36 +97,36 @@ pub fn floor_plan(
     crate::dimensions::draw_dimensions(&mut objects, project, view.storey, style, viewport);
 
     // 8. Raumstempel.
-    draw_room_stamps(&mut objects, project, view.storey, style, viewport);
+    draw_space_tags(&mut objects, project, view.storey, style, viewport);
     objects
 }
 
 /// Raumstempel (3.06), Vorschlag: Nummer klein über dem Namen, darunter die
 /// Netto-Raumfläche nach DIN 277:2021-08. Ein Raum ohne geschlossene Wände
 /// zeigt „Fläche offen“.
-fn draw_room_stamps(
+fn draw_space_tags(
     objects: &mut Vec<PlanObject>,
     project: &Project,
     storey: ElementId,
     style: &ScaleStyle,
     viewport: Viewport,
 ) {
-    let rooms: Vec<_> = project.rooms_on(storey).collect();
-    if rooms.is_empty() {
+    let spaces: Vec<_> = project.spaces_on(storey).collect();
+    if spaces.is_empty() {
         return;
     }
-    let finder = lot_geom::rooms::RoomFinder::new(project, storey);
-    for (_, room) in rooms {
-        let area = finder.area_at([room.position.x, room.position.y]).map(|a| a.area());
+    let finder = lot_geom::spaces::SpaceFinder::new(project, storey);
+    for (_, space) in spaces {
+        let area = finder.area_at([space.position.x, space.position.y]).map(|a| a.area());
         let mut lines: Vec<(String, f64)> = Vec::new();
-        if !room.number.is_empty() {
-            lines.push((room.number.clone(), style.room_text));
+        if !space.number.is_empty() {
+            lines.push((space.number.clone(), style.space_text));
         }
-        lines.push((room.name.clone(), style.room_name));
-        lines.push((area.map_or_else(|| "Fläche offen".to_string(), format_area), style.room_text));
+        lines.push((space.name.clone(), style.space_name));
+        lines.push((area.map_or_else(|| "Fläche offen".to_string(), format_area), style.space_text));
         // Zeilenabstand das 1,6-fache der Schrifthöhe, der Block steht mittig auf dem Raumpunkt.
         let total: f64 = lines.iter().map(|(_, h)| h * 1.6).sum::<f64>() - lines.last().map_or(0.0, |(_, h)| h * 0.6);
-        let center = viewport.to_paper(room.position.x, room.position.y);
+        let center = viewport.to_paper(space.position.x, space.position.y);
         let mut top = center.y + total / 2.0;
         for (text, height) in lines {
             top -= height;

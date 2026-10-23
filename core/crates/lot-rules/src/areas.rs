@@ -22,16 +22,16 @@
 //! - § 4: Anrechnung nach lichter Höhe (unter 1 m gar nicht, 1 bis 2 m zur Hälfte).
 //!   Ohne Dachschrägen im Modell (M3) haben alle Räume volle Höhe und zählen ganz.
 
-use lot_geom::rooms::RoomFinder;
-use lot_model::{ElementId, Project, RoomUsage};
+use lot_geom::spaces::SpaceFinder;
+use lot_model::{ElementId, Project, SpaceUsage};
 
 /// Fläche eines Raums.
 #[derive(Debug, Clone, PartialEq)]
-pub struct RoomArea {
+pub struct SpaceArea {
     pub id: ElementId,
     pub number: String,
     pub name: String,
-    pub usage: RoomUsage,
+    pub usage: SpaceUsage,
     /// Netto-Raumfläche in m²; `None`, wenn der Raum nicht von Wänden umschlossen ist.
     pub net: Option<f64>,
     /// Wohnfläche nach WoFlV in m²; `None` bei Zubehörräumen und offenen Räumen.
@@ -43,7 +43,7 @@ pub struct RoomArea {
 pub struct StoreyAreas {
     pub storey: ElementId,
     pub name: String,
-    pub rooms: Vec<RoomArea>,
+    pub spaces: Vec<SpaceArea>,
     /// Brutto-Grundfläche, m²
     pub gross: f64,
     /// Netto-Raumfläche aller umschlossenen Bereiche, auch ohne Raum, m²
@@ -73,19 +73,19 @@ pub struct AreaReport {
 
 impl AreaReport {
     /// Netto-Raumfläche je Nutzungsgruppe über alle Geschosse, in der Reihenfolge der Norm.
-    pub fn net_by_usage(&self) -> Vec<(RoomUsage, f64)> {
-        RoomUsage::ALL
+    pub fn net_by_usage(&self) -> Vec<(SpaceUsage, f64)> {
+        SpaceUsage::ALL
             .iter()
             .map(|u| {
-                let sum = self.rooms().filter(|r| r.usage == *u).filter_map(|r| r.net).sum();
+                let sum = self.spaces().filter(|r| r.usage == *u).filter_map(|r| r.net).sum();
                 (*u, sum)
             })
             .filter(|(_, a)| *a > 0.0)
             .collect()
     }
 
-    pub fn rooms(&self) -> impl Iterator<Item = &RoomArea> {
-        self.storeys.iter().flat_map(|s| s.rooms.iter())
+    pub fn spaces(&self) -> impl Iterator<Item = &SpaceArea> {
+        self.storeys.iter().flat_map(|s| s.spaces.iter())
     }
 
     pub fn gross(&self) -> f64 {
@@ -106,12 +106,12 @@ impl AreaReport {
 
     /// Nutzungsfläche (NUF 1 bis 7).
     pub fn usable(&self) -> f64 {
-        self.rooms().filter(|r| r.usage.is_usable()).filter_map(|r| r.net).sum()
+        self.spaces().filter(|r| r.usage.is_usable()).filter_map(|r| r.net).sum()
     }
 
     /// Wohnfläche nach WoFlV.
     pub fn living(&self) -> f64 {
-        self.rooms().filter_map(|r| r.living).sum()
+        self.spaces().filter_map(|r| r.living).sum()
     }
 }
 
@@ -119,14 +119,14 @@ impl AreaReport {
 pub fn area_report(project: &Project) -> AreaReport {
     let mut report = AreaReport::default();
     for (storey_id, storey) in project.storeys() {
-        let finder = RoomFinder::new(project, storey_id);
+        let finder = SpaceFinder::new(project, storey_id);
         let mut claimed: Vec<(usize, String)> = Vec::new();
-        let mut rooms = Vec::new();
-        let mut list: Vec<_> = project.rooms_on(storey_id).collect();
+        let mut spaces = Vec::new();
+        let mut list: Vec<_> = project.spaces_on(storey_id).collect();
         list.sort_by(|a, b| a.1.number.cmp(&b.1.number).then(a.0.cmp(&b.0)));
-        for (id, room) in list {
-            let p = [room.position.x, room.position.y];
-            let label = format!("{} {}", room.number, room.name).trim().to_string();
+        for (id, space) in list {
+            let p = [space.position.x, space.position.y];
+            let label = format!("{} {}", space.number, space.name).trim().to_string();
             let index = finder.position_of(p);
             match index {
                 Some(i) => {
@@ -140,12 +140,12 @@ pub fn area_report(project: &Project) -> AreaReport {
             }
             let net = finder.area_at(p).map(|a| a.area());
             // WoFlV § 4 Nr. 1: Ohne Dachschrägen haben alle Räume mindestens 2 m lichte Höhe.
-            let living = if room.living_space { finder.living_area_at(p) } else { None };
-            rooms.push(RoomArea {
+            let living = if space.living_space { finder.living_area_at(p) } else { None };
+            spaces.push(SpaceArea {
                 id,
-                number: room.number.clone(),
-                name: room.name.clone(),
-                usage: room.usage,
+                number: space.number.clone(),
+                name: space.name.clone(),
+                usage: space.usage,
                 net,
                 living,
             });
@@ -156,7 +156,7 @@ pub fn area_report(project: &Project) -> AreaReport {
         report.storeys.push(StoreyAreas {
             storey: storey_id,
             name: storey.name.clone(),
-            rooms,
+            spaces,
             gross,
             net,
             unassigned: net - assigned,
@@ -170,13 +170,13 @@ pub fn area_report(project: &Project) -> AreaReport {
 #[cfg(test)]
 mod tests {
     use lot_model::{
-        Column, ColumnProfile, Element, ElementId, Point2, Project, Room, RoomUsage, Top, Wall, WallAlignment,
+        Column, ColumnProfile, Element, ElementId, Point2, Project, Space, SpaceUsage, Top, Wall, WallAlignment,
     };
 
     use super::*;
 
     /// Vorlage mit einem Raum 5 × 4 m (Achsmaß) aus tragenden Innenwänden.
-    fn project_with_room() -> (Project, ElementId) {
+    fn project_with_space() -> (Project, ElementId) {
         let mut p = Project::template("Test");
         let storey = p.storeys()[0].0;
         let wall_type = p.wall_types().find(|(_, t)| t.name.contains("tragend")).unwrap().0;
@@ -201,12 +201,12 @@ mod tests {
         let id = p.next_id();
         p.elements.insert(
             id,
-            Element::Room(Room {
+            Element::Space(Space {
                 storey,
                 position: Point2::new(2.5, 2.0),
                 number: "0.01".into(),
                 name: "Wohnen".into(),
-                usage: RoomUsage::Living,
+                usage: SpaceUsage::Living,
                 living_space: true,
             }),
         );
@@ -215,11 +215,11 @@ mod tests {
 
     #[test]
     fn net_gross_and_construction_add_up() {
-        let (p, _) = project_with_room();
+        let (p, _) = project_with_space();
         let r = area_report(&p);
         let s = &r.storeys[0];
         // Wand 20,5 cm, Achse mittig: lichte Maße 4,795 × 3,795, Außenmaße 5,205 × 4,205.
-        assert!((s.rooms[0].net.unwrap() - 4.795 * 3.795).abs() < 1e-6);
+        assert!((s.spaces[0].net.unwrap() - 4.795 * 3.795).abs() < 1e-6);
         assert!((s.gross - 5.205 * 4.205).abs() < 1e-6);
         assert!((s.construction - (s.gross - s.net)).abs() < 1e-9);
         assert_eq!(s.unassigned, 0.0);
@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn small_columns_stay_in_living_area_but_not_in_net_area() {
-        let (mut p, _) = project_with_room();
+        let (mut p, _) = project_with_space();
         let storey = p.storeys()[0].0;
         for (x, size) in [(1.5, 0.3), (3.5, 0.4)] {
             let id = p.next_id();
@@ -246,38 +246,38 @@ mod tests {
                 }),
             );
         }
-        let room = &area_report(&p).storeys[0].rooms[0];
+        let space = &area_report(&p).storeys[0].spaces[0];
         let full = 4.795 * 3.795;
         // DIN 277: beide Stützen sind KGF. WoFlV § 3 Abs. 3 Nr. 1: nur die große (0,16 m²) wird abgezogen.
-        assert!((room.net.unwrap() - (full - 0.09 - 0.16)).abs() < 1e-6);
-        assert!((room.living.unwrap() - (full - 0.16)).abs() < 1e-6);
+        assert!((space.net.unwrap() - (full - 0.09 - 0.16)).abs() < 1e-6);
+        assert!((space.living.unwrap() - (full - 0.16)).abs() < 1e-6);
     }
 
     #[test]
-    fn cellar_rooms_do_not_count_as_living_space() {
-        let (mut p, id) = project_with_room();
-        if let Some(Element::Room(r)) = p.elements.get_mut(&id) {
+    fn cellar_spaces_do_not_count_as_living_space() {
+        let (mut p, id) = project_with_space();
+        if let Some(Element::Space(r)) = p.elements.get_mut(&id) {
             r.living_space = false;
         }
         let r = area_report(&p);
-        assert!(r.storeys[0].rooms[0].net.is_some());
+        assert!(r.storeys[0].spaces[0].net.is_some());
         assert_eq!(r.living(), 0.0);
     }
 
     #[test]
-    fn open_and_duplicate_rooms_are_reported() {
-        let (mut p, _) = project_with_room();
+    fn open_and_duplicate_spaces_are_reported() {
+        let (mut p, _) = project_with_space();
         let storey = p.storeys()[0].0;
         for (x, name) in [(3.0, "Doppelt"), (9.0, "Draußen")] {
             let id = p.next_id();
             p.elements.insert(
                 id,
-                Element::Room(Room {
+                Element::Space(Space {
                     storey,
                     position: Point2::new(x, 2.0),
                     number: String::new(),
                     name: name.into(),
-                    usage: RoomUsage::Other,
+                    usage: SpaceUsage::Other,
                     living_space: true,
                 }),
             );
