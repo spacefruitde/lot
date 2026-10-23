@@ -75,9 +75,20 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Projektangaben | `ProjectInfo` | | Bauherr, Bauort, Entwurfsverfasser, Gebäudeart |
 | Gebäudeart | `BuildingClass` | | nach DIN 18065 Tabelle 1 |
 | 2D-Element | `Annotation` | IfcAnnotation | Linie, Fläche, Kreis oder Text in einer Ansicht (ADR 0030) |
-| Bestand, Abbruch, Neubau | `Phase::{Existing, Demolished, New}` | | Farbkonvention nach Bauvorlagenverordnung |
+| Bestand, Abbruch, Neubau | `Phase::{Existing, Demolished, New}` | | Bauzustand; Farben nach Bauvorlagenverordnung (ADR 0031) |
+| Umbauplan, Bestandsplan, Neuzustand | `PhaseFilter::{All, Existing, Planned}` | | welcher Bauzustand gezeigt wird |
+| Ausbruch | | | neue Öffnung in einer Bestandswand, im Umbauplan gelb |
+| Unterlage | `Underlay` | | PDF, Bild, DXF oder DWG unter einem Grundriss (ADR 0032) |
+| Kalibrieren | `CalibrateUnderlay` | | Unterlage über eine Strecke mit bekanntem Maß skalieren |
+| Datei im Projekt | `Attachments` | | etwa Unterlagen und Referenzmodelle, in der Projektdatei gespeichert |
+| Gelände | `Terrain` | IfcSite | Höhenpunkte und Dreiecksnetz (ADR 0034) |
+| Höhenpunkt | `TerrainPoint` | | |
+| Erdreich | `erdreich` (Material) | | Körper unter dem Gelände, im Schnitt schraffiert |
+| Variantengruppe | `VariantSet` | | eine Frage mit mehreren Varianten (ADR 0035) |
+| Referenzmodell | `ReferenceModel` | | IFC eines Fachplaners, sichtbar, nicht bearbeitbar (ADR 0036) |
+| Layer (DXF, DWG) | `floor_plan_layers` | | Gruppen im CAD-Austausch, etwa `A_Bauteile_Schnitt` |
 | Abstandsfläche | `SetbackArea` | | nach Landesbauordnung |
-| Variante | `Variant` | | |
+| Variante | `Variant` | | eine Antwort in einer Variantengruppe |
 | Bürostandard | `OfficeStandard` | | Materialien, Schraffuren, Stiftsets je Maßstab |
 | Detailgrad | `Detail` | | grob (1:200), mittel (1:100), fein (1:50) |
 | Schnittkante | `Pens::cut` | | Umriss geschnittener Bauteile |
