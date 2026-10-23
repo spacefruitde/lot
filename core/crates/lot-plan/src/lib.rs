@@ -54,12 +54,31 @@ pub enum LineStyle {
     Dashed(Vec<f64>),
 }
 
-/// Grauwert von 0 (schwarz) bis 1 (weiß). Farben folgen mit Bestand/Abbruch/Neubau.
+/// Farbe auf dem Plan, sRGB-Anteile von 0 bis 1. Fast alles ist schwarz oder
+/// grau; Farben braucht es für Bestand, Abbruch und Neubau (2.05).
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Gray(pub f64);
+pub struct Color {
+    pub r: f64,
+    pub g: f64,
+    pub b: f64,
+}
 
-impl Gray {
-    pub const BLACK: Gray = Gray(0.0);
+impl Color {
+    pub const BLACK: Color = Color { r: 0.0, g: 0.0, b: 0.0 };
+
+    /// Grauwert von 0 (schwarz) bis 1 (weiß).
+    pub const fn gray(v: f64) -> Color {
+        Color { r: v, g: v, b: v }
+    }
+
+    pub fn rgb8(r: u8, g: u8, b: u8) -> Color {
+        Color { r: r as f64 / 255.0, g: g as f64 / 255.0, b: b as f64 / 255.0 }
+    }
+
+    /// Anteile als Bytes 0 bis 255.
+    pub fn bytes(self) -> [u8; 3] {
+        [self.r, self.g, self.b].map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,13 +87,13 @@ pub struct Line {
     pub closed: bool,
     pub pen: Pen,
     pub style: LineStyle,
-    pub color: Gray,
+    pub color: Color,
 }
 
 /// Füllung einer Fläche.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Fill {
-    Solid(Gray),
+    Solid(Color),
     /// Parallele Schraffurlinien. Winkel in Grad gegen die x-Achse, Abstand in mm.
     Hatch {
         angle_deg: f64,
@@ -175,7 +194,7 @@ impl Sheet {
             closed: false,
             pen,
             style: LineStyle::Solid,
-            color: Gray::BLACK,
+            color: Color::BLACK,
         }));
     }
 
@@ -185,7 +204,7 @@ impl Sheet {
             closed: true,
             pen,
             style: LineStyle::Solid,
-            color: Gray::BLACK,
+            color: Color::BLACK,
         }));
     }
 

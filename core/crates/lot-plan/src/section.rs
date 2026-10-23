@@ -17,7 +17,7 @@ use lot_model::{Element, ElementId, LayerFunction, Project, SectionKind, Section
 
 use crate::floor_plan::draw_cut;
 use crate::standard::{OfficeStandard, ScaleStyle};
-use crate::{Anchor, Gray, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
+use crate::{Anchor, Color, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
 
 /// Geländehöhe über ±0,00, bis das Gelände im Modell ist (M4). Vorschlag, Ben prüft.
 pub const GROUND: f64 = -0.30;
@@ -130,7 +130,7 @@ pub fn section(
                 closed: false,
                 pen: view_pen,
                 style: LineStyle::Solid,
-                color: Gray::BLACK,
+                color: Color::BLACK,
             }));
         }
     }
@@ -147,7 +147,7 @@ pub fn section(
                 closed: false,
                 pen: Pen::mm(style.pens.cut),
                 style: LineStyle::Solid,
-                color: Gray::BLACK,
+                color: Color::BLACK,
             }));
         }
         // 5. Höhenkoten.
@@ -600,14 +600,14 @@ fn draw_level_marks(
             closed: false,
             pen,
             style: LineStyle::Solid,
-            color: Gray::BLACK,
+            color: Color::BLACK,
         }));
         objects.push(PlanObject::Line(Line {
             points: vec![p, PaperPoint::new(p.x - 1.2, p.y + 2.0), PaperPoint::new(p.x + 1.2, p.y + 2.0)],
             closed: true,
             pen,
             style: LineStyle::Solid,
-            color: Gray::BLACK,
+            color: Color::BLACK,
         }));
         // Beschriftung links vom Dreieck, damit sie nicht ins Bild läuft.
         objects.push(PlanObject::Text(Text {

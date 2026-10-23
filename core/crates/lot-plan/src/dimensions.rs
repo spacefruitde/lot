@@ -10,7 +10,7 @@
 use lot_model::{Element, ElementId, Project};
 
 use crate::standard::ScaleStyle;
-use crate::{Anchor, Gray, Line, LineStyle, Pen, PlanObject, Text, Viewport};
+use crate::{Anchor, Color, Line, LineStyle, Pen, PlanObject, Text, Viewport};
 
 /// Länge der Maßhilfslinie über die Maßlinie hinaus und zum Bauteil hin, in mm auf dem Blatt.
 const EXTENSION: (f64, f64) = (1.5, 3.0);
@@ -59,7 +59,7 @@ pub fn draw_dimensions(
                 closed: false,
                 pen: Pen::mm(width),
                 style: LineStyle::Solid,
-                color: Gray::BLACK,
+                color: Color::BLACK,
             })
         };
         let (first, last) = (points[0].along, points[points.len() - 1].along);

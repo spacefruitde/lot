@@ -220,7 +220,7 @@ fn frame(sheet: &mut Sheet) {
         closed: true,
         pen: Pen::mm(0.35),
         style: crate::LineStyle::Solid,
-        color: crate::Gray::BLACK,
+        color: crate::Color::BLACK,
     }));
 }
 

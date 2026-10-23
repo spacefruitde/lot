@@ -13,7 +13,7 @@ use lot_model::{ElementId, FlightLayout, Point2, Project, RailingPath, Stair, St
 
 use crate::clip::inside;
 use crate::standard::ScaleStyle;
-use crate::{Anchor, Area as PlanArea, Fill, Gray, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
+use crate::{Anchor, Area as PlanArea, Color, Fill, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
 
 /// Strich und Lücke für Treppenteile über der Schnittebene, in mm.
 const ABOVE_DASH: [f64; 2] = [1.5, 1.0];
@@ -339,7 +339,7 @@ fn draw_walking_line(objects: &mut Vec<PlanObject>, layout: &StairLayout, view: 
             closed: true,
             pen: Pen::mm(pen),
             style: LineStyle::Solid,
-            color: Gray::BLACK,
+            color: Color::BLACK,
         }));
     }
     // Pfeil am Austritt, gefüllt, 2,5 mm lang.
@@ -355,7 +355,8 @@ fn draw_walking_line(objects: &mut Vec<PlanObject>, layout: &StairLayout, view: 
                 PaperPoint::new(back.x - d.1 * 0.8, back.y + d.0 * 0.8),
                 PaperPoint::new(back.x + d.1 * 0.8, back.y - d.0 * 0.8),
             );
-            objects.push(PlanObject::Area(PlanArea { rings: vec![vec![tip, s0, s1]], fill: Fill::Solid(Gray::BLACK) }));
+            objects
+                .push(PlanObject::Area(PlanArea { rings: vec![vec![tip, s0, s1]], fill: Fill::Solid(Color::BLACK) }));
         }
     }
 }
@@ -402,7 +403,7 @@ fn line(points: Vec<PaperPoint>, width: f64, look: Look) -> PlanObject {
             Look::Solid => LineStyle::Solid,
             Look::Dashed => LineStyle::Dashed(ABOVE_DASH.to_vec()),
         },
-        color: Gray::BLACK,
+        color: Color::BLACK,
     })
 }
 

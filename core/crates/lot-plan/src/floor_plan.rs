@@ -28,7 +28,7 @@ use lot_model::{ElementId, LayerFunction, OpeningKind, Project, WallSide};
 
 use crate::clip::clip_polyline;
 use crate::standard::{CutPattern, Detail, OfficeStandard, ScaleStyle};
-use crate::{Anchor, Area as PlanArea, Fill, Gray, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
+use crate::{Anchor, Area as PlanArea, Color, Fill, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
 
 /// Ein Grundriss: Geschoss, Schnitthöhe über OKFF und Maßstab.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -179,7 +179,7 @@ fn draw_openings(
             closed: false,
             pen: Pen::mm(width),
             style: if dashed { LineStyle::Dashed(HIDDEN_DASH.to_vec()) } else { LineStyle::Solid },
-            color: Gray::BLACK,
+            color: Color::BLACK,
         })
     };
     for (wall_id, wall) in project.walls_on(storey) {
@@ -287,7 +287,7 @@ fn draw_slab_openings(
             closed,
             pen: Pen::mm(width),
             style: if dashed { LineStyle::Dashed(HIDDEN_DASH.to_vec()) } else { LineStyle::Solid },
-            color: Gray::BLACK,
+            color: Color::BLACK,
         })
     };
     for (slab_id, slab) in project.elements.iter().filter_map(|(id, e)| match e {
@@ -372,7 +372,7 @@ fn draw_roof_lines(
                 closed: true,
                 pen: Pen::mm(style.pens.hidden),
                 style: LineStyle::Dashed(HIDDEN_DASH.to_vec()),
-                color: Gray::BLACK,
+                color: Color::BLACK,
             }));
         }
         objects.push(PlanObject::Line(Line {
@@ -380,7 +380,7 @@ fn draw_roof_lines(
             closed: true,
             pen: Pen::mm(style.pens.hidden),
             style: LineStyle::Dashed(HIDDEN_DASH.to_vec()),
-            color: Gray::BLACK,
+            color: Color::BLACK,
         }));
         for height in [1.0, 2.0] {
             let region = lot_geom::roofs::clear_height_region(project, roof_id, roof, height);
@@ -399,7 +399,7 @@ fn draw_roof_lines(
                             closed: false,
                             pen: Pen::mm(style.pens.hatch),
                             style: LineStyle::Dashed(HEIGHT_LINE_DASH.to_vec()),
-                            color: Gray::BLACK,
+                            color: Color::BLACK,
                         }));
                     }
                 }
@@ -442,7 +442,7 @@ fn draw_section_marks(objects: &mut Vec<PlanObject>, project: &Project, style: &
         let d = ((b.x - a.x) / len, (b.y - a.y) / len);
         let (look, _) = view.frame();
         let line = |points: Vec<PaperPoint>, width: f64, style: LineStyle| {
-            PlanObject::Line(Line { points, closed: false, pen: Pen::mm(width), style, color: Gray::BLACK })
+            PlanObject::Line(Line { points, closed: false, pen: Pen::mm(width), style, color: Color::BLACK })
         };
         let end = 8.0f64.min(len / 3.0);
         for (p, dir) in [(a, d), (b, (-d.0, -d.1))] {
@@ -459,7 +459,8 @@ fn draw_section_marks(objects: &mut Vec<PlanObject>, project: &Project, style: &
                 style.pens.annotation,
                 LineStyle::Solid,
             ));
-            objects.push(PlanObject::Area(PlanArea { rings: vec![vec![tip, s0, s1]], fill: Fill::Solid(Gray::BLACK) }));
+            objects
+                .push(PlanObject::Area(PlanArea { rings: vec![vec![tip, s0, s1]], fill: Fill::Solid(Color::BLACK) }));
             if !view.mark.is_empty() {
                 let at = PaperPoint::new(p.x + look.0 * 8.0, p.y + look.1 * 8.0 - style.text / 2.0);
                 objects.push(PlanObject::Text(Text {
@@ -493,7 +494,7 @@ pub(crate) fn draw_cut(
     match style.detail {
         Detail::Coarse => {
             let rings: Vec<Vec<PaperPoint>> = cut_all.rings().iter().map(|r| paper(r, viewport)).collect();
-            objects.push(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(Gray::BLACK) }));
+            objects.push(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(Color::BLACK) }));
         }
         Detail::Medium | Detail::Fine => {
             draw_patterns(objects, cut, standard, style, viewport);
@@ -536,7 +537,7 @@ fn draw_patterns(
         match material.cut {
             CutPattern::Empty => {}
             CutPattern::Solid { gray } => {
-                objects.push(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(Gray(gray)) }));
+                objects.push(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(Color::gray(gray)) }));
             }
             CutPattern::Lines { angle, spacing } => {
                 objects.push(PlanObject::Area(PlanArea {
@@ -612,7 +613,7 @@ fn insulation(objects: &mut Vec<PlanObject>, region: &LayerRegion, soft: bool, p
             closed: false,
             pen,
             style: LineStyle::Solid,
-            color: Gray::BLACK,
+            color: Color::BLACK,
         }));
     }
 }
@@ -642,7 +643,7 @@ fn draw_grid_line(objects: &mut Vec<PlanObject>, grid: &lot_model::GridLine, sty
         closed: false,
         pen: Pen::mm(style.pens.grid),
         style: LineStyle::Dashed(vec![12.0, 1.5, 0.5, 1.5]),
-        color: Gray::BLACK,
+        color: Color::BLACK,
     }));
     let center = PaperPoint::new(a.x - d.0 * r, a.y - d.1 * r);
     let circle: Vec<PaperPoint> = (0..48)
@@ -667,7 +668,7 @@ fn paper(ring: &[[f64; 2]], viewport: Viewport) -> Vec<PaperPoint> {
 }
 
 fn closed(points: Vec<PaperPoint>, width: f64) -> PlanObject {
-    PlanObject::Line(Line { points, closed: true, pen: Pen::mm(width), style: LineStyle::Solid, color: Gray::BLACK })
+    PlanObject::Line(Line { points, closed: true, pen: Pen::mm(width), style: LineStyle::Solid, color: Color::BLACK })
 }
 
 #[cfg(test)]

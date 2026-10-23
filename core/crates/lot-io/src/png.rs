@@ -3,7 +3,7 @@
 //! Gerastert wird aus denselben Planobjekten wie PDF und SVG. Linien behalten
 //! ihre Breite in mm, werden aber nie dünner als ein Pixel.
 
-use lot_plan::{Fill as PlanFill, Gray, Line, LineStyle, PaperPoint, PlanObject, Sheet, hatch_segments};
+use lot_plan::{Color, Fill as PlanFill, Line, LineStyle, PaperPoint, PlanObject, Sheet, hatch_segments};
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, Stroke, StrokeDash, Transform};
 
 use crate::IoError;
@@ -39,7 +39,7 @@ pub fn to_png(sheet: &Sheet, dpi: f64) -> Result<Vec<u8>, IoError> {
                     }
                     if let Some(path) = builder.finish() {
                         let stroke = stroke(pen.width_mm, px_per_mm, None);
-                        pixmap.stroke_path(&path, &paint(Gray::BLACK), &stroke, Transform::identity(), None);
+                        pixmap.stroke_path(&path, &paint(Color::BLACK), &stroke, Transform::identity(), None);
                     }
                 }
             },
@@ -47,7 +47,7 @@ pub fn to_png(sheet: &Sheet, dpi: f64) -> Result<Vec<u8>, IoError> {
                 let mut sink = SkiaSink { builder: PathBuilder::new(), px_per_mm, height: h };
                 plan_font().outline(text, &mut sink);
                 if let Some(path) = sink.builder.finish() {
-                    pixmap.fill_path(&path, &paint(Gray::BLACK), FillRule::Winding, Transform::identity(), None);
+                    pixmap.fill_path(&path, &paint(Color::BLACK), FillRule::Winding, Transform::identity(), None);
                 }
             }
         }
@@ -77,10 +77,10 @@ fn stroke(width_mm: f64, px_per_mm: f64, dash: Option<StrokeDash>) -> Stroke {
     }
 }
 
-fn paint(gray: Gray) -> Paint<'static> {
-    let v = (gray.0.clamp(0.0, 1.0) * 255.0).round() as u8;
+fn paint(color: Color) -> Paint<'static> {
+    let [r, g, b] = color.bytes();
     let mut paint = Paint::default();
-    paint.set_color_rgba8(v, v, v, 255);
+    paint.set_color_rgba8(r, g, b, 255);
     paint.anti_alias = true;
     paint
 }

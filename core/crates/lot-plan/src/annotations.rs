@@ -3,7 +3,7 @@
 use lot_model::{AnnotationShape, AnnotationView, Point2, Project};
 
 use crate::standard::{CutPattern, OfficeStandard, ScaleStyle};
-use crate::{Anchor, Area, Fill, Gray, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
+use crate::{Anchor, Area, Color, Fill, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
 
 /// Strich und Lücke gestrichelter 2D-Linien, in mm.
 const DASH: [f64; 2] = [2.0, 1.0];
@@ -22,7 +22,7 @@ pub fn draw_annotations(
         let pen = Pen::mm(a.pen);
         let line_style = if a.dashed { LineStyle::Dashed(DASH.to_vec()) } else { LineStyle::Solid };
         let line = |points: Vec<PaperPoint>, closed: bool| {
-            PlanObject::Line(Line { points, closed, pen, style: line_style.clone(), color: Gray::BLACK })
+            PlanObject::Line(Line { points, closed, pen, style: line_style.clone(), color: Color::BLACK })
         };
         match &a.shape {
             AnnotationShape::Polyline(points) => {
@@ -63,7 +63,7 @@ pub fn draw_annotations(
 fn fills(pattern: &CutPattern, style: &ScaleStyle) -> Vec<Fill> {
     let pen = Pen::mm(style.pens.hatch);
     match *pattern {
-        CutPattern::Solid { gray } => vec![Fill::Solid(Gray(gray))],
+        CutPattern::Solid { gray } => vec![Fill::Solid(Color::gray(gray))],
         CutPattern::Lines { angle, spacing } => vec![Fill::Hatch { angle_deg: angle, spacing_mm: spacing, pen }],
         CutPattern::Cross { angle, spacing } => vec![
             Fill::Hatch { angle_deg: angle, spacing_mm: spacing, pen },
