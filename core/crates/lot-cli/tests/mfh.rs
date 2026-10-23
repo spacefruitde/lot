@@ -119,6 +119,7 @@ fn submission_sheets_are_complete() {
                     _ => panic!("Ansicht {view:?} fehlt"),
                 },
                 ViewContent::SitePlan => site += 1,
+                ViewContent::Presentation { .. } => {}
             }
         }
     }

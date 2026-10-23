@@ -200,7 +200,7 @@ Project(
             views: [
                 (content: FloorPlan(storey: 3), scale: 100.0, center: (x: 150.0, y: 260.0)),
                 (content: Section(view: 108), scale: 100.0, center: (x: 400.0, y: 320.0)),
-                (content: Section(view: 109), scale: 100.0, center: (x: 400.0, y: 150.0)),
+                (content: Section(view: 109), scale: 100.0, center: (x: 395.0, y: 160.0)),
             ],
         ),
         117: PlanSheet(

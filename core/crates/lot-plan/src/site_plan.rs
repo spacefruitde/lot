@@ -340,6 +340,11 @@ fn tick(at: PaperPoint, d: [f64; 2], pen: Pen) -> PlanObject {
     )
 }
 
+/// Nordpfeil für andere Pläne.
+pub fn north_arrow_at(at: PaperPoint, north: f64, pen: Pen) -> Vec<PlanObject> {
+    north_arrow(at, north, pen)
+}
+
 /// Nordpfeil: Kreis mit Pfeil nach Norden und „N“.
 fn north_arrow(at: PaperPoint, north: f64, pen: Pen) -> Vec<PlanObject> {
     let r = 6.0;

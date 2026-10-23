@@ -16,6 +16,19 @@ use serde::Deserialize;
 
 /// Dateiname der Ausgabenbeschreibung in einem Testprojektordner.
 pub const OUTPUTS_FILE: &str = "ausgaben.ron";
+/// Dateiname eines eigenen Bürostandards im Projektordner (2.08).
+pub const STANDARD_FILE: &str = "buerostandard.ron";
+
+/// Der Bürostandard eines Projektordners: der eingebaute mit den
+/// Abweichungen aus `buerostandard.ron`, falls die Datei da ist.
+pub fn office_standard(project_dir: &Path) -> Result<OfficeStandard> {
+    let file = project_dir.join(STANDARD_FILE);
+    if !file.is_file() {
+        return Ok(OfficeStandard::builtin().clone());
+    }
+    let text = std::fs::read_to_string(&file).with_context(|| format!("{} nicht lesbar", file.display()))?;
+    OfficeStandard::with_overrides(&text).map_err(|e| anyhow::anyhow!("{}: {e}", file.display()))
+}
 
 /// Eine Ausgabe. `name` ist der Dateiname ohne Endung.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -128,8 +141,13 @@ pub fn outputs(project_dir: &Path) -> Result<Vec<Output>> {
 }
 
 /// Die Blätter einer Ausgabe. Leer für Ausgaben ohne Blätter (3D-Bild).
-pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &Attachments) -> Vec<Sheet> {
-    let standard = OfficeStandard::default_standard();
+pub fn sheets(
+    project: &Project,
+    output: &Output,
+    source: &str,
+    attachments: &Attachments,
+    standard: &OfficeStandard,
+) -> Vec<Sheet> {
     match output {
         Output::M0Sheet { .. } => vec![lot_plan::m0::sheet(project, source)],
         Output::FloorPlan { storey, scale, phase, variant, references, findings, .. } => {
@@ -243,9 +261,19 @@ pub fn geometry(project: &Project, attachments: &Attachments) -> Result<lot_geom
 }
 
 /// DXF- und DWG-Dateien einer Ausgabe, falls sie welche verlangt: (Dateiname, Inhalt).
-pub fn cad_files(project: &Project, output: &Output, attachments: &Attachments) -> Result<Vec<(String, Vec<u8>)>> {
-    use lot_io::cad::{CadUnits, dwg_bytes, dxf_bytes, to_cad};
-    let standard = OfficeStandard::default_standard();
+pub fn cad_files(
+    project: &Project,
+    output: &Output,
+    attachments: &Attachments,
+    standard: &OfficeStandard,
+) -> Result<Vec<(String, Vec<u8>)>> {
+    use lot_io::cad::{CadUnits, dwg_bytes, dxf_bytes};
+    // Layer mit den Namen des Büros (Bürostandard).
+    let to_cad = |layers: &[(&str, Vec<lot_plan::PlanObject>)], factor: f64, units: CadUnits| {
+        let named: Vec<(&str, Vec<lot_plan::PlanObject>)> =
+            layers.iter().map(|(name, objects)| (standard.layer_name(name), objects.clone())).collect();
+        lot_io::cad::to_cad(&named, factor, units)
+    };
     let origin = lot_plan::Viewport { scale: 100.0, origin: lot_plan::PaperPoint::new(0.0, 0.0) };
     let mut docs: Vec<(String, lot_io::cad::CadDocument)> = Vec::new();
     match output {

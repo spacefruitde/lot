@@ -51,6 +51,7 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
     // Unterlagen liegen als Dateien im Projektordner.
     let attachments = lot_io::testproject::attachments(&project, project_dir);
 
+    let standard = lot_cli::office_standard(project_dir)?;
     for output in outputs(project_dir)? {
         if let Output::View3d { name } = &output {
             if with_3d {
@@ -79,10 +80,10 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
                 lot_plan::area_table::area_csv(&lot_rules::area_report(&lot_cli::phase_project(&project, *phase)));
             write(&out.join(format!("{name}.csv")), csv.as_bytes())?;
         }
-        for (file, bytes) in lot_cli::cad_files(&project, &output, &attachments)? {
+        for (file, bytes) in lot_cli::cad_files(&project, &output, &attachments, &standard)? {
             write(&out.join(file), &bytes)?;
         }
-        let pages = sheets(&project, &output, &source, &attachments);
+        let pages = sheets(&project, &output, &source, &attachments, &standard);
         write(&out.join(format!("{}.pdf", output.name())), &lot_io::pdf::to_pdf_pages(&pages)?)?;
         for (sheet, page) in pages.iter().zip(page_names(output.name(), pages.len())) {
             write(&out.join(format!("{page}.svg")), lot_io::svg::to_svg(sheet).as_bytes())?;

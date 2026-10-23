@@ -20,7 +20,8 @@ fn approved_plans_are_unchanged() {
         let project = lot_io::testproject::load(&dir).unwrap();
         for output in lot_cli::outputs(&dir).unwrap() {
             let files = lot_io::testproject::attachments(&project, &dir);
-            let pages = lot_cli::sheets(&project, &output, &format!("testprojekte/{name}"), &files);
+            let standard = lot_cli::office_standard(&dir).expect("Bürostandard");
+            let pages = lot_cli::sheets(&project, &output, &format!("testprojekte/{name}"), &files, &standard);
             for (sheet, page) in pages.iter().zip(lot_cli::page_names(output.name(), pages.len())) {
                 let reference = references.join(format!("{page}.svg"));
                 if !reference.is_file() {

@@ -14,6 +14,7 @@ pub mod findings;
 pub mod floor_plan;
 pub mod layout;
 pub mod m0;
+pub mod presentation;
 pub mod reference;
 pub mod section;
 pub mod sheets;

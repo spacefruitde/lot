@@ -446,7 +446,7 @@ Project(
         ),
         41: Plot(name: "Flurstück 122", outline: [(x: -16.0, y: -9.0), (x: -6.0, y: -9.0), (x: -6.0, y: 16.0), (x: -16.0, y: 16.0)], neighbour: true),
         42: Plot(name: "Flurstück 124", outline: [(x: 30.0, y: -9.0), (x: 40.0, y: -9.0), (x: 40.0, y: 16.0), (x: 30.0, y: 16.0)], neighbour: true),
-        43: Plot(name: "Flurstück 131", outline: [(x: -16.0, y: -19.0), (x: 40.0, y: -19.0), (x: 40.0, y: -9.0), (x: -16.0, y: -9.0)], neighbour: true),
+        43: Plot(name: "Flurstück 131", outline: [(x: -16.0, y: -16.0), (x: 40.0, y: -16.0), (x: 40.0, y: -9.0), (x: -16.0, y: -9.0)], neighbour: true),
         // Probe für den Prüfbericht: dasselbe Grundstück mit der Ostgrenze 4,50 m vor dem Haus.
         44: Plot(
             name: "Flurstück 123 (Probe)",
@@ -468,17 +468,17 @@ Project(
             parcel: "Gemarkung Musterstadt, Flur 3, Flurstück 123",
             datum: Some(112.4),
         ),
-        60: SectionView(name: "Schnitt A-A", mark: "A", start: (x: 13.1, y: -3.0), end: (x: 13.1, y: 15.0), look: Left, depth: 14.0),
-        61: SectionView(name: "Schnitt B-B", mark: "B", start: (x: -3.0, y: 3.0), end: (x: 27.0, y: 3.0), look: Left, depth: 10.0),
+        60: SectionView(name: "Schnitt A-A", mark: "A", start: (x: 13.1, y: -2.4), end: (x: 13.1, y: 14.4), look: Left, depth: 14.0),
+        61: SectionView(name: "Schnitt B-B", mark: "B", start: (x: -2.4, y: 3.0), end: (x: 26.4, y: 3.0), look: Left, depth: 10.0),
         62: SectionView(name: "Ansicht Süd", start: (x: -3.0, y: -6.0), end: (x: 27.0, y: -6.0), look: Left, depth: 40.0, kind: Elevation),
         63: SectionView(name: "Ansicht Ost", start: (x: 28.0, y: -3.0), end: (x: 28.0, y: 15.0), look: Left, depth: 40.0, kind: Elevation),
         64: SectionView(name: "Ansicht Nord", start: (x: 27.0, y: 15.0), end: (x: -3.0, y: 15.0), look: Left, depth: 40.0, kind: Elevation),
         65: SectionView(name: "Ansicht West", start: (x: -4.0, y: 15.0), end: (x: -4.0, y: -3.0), look: Left, depth: 40.0, kind: Elevation),
-        70: PlanSheet(number: "BA-01", title: "Lageplan mit Abstandsflächen", format: "A3", date: "24.10.2026", views: [(content: SitePlan, scale: 250.0, center: (x: 165.0, y: 175.0))]),
-        71: PlanSheet(number: "BA-02", title: "Grundriss Erdgeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 1), scale: 100.0, center: (x: 185.0, y: 175.0))]),
-        72: PlanSheet(number: "BA-03", title: "Grundriss 1. Obergeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 2), scale: 100.0, center: (x: 185.0, y: 175.0))]),
-        73: PlanSheet(number: "BA-04", title: "Grundriss 2. Obergeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 3), scale: 100.0, center: (x: 185.0, y: 175.0))]),
-        74: PlanSheet(number: "BA-05", title: "Grundriss 3. Obergeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 4), scale: 100.0, center: (x: 185.0, y: 175.0))]),
+        70: PlanSheet(number: "BA-01", title: "Lageplan mit Abstandsflächen", format: "A3", date: "24.10.2026", views: [(content: SitePlan, scale: 250.0, center: (x: 150.0, y: 186.0))]),
+        71: PlanSheet(number: "BA-02", title: "Grundriss Erdgeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 1), scale: 100.0, center: (x: 170.0, y: 182.0))]),
+        72: PlanSheet(number: "BA-03", title: "Grundriss 1. Obergeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 2), scale: 100.0, center: (x: 170.0, y: 182.0))]),
+        73: PlanSheet(number: "BA-04", title: "Grundriss 2. Obergeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 3), scale: 100.0, center: (x: 170.0, y: 182.0))]),
+        74: PlanSheet(number: "BA-05", title: "Grundriss 3. Obergeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 4), scale: 100.0, center: (x: 170.0, y: 182.0))]),
         75: PlanSheet(
             number: "BA-06",
             title: "Schnitte",
@@ -497,6 +497,16 @@ Project(
             views: [
                 (content: Section(view: 62), scale: 100.0, center: (x: 210.0, y: 315.0)),
                 (content: Section(view: 64), scale: 100.0, center: (x: 210.0, y: 130.0)),
+            ],
+        ),
+        78: PlanSheet(
+            number: "P-01",
+            title: "Präsentation Erdgeschoss und Regelgeschoss",
+            format: "A3",
+            date: "24.10.2026",
+            views: [
+                (content: Presentation(storey: 1), scale: 150.0, center: (x: 135.0, y: 222.0)),
+                (content: Presentation(storey: 2), scale: 150.0, center: (x: 135.0, y: 100.0)),
             ],
         ),
         77: PlanSheet(

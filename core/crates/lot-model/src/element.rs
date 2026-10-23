@@ -963,6 +963,8 @@ pub enum ViewContent {
     Section { view: ElementId },
     /// Lageplan mit Grundstück, Gebäude und Abstandsflächen (5.01).
     SitePlan,
+    /// Präsentationsgrundriss eines Geschosses (3.11).
+    Presentation { storey: ElementId },
 }
 
 /// Querschnitt einer Stütze.

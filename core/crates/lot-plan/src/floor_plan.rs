@@ -214,7 +214,7 @@ const HIDDEN_DASH: [f64; 2] = [2.0, 1.0];
 ///   Glaslinie. Der Rahmen sitzt an der Außenkante der Tragschicht, wenn außen
 ///   gedämmt ist, sonst in der Mitte der Tragschicht.
 /// - Öffnungen ganz über der Schnittebene (Oberlichter): Umriss gestrichelt.
-fn draw_openings(
+pub(crate) fn draw_openings(
     objects: &mut Vec<PlanObject>,
     project: &Project,
     storey: ElementId,

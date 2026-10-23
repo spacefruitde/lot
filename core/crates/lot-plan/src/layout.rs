@@ -69,6 +69,13 @@ fn drawings(project: &Project, geometry: &ModelGeometry, sheet: &PlanSheet, stan
                 }
                 _ => (Vec::new(), "Ansicht fehlt".to_string()),
             },
+            ViewContent::Presentation { storey } => {
+                let name = project.storey(storey).map_or("?".to_string(), |s| s.name.clone());
+                (
+                    crate::presentation::presentation_plan(project, storey, placed.scale, standard, viewport),
+                    format!("Grundriss {name}"),
+                )
+            }
             ViewContent::SitePlan => {
                 (crate::site_plan::site_plan(project, geometry, standard, viewport), "Lageplan".to_string())
             }
@@ -116,7 +123,7 @@ pub fn plan_sheet(project: &Project, geometry: &ModelGeometry, sheet: &PlanSheet
             PaperPoint::new(p.x, p.y)
         });
     }
-    title_block(&mut out, project, sheet);
+    title_block(&mut out, project, sheet, standard);
     out
 }
 
@@ -130,8 +137,10 @@ pub fn layout_problems(
 ) -> Vec<String> {
     let (width, height) = format_size(&sheet.format);
     let frame = (PaperPoint::new(BINDING, MARGIN), PaperPoint::new(width - MARGIN, height - MARGIN));
-    let block =
-        (PaperPoint::new(width - MARGIN - BLOCK_WIDTH, MARGIN), PaperPoint::new(width - MARGIN, MARGIN + 4.0 * ROW));
+    let block = (
+        PaperPoint::new(width - MARGIN - BLOCK_WIDTH, MARGIN),
+        PaperPoint::new(width - MARGIN, MARGIN + block_rows(standard) * ROW),
+    );
     let overlap = |a: (PaperPoint, PaperPoint), b: (PaperPoint, PaperPoint)| {
         a.0.x < b.1.x && b.0.x < a.1.x && a.0.y < b.1.y && b.0.y < a.1.y
     };
@@ -154,16 +163,23 @@ pub fn layout_problems(
     problems
 }
 
-/// Schriftfeld unten rechts (Vorschlag): Bauvorhaben; Bauherr, Bauort,
-/// Entwurfsverfasser; Planinhalt; Maßstab, Format, Datum, Index, Plannummer.
-fn title_block(out: &mut Sheet, project: &Project, sheet: &PlanSheet) {
+/// Zeilen des Schriftfelds: vier, mit Unterschriften fünf.
+fn block_rows(standard: &OfficeStandard) -> f64 {
+    if standard.sheets.signatures { 5.0 } else { 4.0 }
+}
+
+/// Schriftfeld unten rechts (Vorschlag): Bauvorhaben; Bauherr, Bauort mit
+/// Grundstück, Entwurfsverfasser; Planinhalt; Maßstab, Format, Datum, Index,
+/// Plannummer; im Bürostandard wählbar Unterschriften von Bauherr und
+/// Entwurfsverfasser (Bauvorlagen).
+fn title_block(out: &mut Sheet, project: &Project, sheet: &PlanSheet, standard: &OfficeStandard) {
     let info = project.info();
     let w = out.width_mm;
     let (x0, y0) = (w - MARGIN - BLOCK_WIDTH, MARGIN);
     let x1 = w - MARGIN;
-    let rows = 4.0;
+    let rows = block_rows(standard);
     out.polygon(rect_points(x0, y0, BLOCK_WIDTH, rows * ROW), Pen::mm(0.5));
-    for r in 1..4 {
+    for r in 1..rows as usize {
         let y = y0 + r as f64 * ROW;
         out.line(vec![PaperPoint::new(x0, y), PaperPoint::new(x1, y)], Pen::mm(0.25));
     }
@@ -173,13 +189,26 @@ fn title_block(out: &mut Sheet, project: &Project, sheet: &PlanSheet) {
         Some(_) => "wie angegeben".to_string(),
         None => String::new(),
     };
+    let office = &standard.office;
+    let architect = if office.name.is_empty() {
+        info.architect.clone()
+    } else {
+        [office.name.as_str(), office.address.as_str(), office.contact.as_str()]
+            .iter()
+            .filter(|t| !t.is_empty())
+            .copied()
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let site = if info.parcel.is_empty() { info.site.clone() } else { format!("{}\n{}", info.site, info.parcel) };
+    let title = if info.description.is_empty() { project.name.clone() } else { info.description.clone() };
     // Zeilen von oben nach unten, je Zeile Felder: (Breite, Bezeichnung, Inhalt, Schrifthöhe).
-    let rows_content: [Vec<(f64, &str, String, f64)>; 4] = [
-        vec![(BLOCK_WIDTH, "Bauvorhaben", project.name.clone(), 3.5)],
+    let mut rows_content: Vec<Vec<(f64, &str, String, f64)>> = vec![
+        vec![(BLOCK_WIDTH, "Bauvorhaben", title, 3.5)],
         vec![
             (60.0, "Bauherr", info.client.clone(), 2.5),
-            (60.0, "Bauort", info.site.clone(), 2.5),
-            (60.0, "Entwurfsverfasser", info.architect.clone(), 2.5),
+            (60.0, "Bauort, Grundstück", site, 2.5),
+            (60.0, "Entwurfsverfasser", architect, 2.5),
         ],
         vec![(BLOCK_WIDTH, "Planinhalt", sheet.title.clone(), 3.5)],
         vec![
@@ -190,6 +219,12 @@ fn title_block(out: &mut Sheet, project: &Project, sheet: &PlanSheet) {
             (65.0, "Plan-Nr.", sheet.number.clone(), 5.0),
         ],
     ];
+    if standard.sheets.signatures {
+        rows_content.push(vec![
+            (90.0, "Bauherr: Datum, Unterschrift", String::new(), 2.5),
+            (90.0, "Entwurfsverfasser: Datum, Unterschrift", String::new(), 2.5),
+        ]);
+    }
     for (r, cells) in rows_content.iter().enumerate() {
         let top = y0 + (rows - r as f64) * ROW;
         let mut x = x0;
@@ -198,7 +233,15 @@ fn title_block(out: &mut Sheet, project: &Project, sheet: &PlanSheet) {
                 out.line(vec![PaperPoint::new(x, top), PaperPoint::new(x, top - ROW)], Pen::mm(0.25));
             }
             out.text(x + 1.5, top - 3.0, *label, 1.8, Anchor::Left);
-            out.text(x + 1.5, top - ROW + 2.5, value.clone(), *size, Anchor::Left);
+            // Mehrere Zeilen kleiner und von unten nach oben.
+            let lines: Vec<&str> = value.lines().collect();
+            if lines.len() > 1 {
+                for (i, line) in lines.iter().rev().enumerate() {
+                    out.text(x + 1.5, top - ROW + 1.8 + i as f64 * 2.6, *line, 1.9, Anchor::Left);
+                }
+            } else {
+                out.text(x + 1.5, top - ROW + 2.5, value.clone(), *size, Anchor::Left);
+            }
             x += cw;
         }
     }
