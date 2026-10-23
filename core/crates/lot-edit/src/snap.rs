@@ -19,6 +19,8 @@ pub enum SnapKind {
     Angle,
     /// Frei, auf 1 cm gerundet
     Free,
+    /// Endpunkt einer Linie in einer Unterlage aus DXF oder DWG
+    Underlay,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

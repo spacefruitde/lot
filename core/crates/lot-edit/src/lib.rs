@@ -123,6 +123,9 @@ pub struct Overlay {
 
 pub struct Editor {
     pub storey: ElementId,
+    /// Endpunkte der Linien in Unterlagen aus DXF oder DWG, in Modellmetern;
+    /// gesetzt von der Ansicht, die die Dateien liest. Der Zeiger rastet daran ein.
+    pub underlay_points: Vec<Point2>,
     pub tool: Tool,
     pub wall_type: Option<ElementId>,
     pub alignment: WallAlignment,
@@ -143,6 +146,7 @@ impl Editor {
             project.storeys().iter().find(|(_, s)| s.elevation >= 0.0).or(project.storeys().first()).map(|(id, _)| *id);
         Self {
             storey: storey.unwrap_or(ElementId(0)),
+            underlay_points: Vec::new(),
             tool: Tool::Select,
             wall_type: project.wall_types().next().map(|(id, _)| id),
             alignment: WallAlignment::Center,
@@ -176,7 +180,7 @@ impl Editor {
                 Response::redraw()
             }
             Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column | Tool::SlabOpening | Tool::Line => {
-                self.pointer = Some(snap::snap(
+                self.pointer = Some(self.snap(
                     project,
                     self.storey,
                     input.point,
@@ -199,7 +203,7 @@ impl Editor {
     pub fn pointer_down(&mut self, doc: &mut Document, input: Input, clicks: u32) -> Response {
         match self.tool {
             Tool::Column => {
-                let p = snap::snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
+                let p = self.snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
                 let column = Column {
                     phase: Default::default(),
                     storey: self.storey,
@@ -225,7 +229,7 @@ impl Editor {
                 Response::from_result(doc.insert(Element::Space(space)).map(|_| ()))
             }
             Tool::SlabOpening => {
-                let p = snap::snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
+                let p = self.snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
                 self.pointer = None;
                 match self.chain_start {
                     None => {
@@ -239,16 +243,9 @@ impl Editor {
                 }
             }
             Tool::Grid => {
-                let p = snap::snap(
-                    doc.project(),
-                    self.storey,
-                    input.point,
-                    input.tolerance,
-                    self.chain_start,
-                    input.shift,
-                    &[],
-                )
-                .point;
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
                 self.pointer = None;
                 match self.chain_start {
                     None => {
@@ -274,16 +271,9 @@ impl Editor {
                     self.pointer = None;
                     return self.add_arc_wall(doc, start, end, sagitta_from(start, end, input.point));
                 }
-                let p = snap::snap(
-                    doc.project(),
-                    self.storey,
-                    input.point,
-                    input.tolerance,
-                    self.chain_start,
-                    input.shift,
-                    &[],
-                )
-                .point;
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
                 self.pointer = None;
                 match self.chain_start {
                     None => self.chain_start = Some(p),
@@ -340,16 +330,9 @@ impl Editor {
                     self.end_chain();
                     return Response::redraw();
                 }
-                let p = snap::snap(
-                    doc.project(),
-                    self.storey,
-                    input.point,
-                    input.tolerance,
-                    self.chain_start,
-                    input.shift,
-                    &[],
-                )
-                .point;
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
                 self.pointer = None;
                 match self.chain_start {
                     None => {
@@ -364,16 +347,9 @@ impl Editor {
                     self.end_chain();
                     return Response::redraw();
                 }
-                let p = snap::snap(
-                    doc.project(),
-                    self.storey,
-                    input.point,
-                    input.tolerance,
-                    self.chain_start,
-                    input.shift,
-                    &[],
-                )
-                .point;
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
                 self.pointer = None;
                 match self.chain_start {
                     None => {
@@ -406,16 +382,9 @@ impl Editor {
                         } else if !self.selection.contains(&id) {
                             self.selection = vec![id];
                         }
-                        let start = snap::snap(
-                            project,
-                            self.storey,
-                            input.point,
-                            input.tolerance,
-                            None,
-                            false,
-                            &self.selection,
-                        )
-                        .point;
+                        let start = self
+                            .snap(project, self.storey, input.point, input.tolerance, None, false, &self.selection)
+                            .point;
                         self.drag = Some(Drag::Selection { start, current: start });
                     }
                     None => {
@@ -430,17 +399,23 @@ impl Editor {
     }
 
     pub fn pointer_dragged(&mut self, project: &Project, input: Input) -> Response {
-        match &mut self.drag {
-            Some(Drag::Selection { current, .. }) => {
-                *current =
-                    snap::snap(project, self.storey, input.point, input.tolerance, None, false, &self.selection).point;
+        match self.drag.clone() {
+            Some(Drag::Selection { .. }) => {
+                let p =
+                    self.snap(project, self.storey, input.point, input.tolerance, None, false, &self.selection).point;
+                if let Some(Drag::Selection { current, .. }) = &mut self.drag {
+                    *current = p;
+                }
                 Response::redraw()
             }
-            Some(Drag::Endpoint { wall, end, current }) => {
+            Some(Drag::Endpoint { wall, end, .. }) => {
                 let other =
-                    project.wall(*wall).map(|w| end_point(w, if *end == End::Start { End::End } else { End::Start }));
-                *current =
-                    snap::snap(project, self.storey, input.point, input.tolerance, other, input.shift, &[*wall]).point;
+                    project.wall(wall).map(|w| end_point(w, if end == End::Start { End::End } else { End::Start }));
+                let p =
+                    self.snap(project, self.storey, input.point, input.tolerance, other, input.shift, &[wall]).point;
+                if let Some(Drag::Endpoint { current, .. }) = &mut self.drag {
+                    *current = p;
+                }
                 Response::redraw()
             }
             None => self.pointer_moved(project, input),
@@ -940,6 +915,31 @@ impl Editor {
             self.chain_start = Some(end);
         }
         Response::from_result(result)
+    }
+
+    /// Fangpunkt wie [`snap::snap`], dazu Endpunkte in Unterlagen, wenn kein
+    /// Wandende oder Achsschnittpunkt näher liegt.
+    #[allow(clippy::too_many_arguments)]
+    fn snap(
+        &self,
+        project: &Project,
+        storey: ElementId,
+        p: Point2,
+        tolerance: f64,
+        from: Option<Point2>,
+        orthogonal: bool,
+        exclude: &[ElementId],
+    ) -> Snap {
+        let s = snap::snap(project, storey, p, tolerance, from, orthogonal, exclude);
+        if matches!(s.kind, SnapKind::Endpoint | SnapKind::GridIntersection) {
+            return s;
+        }
+        self.underlay_points
+            .iter()
+            .map(|q| (*q, q.distance(p)))
+            .filter(|(_, d)| *d <= tolerance)
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map_or(s, |(q, _)| Snap { point: q, kind: SnapKind::Underlay })
     }
 
     /// Die Unterlage, auf die Kalibrieren und Ausrichten wirken: die gewählte,

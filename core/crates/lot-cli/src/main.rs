@@ -133,7 +133,15 @@ fn render_plan_view(
     let view =
         lot_plan::floor_plan::FloorPlanView { storey, cut_height: lot_plan::floor_plan::DEFAULT_CUT_HEIGHT, scale };
     let viewport = lot_plan::Viewport { scale, origin: lot_plan::PaperPoint::new(0.0, 0.0) };
-    renderer.set_plan(lot_plan::floor_plan::floor_plan(project, view, standard, viewport));
+    // Unterlagen aus DXF und DWG als graue Linien unter dem Plan.
+    let mut objects = Vec::new();
+    for (_, u) in project.underlays_on(storey).filter(|(_, u)| lot_io::cad::is_cad(&u.source)) {
+        if let Some(v) = attachments.get(&u.source).and_then(|b| lot_io::cad::read_vectors(b).ok()) {
+            objects.extend(lot_io::cad::underlay_objects(u, &v, viewport));
+        }
+    }
+    objects.extend(lot_plan::floor_plan::floor_plan(project, view, standard, viewport));
+    renderer.set_plan(objects);
     let quads: Vec<lot_render::UnderlayQuad> = project
         .underlays_on(storey)
         .filter_map(|(_, u)| {

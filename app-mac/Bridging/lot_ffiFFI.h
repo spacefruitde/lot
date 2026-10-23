@@ -385,6 +385,11 @@ void uniffi_lot_ffi_fn_free_viewport(uint64_t handle, RustCallStatus *_Nonnull o
 uint64_t uniffi_lot_ffi_fn_constructor_viewport_new(uint64_t ns_view, uint32_t width_px, uint32_t height_px, float scale, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ADD_CAD_UNDERLAY
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ADD_CAD_UNDERLAY
+uint64_t uniffi_lot_ffi_fn_method_viewport_add_cad_underlay(uint64_t ptr, RustBuffer source, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ADD_UNDERLAY
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ADD_UNDERLAY
 uint64_t uniffi_lot_ffi_fn_method_viewport_add_underlay(uint64_t ptr, RustBuffer source, uint32_t page, double width, double height, double scale, RustCallStatus *_Nonnull out_status
@@ -878,6 +883,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_storey_areas(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_UNDO
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_UNDO
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_undo(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_ADD_CAD_UNDERLAY
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_ADD_CAD_UNDERLAY
+uint16_t uniffi_lot_ffi_checksum_method_viewport_add_cad_underlay(void
     
 );
 #endif

@@ -13,12 +13,21 @@ extension AppModel {
     /// Danach ist „Unterlage kalibrieren“ gewählt.
     func importUnderlayWithPanel() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.pdf, .png, .jpeg, .tiff]
-        panel.message = "Bestandsplan als PDF oder Bild wählen"
+        let cad = ["dxf", "dwg"].compactMap { UTType(filenameExtension: $0) }
+        panel.allowedContentTypes = [.pdf, .png, .jpeg, .tiff] + cad
+        panel.message = "Bestandsplan als PDF, Bild, DXF oder DWG wählen"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let data = try Data(contentsOf: url)
             let name = url.lastPathComponent
+            if ["dxf", "dwg"].contains(url.pathExtension.lowercased()) {
+                // Linien liest der Kern selbst; Maßstab aus den Einheiten der Datei.
+                document.addAttachment(name: name, data: data)
+                guard let viewport else { return }
+                _ = try viewport.addCadUnderlay(source: name)
+                requestRedraw?()
+                return
+            }
             guard let size = Self.underlaySize(data: data, name: name) else {
                 errorMessage = "\(name) lässt sich nicht als Unterlage lesen"
                 return

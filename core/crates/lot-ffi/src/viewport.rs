@@ -90,6 +90,8 @@ struct State {
     model_fitted: bool,
     /// Bilder der Unterlagen, nach Datei und Seite (siehe `underlay_key`).
     images: HashMap<String, Arc<UnderlayImage>>,
+    /// Linien der Unterlagen aus DXF und DWG, nach Datei.
+    vectors: HashMap<String, Arc<lot_io::cad::CadVectors>>,
 }
 
 /// Eine Unterlage, deren Bild die App liefern muss (PDF-Seite oder Bild).
@@ -138,6 +140,7 @@ impl Viewport {
                 model_stale: true,
                 model_fitted: false,
                 images: HashMap::new(),
+                vectors: HashMap::new(),
             }),
         }))
     }
@@ -153,6 +156,7 @@ impl Viewport {
         s.document = Some(document);
         s.model_fitted = false;
         s.images.clear();
+        s.vectors.clear();
         load_png_underlays(&mut s);
         let ms = rebuild(&mut s, true);
         build_model(&mut s);
@@ -180,7 +184,9 @@ impl Viewport {
             .elements
             .values()
             .filter_map(|e| match e {
-                lot_model::Element::Underlay(u) if !s.images.contains_key(&underlay_key(&u.source, u.page)) => {
+                lot_model::Element::Underlay(u)
+                    if !lot_io::cad::is_cad(&u.source) && !s.images.contains_key(&underlay_key(&u.source, u.page)) =>
+                {
                     Some(UnderlayRef { source: u.source.clone(), page: u.page })
                 }
                 _ => None,
@@ -188,6 +194,47 @@ impl Viewport {
             .collect();
         out.dedup();
         out
+    }
+
+    /// Legt eine Unterlage aus einer DXF- oder DWG-Datei im Projekt an (vorher
+    /// mit `add_attachment` abgelegt). Maßstab nach den Einheiten der Datei;
+    /// liegen ihre Koordinaten nahe am Ursprung, bleiben sie, sonst kommt die
+    /// Zeichnung in die Mitte der Ansicht.
+    pub fn add_cad_underlay(&self, source: String) -> Result<u64, LotError> {
+        let mut s = self.lock();
+        let (Some(doc), Some(editor)) = (s.document.clone(), s.editor.as_ref()) else {
+            return Err(LotError::Failed("Kein Projekt geöffnet".into()));
+        };
+        let bytes =
+            doc.attachment_bytes(&source).ok_or_else(|| LotError::Failed(format!("{source} fehlt im Projekt")))?;
+        let vectors = lot_io::cad::read_vectors(&bytes).map_err(LotError::from_display)?;
+        let Some((lo, hi)) = vectors.bounds() else {
+            return Err(LotError::Failed(format!("{source} enthält keine Linien")));
+        };
+        let scale = vectors.metres_per_unit();
+        let (width, height) = ((hi[0] - lo[0]).max(1e-6), (hi[1] - lo[1]).max(1e-6));
+        let origin = if lo[0].abs().max(lo[1].abs()) * scale < 1000.0 {
+            Point2::new(lo[0] * scale, lo[1] * scale)
+        } else {
+            let center = s.renderer.plan_camera().center;
+            let m = s.plan_scale / 1000.0;
+            Point2::new(center[0] * m - width * scale / 2.0, center[1] * m - height * scale / 2.0)
+        };
+        let underlay = lot_model::Underlay {
+            storey: editor.storey,
+            source: source.clone(),
+            page: 0,
+            origin,
+            scale,
+            width,
+            height,
+            rotation: 0.0,
+            opacity: 0.45,
+        };
+        let id = doc.lock().insert(lot_model::Element::Underlay(underlay)).map_err(LotError::from_display)?;
+        s.vectors.insert(source, Arc::new(vectors));
+        rebuild(&mut s, false);
+        Ok(id.0)
     }
 
     /// Legt eine Unterlage im aktuellen Geschoss an, mittig in der Ansicht.
@@ -490,9 +537,21 @@ fn rebuild(s: &mut State, model: bool) -> f64 {
     if let Some(editor) = &s.editor {
         let view = FloorPlanView { storey: editor.storey, cut_height: DEFAULT_CUT_HEIGHT, scale: s.plan_scale };
         let viewport = PlanViewport { scale: s.plan_scale, origin: PaperPoint::new(0.0, 0.0) };
-        s.renderer.set_plan(floor_plan(project, view, standard, viewport));
+        // Unterlagen aus DXF und DWG als graue Linien unter dem Plan, ihre Endpunkte zum Fangen.
+        let mut objects = Vec::new();
+        let mut points = Vec::new();
+        for (_, u) in project.underlays_on(editor.storey).filter(|(_, u)| lot_io::cad::is_cad(&u.source)) {
+            let Some(v) = s.vectors.get(&u.source) else { continue };
+            objects.extend(lot_io::cad::underlay_objects(u, v, viewport));
+            points.extend(lot_io::cad::underlay_points(u, v));
+        }
+        objects.extend(floor_plan(project, view, standard, viewport));
+        s.renderer.set_plan(objects);
         let quads = underlay_quads(project, editor.storey, &s.images, viewport);
         s.renderer.set_underlays(&quads);
+        if let Some(editor) = s.editor.as_mut() {
+            editor.underlay_points = points;
+        }
     }
     drop(doc);
     update_overlay(s);
@@ -519,8 +578,28 @@ pub(crate) fn underlay_quads(
         .collect()
 }
 
-/// Liest Unterlagen als PNG aus den Dateien des Projekts.
+/// Liest Unterlagen als PNG und aus DXF oder DWG aus den Dateien des Projekts.
 fn load_png_underlays(s: &mut State) {
+    if let Some(doc) = s.document.clone() {
+        let cad: Vec<String> = doc
+            .lock()
+            .project()
+            .elements
+            .values()
+            .filter_map(|e| match e {
+                lot_model::Element::Underlay(u) if lot_io::cad::is_cad(&u.source) => Some(u.source.clone()),
+                _ => None,
+            })
+            .collect();
+        for source in cad {
+            if s.vectors.contains_key(&source) {
+                continue;
+            }
+            if let Some(v) = doc.attachment_bytes(&source).and_then(|b| lot_io::cad::read_vectors(&b).ok()) {
+                s.vectors.insert(source, Arc::new(v));
+            }
+        }
+    }
     let Some(doc) = s.document.clone() else { return };
     let wanted: Vec<(String, u32)> = doc
         .lock()

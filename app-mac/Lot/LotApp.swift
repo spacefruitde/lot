@@ -27,7 +27,7 @@ struct LotApp: App {
                 Button("Testprojekt öffnen …") { model.openTestprojectWithPanel() }
                     .keyboardShortcut("o", modifiers: [.command, .shift])
                 Divider()
-                Button("Unterlage laden (PDF oder Bild) …") { model.importUnderlayWithPanel() }
+                Button("Unterlage laden (PDF, Bild, DXF, DWG) …") { model.importUnderlayWithPanel() }
             }
             CommandGroup(replacing: .saveItem) {
                 Button("Sichern") { model.save() }

@@ -11,13 +11,13 @@
 
 use std::io::Cursor;
 
+pub use acadrust::CadDocument;
 use acadrust::entities::{
-    BoundaryEdge, BoundaryPath, BoundaryPathFlags, EntityType, Hatch, HatchPattern, HatchPatternLine,
-    HatchPatternType, LwPolyline, PolylineEdge, Text, TextHorizontalAlignment,
+    BoundaryEdge, BoundaryPath, BoundaryPathFlags, EntityType, Hatch, HatchPattern, HatchPatternLine, HatchPatternType,
+    LwPolyline, PolylineEdge, Text, TextHorizontalAlignment,
 };
 use acadrust::tables::{Layer, LineType, LineTypeElement};
 use acadrust::types::{Color as CadColor, DxfVersion, LineWeight, Vector2, Vector3};
-pub use acadrust::CadDocument;
 use acadrust::{DwgReader, DwgWriter, DxfReader, DxfWriter};
 use lot_plan::{Anchor, Color, Fill, LineStyle, PaperPoint, PlanObject};
 
@@ -92,7 +92,12 @@ fn color(c: Color) -> CadColor {
 }
 
 /// Linientyp für ein Strichmuster in Blattmillimetern, einmal je Muster angelegt.
-fn line_type(pattern: &[f64], factor: f64, doc: &mut CadDocument, known: &mut Vec<Vec<f64>>) -> Result<String, IoError> {
+fn line_type(
+    pattern: &[f64],
+    factor: f64,
+    doc: &mut CadDocument,
+    known: &mut Vec<Vec<f64>>,
+) -> Result<String, IoError> {
     let index = match known.iter().position(|k| k == pattern) {
         Some(i) => i,
         None => {
@@ -283,6 +288,54 @@ pub fn read_vectors(bytes: &[u8]) -> Result<CadVectors, IoError> {
     Ok(out)
 }
 
+/// Ob eine Datei nach ihrem Namen DXF oder DWG ist.
+pub fn is_cad(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.ends_with(".dxf") || n.ends_with(".dwg")
+}
+
+/// Linien einer Unterlage aus DXF oder DWG im Grundriss, in Modellmetern. Die
+/// Vorlagenkoordinaten zählen ab der linken unteren Ecke der Zeichnung.
+pub fn underlay_lines(u: &lot_model::Underlay, v: &CadVectors) -> Vec<Vec<lot_model::Point2>> {
+    let lo = v.bounds().map_or([0.0, 0.0], |b| b.0);
+    v.lines.iter().map(|l| l.iter().map(|p| u.to_model(p[0] - lo[0], p[1] - lo[1])).collect()).collect()
+}
+
+/// Endpunkte der Linien einer Unterlage, zum Fangen beim Nachzeichnen.
+pub fn underlay_points(u: &lot_model::Underlay, v: &CadVectors) -> Vec<lot_model::Point2> {
+    let mut points: Vec<lot_model::Point2> = Vec::new();
+    for line in underlay_lines(u, v) {
+        if let (Some(a), Some(b)) = (line.first(), line.last()) {
+            points.push(*a);
+            points.push(*b);
+        }
+        // Ecken von Polylinien zählen auch, Bögen haben zu viele Punkte.
+        if line.len() <= 8 {
+            points.extend(line.iter().copied());
+        }
+    }
+    points
+}
+
+/// Eine Unterlage aus DXF oder DWG als dünne graue Linien für den Plan. Texte
+/// der Zeichnung fehlen noch, weil Plantexte bisher nur schwarz sein können.
+pub fn underlay_objects(u: &lot_model::Underlay, v: &CadVectors, viewport: lot_plan::Viewport) -> Vec<PlanObject> {
+    let gray = Color::gray(1.0 - 0.6 * u.opacity.clamp(0.0, 1.0));
+    let out: Vec<PlanObject> = underlay_lines(u, v)
+        .into_iter()
+        .map(|line| {
+            PlanObject::Line(lot_plan::Line {
+                points: line.iter().map(|p| viewport.to_paper(p.x, p.y)).collect(),
+                closed: false,
+                pen: lot_plan::Pen::mm(0.13),
+                style: LineStyle::Solid,
+                color: gray,
+            })
+        })
+        .collect();
+    out
+}
+
 /// Bogen als Linienzug, Winkel in Grad.
 fn arc_points(center: [f64; 2], r: f64, from: f64, to: f64) -> Vec<[f64; 2]> {
     let n = (((to - from).abs() / 10.0).ceil() as usize).max(2);
@@ -362,6 +415,30 @@ mod tests {
         assert!(bytes.starts_with(b"AC10"));
         let v = read_vectors(&bytes).unwrap();
         assert_eq!(v.lines.len(), 2, "{v:?}");
+    }
+
+    #[test]
+    fn vector_underlay_sits_with_its_lower_left_corner_at_the_origin() {
+        let doc = to_cad(&[("A", objects())], 0.1, CadUnits::Meters).unwrap();
+        let v = read_vectors(&dxf_bytes(&doc).unwrap()).unwrap();
+        let (lo, _) = v.bounds().unwrap();
+        let u = lot_model::Underlay {
+            storey: lot_model::ElementId(1),
+            source: "plan.dxf".into(),
+            page: 0,
+            origin: lot_model::Point2::new(lo[0], lo[1]),
+            scale: 1.0,
+            width: 5.0,
+            height: 3.0,
+            rotation: 0.0,
+            opacity: 0.45,
+        };
+        // Mit dem Ursprung an der linken unteren Ecke bleiben die Koordinaten der Zeichnung.
+        let lines = underlay_lines(&u, &v);
+        assert!((lines[0][1].x - 5.0).abs() < 1e-9 && (lines[0][2].y - 3.0).abs() < 1e-9, "{:?}", lines[0]);
+        assert!(underlay_points(&u, &v).iter().any(|p| (p.x - 5.0).abs() < 1e-9 && (p.y - 3.0).abs() < 1e-9));
+        let viewport = lot_plan::Viewport { scale: 100.0, origin: PaperPoint::new(0.0, 0.0) };
+        assert_eq!(underlay_objects(&u, &v, viewport).len(), 2);
     }
 
     #[test]

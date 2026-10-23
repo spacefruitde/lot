@@ -1067,6 +1067,14 @@ public func FfiConverterTypeLotDocument_lower(_ value: LotDocument) -> UInt64 {
 public protocol ViewportProtocol: AnyObject, Sendable {
     
     /**
+     * Legt eine Unterlage aus einer DXF- oder DWG-Datei im Projekt an (vorher
+     * mit `add_attachment` abgelegt). Maßstab nach den Einheiten der Datei;
+     * liegen ihre Koordinaten nahe am Ursprung, bleiben sie, sonst kommt die
+     * Zeichnung in die Mitte der Ansicht.
+     */
+    func addCadUnderlay(source: String) throws  -> UInt64
+    
+    /**
      * Legt eine Unterlage im aktuellen Geschoss an, mittig in der Ansicht.
      * `width` und `height` in Einheiten der Vorlage (PDF-Punkte oder Bildpunkte),
      * `scale` in Metern je Einheit (vor dem Kalibrieren geschätzt).
@@ -1220,6 +1228,22 @@ public convenience init(nsView: UInt64, widthPx: UInt32, heightPx: UInt32, scale
 
     
 
+    
+    /**
+     * Legt eine Unterlage aus einer DXF- oder DWG-Datei im Projekt an (vorher
+     * mit `add_attachment` abgelegt). Maßstab nach den Einheiten der Datei;
+     * liegen ihre Koordinaten nahe am Ursprung, bleiben sie, sonst kommt die
+     * Zeichnung in die Mitte der Ansicht.
+     */
+open func addCadUnderlay(source: String)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_add_cad_underlay(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(source),uniffiCallStatus
+    )
+})
+}
     
     /**
      * Legt eine Unterlage im aktuellen Geschoss an, mittig in der Ansicht.
@@ -2935,6 +2959,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_undo() != 9472) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_add_cad_underlay() != 38521) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_add_underlay() != 28626) {
