@@ -43,7 +43,9 @@ Angelegt in M0, immer aktuell halten. Rust über rustup, die Version steht in `c
 - CI: `.github/workflows/pruefen.yml` prüft bei jedem Push Formatierung, clippy und Tests unter Linux und macOS und baut die Mac-App
 - Kern unter Linux lokal prüfen, ohne Ordnerfreigabe für Docker: `tar --exclude core/target -cf - core testprojekte | docker run -i --rm rust:1.99 bash -c 'mkdir /lot && tar -C /lot -xf - && cd /lot/core && cargo test --workspace'`
 - Testprojekt rechnen und Pläne ausgeben: `cd core && cargo run -p lot-cli -- render ../testprojekte/<name> --out ../out/<name>`
-  - schreibt, was `testprojekte/<name>/ausgaben.ron` beschreibt (Grundrisse, Katalog, 3D-Bild, Planansicht, Flächenaufstellung als PDF und CSV), dazu `projekt.lot`
+  - schreibt, was `testprojekte/<name>/ausgaben.ron` beschreibt (Grundrisse, Schnitte und Ansichten, Planblätter mit Plankopf, Katalog, 3D-Bild, Planansicht, Flächenaufstellung als PDF und CSV), dazu `projekt.lot`
+  - gibt die Prüfung aller Treppen nach DIN 18065 aus (Steigungsverhältnis, Durchgangshöhe)
+- Abnahmetest EFH (Planblätter vollständig, Treppen nach DIN 18065): `cd core && cargo test -p lot-cli --test efh`
   - `--no-3d` auf Rechnern ohne Grafikkarte (etwa Cloud-Sessions)
   - die Planschrift liegt in `core/assets/fonts/`, ein anderer Ort geht über `LOT_PLAN_FONT`
 - Swift-Anbindung neu erzeugen: `app-mac/scripts/build-core.sh` (läuft auch automatisch als erste Build-Phase in Xcode)
