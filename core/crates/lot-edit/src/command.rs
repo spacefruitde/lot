@@ -18,6 +18,10 @@ pub enum Command {
     DoorTool,
     WindowTool,
     SlabOpeningTool,
+    /// 2D-Linie im Grundriss
+    LineTool,
+    /// 2D-Text im Grundriss
+    TextTool,
     /// Gewählte Türen schlagen zur anderen Wandseite auf.
     FlipDoorSwing,
     /// Gewählte Türen: DIN links und DIN rechts tauschen.
@@ -26,6 +30,8 @@ pub enum Command {
     DimensionWalls,
     /// Decke im aktuellen Geschoss aus den Wänden darunter, im untersten Geschoss Bodenplatte.
     SlabFromWalls,
+    /// Satteldach über den Wänden des Geschosses; Wände bis zum Geschoss reichen dann bis unters Dach.
+    GableRoofFromWalls,
     /// Einen Raum in jeden umschlossenen Bereich ohne Raum setzen.
     DetectSpaces,
     SetWallType(u64),

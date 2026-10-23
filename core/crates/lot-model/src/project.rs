@@ -142,6 +142,17 @@ impl Project {
         let top = match top {
             Top::Height(h) => bottom + h,
             Top::Storey { offset } => s.elevation + s.height + offset,
+            Top::Roof { offset } => {
+                // Höchster Punkt der Dachunterseite; im 3D wird darunter genau geschnitten.
+                let highest = self
+                    .roofs_on(storey)
+                    .flat_map(|(_, r)| {
+                        let t = self.roof_thickness(r);
+                        r.outline.clone().into_iter().chain(ridge_samples(r)).map(move |p| r.underside_at(p, t))
+                    })
+                    .fold(f64::NEG_INFINITY, f64::max);
+                if highest.is_finite() { s.elevation + highest + offset } else { s.elevation + s.height + offset }
+            }
         };
         Some((bottom, top))
     }
@@ -149,6 +160,108 @@ impl Project {
     /// Unter- und Oberkante einer Wand über ±0,00.
     pub fn wall_extent(&self, wall: &Wall) -> Option<(f64, f64)> {
         self.vertical_extent(wall.storey, wall.base_offset, wall.top)
+    }
+
+    pub fn roof(&self, id: ElementId) -> Option<&crate::Roof> {
+        match self.elements.get(&id) {
+            Some(Element::Roof(r)) => Some(r),
+            _ => None,
+        }
+    }
+
+    /// Gauben in einem Dach.
+    pub fn dormers_in(&self, roof: ElementId) -> impl Iterator<Item = (ElementId, &crate::Dormer)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Dormer(d) if d.roof == roof => Some((*id, d)),
+            _ => None,
+        })
+    }
+
+    /// Dachfenster in einem Dach.
+    pub fn roof_windows_in(&self, roof: ElementId) -> impl Iterator<Item = (ElementId, &crate::RoofWindow)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::RoofWindow(w) if w.roof == roof => Some((*id, w)),
+            _ => None,
+        })
+    }
+
+    /// 2D-Elemente einer Ansicht.
+    pub fn annotations_in(&self, view: crate::AnnotationView) -> impl Iterator<Item = (ElementId, &crate::Annotation)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Annotation(a) if a.view == view => Some((*id, a)),
+            _ => None,
+        })
+    }
+
+    pub fn stairs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Stair)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Stair(s) if s.storey == storey => Some((*id, s)),
+            _ => None,
+        })
+    }
+
+    pub fn stair(&self, id: ElementId) -> Option<&crate::Stair> {
+        match self.elements.get(&id) {
+            Some(Element::Stair(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Form einer Treppe; sie überwindet die Geschosshöhe ihres Geschosses.
+    pub fn stair_layout(&self, stair: &crate::Stair) -> Option<crate::StairLayout> {
+        Some(stair.layout(self.storey(stair.storey)?.height))
+    }
+
+    pub fn railings_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Railing)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Railing(r) if r.storey == storey => Some((*id, r)),
+            _ => None,
+        })
+    }
+
+    /// Angaben für den Plankopf; leer, wenn das Projekt keine hat.
+    pub fn info(&self) -> crate::ProjectInfo {
+        self.elements
+            .values()
+            .find_map(|e| match e {
+                Element::ProjectInfo(i) => Some(i.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
+    /// Alle Planblätter, nach Plannummer.
+    pub fn plan_sheets(&self) -> Vec<(ElementId, &crate::PlanSheet)> {
+        let mut sheets: Vec<_> = self
+            .elements
+            .iter()
+            .filter_map(|(id, e)| match e {
+                Element::PlanSheet(s) => Some((*id, s)),
+                _ => None,
+            })
+            .collect();
+        sheets.sort_by(|a, b| a.1.number.cmp(&b.1.number));
+        sheets
+    }
+
+    /// Alle Schnitte und Ansichten, nach Kennung.
+    pub fn section_views(&self) -> impl Iterator<Item = (ElementId, &crate::SectionView)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::SectionView(v) => Some((*id, v)),
+            _ => None,
+        })
+    }
+
+    pub fn roofs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Roof)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Roof(r) if r.storey == storey => Some((*id, r)),
+            _ => None,
+        })
+    }
+
+    /// Dicke eines Dachs aus seinem Aufbau, senkrecht zur Dachfläche.
+    pub fn roof_thickness(&self, roof: &crate::Roof) -> f64 {
+        self.slab_type(roof.roof_type).map_or(0.0, |t| t.thickness())
     }
 
     /// Neues, leeres Projekt mit einem Erdgeschoss und üblichen Wandaufbauten.
@@ -219,6 +332,14 @@ impl Project {
                     layer("stahlbeton", 0.25, Structure),
                 ],
             ),
+            (
+                "Steildach Sparren 22",
+                vec![
+                    layer("dachziegel", 0.06, Finish),
+                    layer("daemmung", 0.22, Insulation),
+                    layer("gipskarton", 0.0125, Finish),
+                ],
+            ),
         ];
         for (i, (name, layers)) in slabs.into_iter().enumerate() {
             p.elements
@@ -277,4 +398,19 @@ impl Project {
         );
         p
     }
+}
+
+/// Punkte, an denen ein Dach am höchsten sein kann: Mitten zwischen allen Eckpaaren.
+fn ridge_samples(r: &crate::Roof) -> Vec<Point2> {
+    let n = r.outline.len();
+    let mut points = Vec::new();
+    for i in 0..n {
+        for j in i + 1..n {
+            let (a, b) = (r.outline[i], r.outline[j]);
+            points.push(Point2::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0));
+        }
+    }
+    let c = r.outline.iter().fold((0.0, 0.0), |acc, p| (acc.0 + p.x / n as f64, acc.1 + p.y / n as f64));
+    points.push(Point2::new(c.0, c.1));
+    points
 }

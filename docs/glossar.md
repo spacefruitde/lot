@@ -36,14 +36,31 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Türaufschlag | `Door::opens_to`, `FlipDoorSwing` | | Seite der Wand, zu der die Tür aufschlägt |
 | Raum | `Space` | IfcSpace | gespeichert nur als Punkt, Fläche aus den Wänden |
 | Raumstempel | `draw_space_tags` | | Nummer, Name, Netto-Raumfläche |
-| Dach | `Roof` | IfcRoof | |
-| Traufe | `Eave` | | |
-| Ortgang | `Verge` | | |
-| First | `Ridge` | | |
-| Gaube | `Dormer` | | |
-| Treppe | `Stair` | IfcStair | |
-| Geländer | `Railing` | IfcRailing | |
-| Höhenkote | `LevelMark` | | |
+| Dach | `Roof` | IfcRoof | Umriss mit Traufen und Ortgängen, Dachfläche als untere Hülle der Traufebenen (ADR 0025) |
+| Dachaufbau | `Roof::roof_type` | | ein `SlabType`, Schichten von oben nach unten |
+| Dachfläche | `RoofFace` | | Fläche einer Traufe: a entlang der Traufe, d waagerecht nach innen |
+| Traufhöhe | `Roof::eave_height` | | Dachhaut an der Außenkante über OKFF |
+| Traufe | `RoofEdge::Eave` | | mit Neigung und Überstand |
+| Ortgang | `RoofEdge::Verge` | | Giebelseite, nur Überstand |
+| First | | | ergibt sich, wo Dachflächen sich treffen |
+| Gaube | `Dormer` | | vorerst Schleppgaube (ADR 0029) |
+| Dachfenster | `RoofWindow` | IfcWindow | in der Dachfläche einer Traufe |
+| Treppe | `Stair` | IfcStair | gerade Läufe mit Podesten (ADR 0028) |
+| Lauf, Treppenlauf | `StairFlight` | IfcStairFlight | |
+| Podest | `Landing` | | Zwischen-, Viertel- oder Halbpodest |
+| Lauflinie | `StairLayout::walking_line` | | |
+| Antritt, Austritt | `Stair::start`, `StairLayout::end` | | erste Stufe, Ankunft oben |
+| Steigung (s) | `StairLayout::rise` | | Geschosshöhe durch Zahl der Steigungen |
+| Auftritt (a) | `Stair::tread` | | |
+| Schrittmaß | `StairCheck::step` | | 2s + a nach DIN 18065 |
+| Laufbreite | `Stair::width` | | |
+| Laufplatte | `Stair::thickness` | | |
+| lichte Treppendurchgangshöhe | `StairCheck::headroom` | | |
+| Geländer | `Railing` | IfcRailing | frei oder an einem Treppenlauf |
+| Höhenkote | `draw_level_marks` | | in Schnitten und Ansichten |
+| Schnitt, Ansicht | `SectionView`, `SectionKind` | | Linie, Blickrichtung, Blicktiefe (ADR 0026) |
+| Blickrichtung | `SectionView::look` | | links oder rechts der Schnittlinie |
+| Blicktiefe | `SectionView::depth` | | |
 | Maßkette | `DimensionChain` | IfcAnnotation | speichert Bezüge (`DimRef`), nicht Maße |
 | Stiftset | `PenSet` | | Linienbreiten je Maßstab |
 | Stift | `Pen` | | eine Linienbreite in mm auf dem Papier |
@@ -53,8 +70,11 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Projekt, geöffnet | `Document` | | Projekt mit Operationsprotokoll und Undo/Redo |
 | Abstand der Öffnung vom Wandanfang | `Opening::offset` | | entlang der Wandachse bis zur Kante der Öffnung |
 | Schraffur | `Hatch` | | |
-| Planblatt | `Sheet` | | |
-| Plankopf | `TitleBlock` | | |
+| Planblatt | `PlanSheet` | | im Modell; die gezeichnete Seite heißt `Sheet` (ADR 0027) |
+| Plankopf, Schriftfeld | `title_block` | | |
+| Projektangaben | `ProjectInfo` | | Bauherr, Bauort, Entwurfsverfasser, Gebäudeart |
+| Gebäudeart | `BuildingClass` | | nach DIN 18065 Tabelle 1 |
+| 2D-Element | `Annotation` | IfcAnnotation | Linie, Fläche, Kreis oder Text in einer Ansicht (ADR 0030) |
 | Bestand, Abbruch, Neubau | `Phase::{Existing, Demolished, New}` | | Farbkonvention nach Bauvorlagenverordnung |
 | Abstandsfläche | `SetbackArea` | | nach Landesbauordnung |
 | Variante | `Variant` | | |

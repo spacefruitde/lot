@@ -69,6 +69,31 @@ OfficeStandard(
             color: (222, 220, 214),
             cut: Empty,
         ),
+        "dachziegel": Material(
+            name: "Dachziegel mit Lattung",
+            color: (178, 92, 70),
+            cut: Empty,
+        ),
+        "rahmen": Material(
+            name: "Fensterrahmen",
+            color: (238, 238, 236),
+            cut: Empty,
+        ),
+        "glas": Material(
+            name: "Glas",
+            color: (186, 206, 214),
+            cut: Empty,
+        ),
+        "tuerblatt": Material(
+            name: "Türblatt",
+            color: (226, 214, 196),
+            cut: Empty,
+        ),
+        "stahl": Material(
+            name: "Stahl",
+            color: (96, 100, 106),
+            cut: Solid(gray: 0.0),
+        ),
         "klinker": Material(
             name: "Klinker (Vormauerschale)",
             color: (176, 108, 84),

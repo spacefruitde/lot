@@ -17,6 +17,8 @@ final class AppModel {
     private(set) var spaces: [SpaceInfo] = []
     /// Gewählte Türen.
     private(set) var doors: [DoorInfo] = []
+    /// Gewählte 2D-Texte.
+    private(set) var texts: [TextInfo] = []
     /// Flächen je Geschoss, für die Übersicht im Inspektor.
     private(set) var storeyAreas: [StoreyAreaInfo] = []
     /// Nutzungsgruppen nach DIN 277.
@@ -97,6 +99,10 @@ final class AppModel {
         parameters = state.selection.isEmpty ? [] : document.parameters(ids: state.selection)
         spaces = state.selection.isEmpty ? [] : document.spaces(ids: state.selection)
         doors = state.selection.isEmpty ? [] : document.doors(ids: state.selection)
+        texts = state.selection.compactMap { id in
+            guard let text = document.annotationText(element: id) else { return nil }
+            return TextInfo(element: id, text: text, height: document.annotationTextHeight(element: id) ?? 2.5)
+        }
     }
 
     // MARK: Modell
@@ -125,6 +131,21 @@ final class AppModel {
                 usage: usage ?? space.usage,
                 livingSpace: livingSpace ?? space.livingSpace
             )
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+        if let viewport {
+            stats.rebuildMs = viewport.refresh()
+        }
+        refresh()
+        updateViewState()
+        requestRedraw?()
+    }
+
+    /// Ändert Inhalt und Schrifthöhe eines 2D-Texts.
+    func setText(_ info: TextInfo, text: String? = nil, height: Double? = nil) {
+        do {
+            try document.setAnnotationText(element: info.element, text: text ?? info.text, height: height ?? info.height)
         } catch {
             errorMessage = Self.message(for: error)
         }
@@ -232,4 +253,12 @@ struct ViewportStatsDisplay: Equatable {
     var frameMs: Double = 0
     var rebuildMs: Double = 0
     var triangles: UInt32 = 0
+}
+
+/// Ein gewählter 2D-Text für den Inspektor.
+struct TextInfo: Equatable {
+    let element: UInt64
+    let text: String
+    /// Schrifthöhe in mm auf dem Papier.
+    let height: Double
 }

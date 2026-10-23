@@ -1,6 +1,6 @@
 // Testprojekt Einfamilienhaus (PLAN.md, Abschnitt 7): KG, EG, DG.
 // Ausgedacht für Tests, kein echtes Projekt. Außenmaß 11,00 x 9,00 m.
-// Außenwände im Uhrzeigersinn, Bezugslinie auf der Außenfläche. Dach folgt in M3.
+// Außenwände im Uhrzeigersinn, Bezugslinie auf der Außenfläche. Satteldach 40° über dem DG.
 Project(
     name: "EFH Testprojekt",
     elements: {
@@ -61,18 +61,17 @@ Project(
         39: Opening(host: 27, offset: 2.0, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Wohnen West
         40: Opening(host: 27, offset: 7.6, width: 0.635, height: 0.76, sill_height: 1.385, kind: Window), // WC
         41: Opening(host: 28, offset: 5.0, width: 1.135, height: 2.26, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Haustür
-        42: Opening(host: 28, offset: 8.5, width: 1.01, height: 1.385, sill_height: 0.885, kind: Window), // Hauswirtschaft
-        43: Opening(host: 29, offset: 2.0, width: 1.01, height: 1.385, sill_height: 0.885, kind: Window), // Treppe
+        42: Opening(host: 28, offset: 7.6, width: 1.01, height: 1.385, sill_height: 0.885, kind: Window), // Treppe
         44: Opening(host: 29, offset: 6.0, width: 1.26, height: 1.385, sill_height: 0.885, kind: Window), // Küche Ost
         45: Opening(host: 31, offset: 4.2, width: 1.01, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinRight)), // Tür Diele - Wohnen
         46: Opening(host: 32, offset: 0.6, width: 0.885, height: 2.135, sill_height: 0.0, kind: Door(opens_to: Right, hinge: DinLeft)), // Tür WC
-        47: Wall(storey: 3, wall_type: 10, start: (x: 0.0, y: 0.0), end: (x: 0.0, y: 9.0), alignment: Exterior, top: Storey(offset: 0.0)),
+        47: Wall(storey: 3, wall_type: 10, start: (x: 0.0, y: 0.0), end: (x: 0.0, y: 9.0), alignment: Exterior, top: Roof(offset: 0.0)),
         48: Wall(storey: 3, wall_type: 10, start: (x: 0.0, y: 9.0), end: (x: 11.0, y: 9.0), alignment: Exterior, top: Height(1.0)),
-        49: Wall(storey: 3, wall_type: 10, start: (x: 11.0, y: 9.0), end: (x: 11.0, y: 0.0), alignment: Exterior, top: Storey(offset: 0.0)),
+        49: Wall(storey: 3, wall_type: 10, start: (x: 11.0, y: 9.0), end: (x: 11.0, y: 0.0), alignment: Exterior, top: Roof(offset: 0.0)),
         50: Wall(storey: 3, wall_type: 10, start: (x: 11.0, y: 0.0), end: (x: 0.0, y: 0.0), alignment: Exterior, top: Height(1.0)),
-        51: Wall(storey: 3, wall_type: 11, start: (x: 0.0, y: 5.0), end: (x: 11.0, y: 5.0), alignment: Center, top: Storey(offset: 0.0)),
-        52: Wall(storey: 3, wall_type: 12, start: (x: 4.0, y: 5.0), end: (x: 4.0, y: 0.0), alignment: Center, top: Storey(offset: 0.0)),
-        53: Wall(storey: 3, wall_type: 12, start: (x: 7.5, y: 5.0), end: (x: 7.5, y: 9.0), alignment: Center, top: Storey(offset: 0.0)),
+        51: Wall(storey: 3, wall_type: 11, start: (x: 0.0, y: 5.0), end: (x: 11.0, y: 5.0), alignment: Center, top: Roof(offset: 0.0)),
+        52: Wall(storey: 3, wall_type: 12, start: (x: 4.0, y: 5.0), end: (x: 4.0, y: 0.0), alignment: Center, top: Roof(offset: 0.0)),
+        53: Wall(storey: 3, wall_type: 12, start: (x: 7.5, y: 5.0), end: (x: 7.5, y: 9.0), alignment: Center, top: Roof(offset: 0.0)),
         54: Opening(host: 47, offset: 2.0, width: 1.01, height: 1.26, sill_height: 1.0, kind: Window), // Giebelfenster West
         55: Opening(host: 49, offset: 2.0, width: 1.01, height: 1.26, sill_height: 1.0, kind: Window), // Giebelfenster Ost
         56: GridLine(label: "1", start: (x: 0.2575, y: -2.8), end: (x: 0.2575, y: 11.8)),
@@ -87,16 +86,16 @@ Project(
         65: Space(storey: 2, position: (x: 5.5, y: 7.0), number: "0.02", name: "Diele", usage: Circulation),
         66: Space(storey: 2, position: (x: 1.75, y: 6.1), number: "0.03", name: "WC", usage: Other),
         67: Space(storey: 2, position: (x: 1.75, y: 8.1), number: "0.04", name: "Garderobe", usage: Other),
-        68: Space(storey: 2, position: (x: 9.25, y: 7.0), number: "0.05", name: "Hauswirtschaft", usage: Other),
+        68: Space(storey: 2, position: (x: 8.1, y: 7.0), number: "0.05", name: "Treppe", usage: Circulation),
         69: Space(storey: 3, position: (x: 2.0, y: 2.5), number: "1.01", name: "Kind", usage: Living),
         70: Space(storey: 3, position: (x: 7.5, y: 2.5), number: "1.02", name: "Schlafen", usage: Living),
         71: Space(storey: 3, position: (x: 3.75, y: 7.0), number: "1.03", name: "Bad", usage: Other),
-        72: Space(storey: 3, position: (x: 8.5, y: 7.0), number: "1.04", name: "Flur", usage: Circulation),
+        72: Space(storey: 3, position: (x: 8.1, y: 7.0), number: "1.04", name: "Flur", usage: Circulation),
         73: DimensionChain(storey: 2, position: (x: -1.0, y: 0.0), direction: (x: 0.0, y: 1.0), refs: [WallEnd(wall: 27, end: Start, side: Left), Jamb(opening: 39, end: Start, side: Left), Jamb(opening: 39, end: End, side: Left), Jamb(opening: 40, end: Start, side: Left), Jamb(opening: 40, end: End, side: Left), WallEnd(wall: 27, end: End, side: Left)]),
         74: DimensionChain(storey: 2, position: (x: -1.7, y: 0.0), direction: (x: 0.0, y: 1.0), refs: [WallEnd(wall: 27, end: Start, side: Left), WallEnd(wall: 27, end: End, side: Left)]),
         75: DimensionChain(storey: 2, position: (x: 0.0, y: 10.0), direction: (x: 1.0, y: 0.0), refs: [WallEnd(wall: 28, end: Start, side: Left), Jamb(opening: 41, end: Start, side: Left), Jamb(opening: 41, end: End, side: Left), Jamb(opening: 42, end: Start, side: Left), Jamb(opening: 42, end: End, side: Left), WallEnd(wall: 28, end: End, side: Left)]),
         76: DimensionChain(storey: 2, position: (x: 0.0, y: 10.7), direction: (x: 1.0, y: 0.0), refs: [WallEnd(wall: 28, end: Start, side: Left), WallEnd(wall: 28, end: End, side: Left)]),
-        77: DimensionChain(storey: 2, position: (x: 12.0, y: 9.0), direction: (x: 0.0, y: -1.0), refs: [WallEnd(wall: 29, end: Start, side: Left), Jamb(opening: 43, end: Start, side: Left), Jamb(opening: 43, end: End, side: Left), Jamb(opening: 44, end: Start, side: Left), Jamb(opening: 44, end: End, side: Left), WallEnd(wall: 29, end: End, side: Left)]),
+        77: DimensionChain(storey: 2, position: (x: 12.0, y: 9.0), direction: (x: 0.0, y: -1.0), refs: [WallEnd(wall: 29, end: Start, side: Left), Jamb(opening: 44, end: Start, side: Left), Jamb(opening: 44, end: End, side: Left), WallEnd(wall: 29, end: End, side: Left)]),
         78: DimensionChain(storey: 2, position: (x: 12.7, y: 9.0), direction: (x: 0.0, y: -1.0), refs: [WallEnd(wall: 29, end: Start, side: Left), WallEnd(wall: 29, end: End, side: Left)]),
         79: DimensionChain(storey: 2, position: (x: 11.0, y: -1.0), direction: (x: -1.0, y: 0.0), refs: [WallEnd(wall: 30, end: Start, side: Left), Jamb(opening: 36, end: Start, side: Left), Jamb(opening: 36, end: End, side: Left), Jamb(opening: 37, end: Start, side: Left), Jamb(opening: 37, end: End, side: Left), Jamb(opening: 38, end: Start, side: Left), Jamb(opening: 38, end: End, side: Left), WallEnd(wall: 30, end: End, side: Left)]),
         80: DimensionChain(storey: 2, position: (x: 11.0, y: -1.7), direction: (x: -1.0, y: 0.0), refs: [WallEnd(wall: 30, end: Start, side: Left), WallEnd(wall: 30, end: End, side: Left)]),
@@ -120,6 +119,91 @@ Project(
         102: Slab(storey: 1, slab_type: 101, outline: [(x: 0.12, y: 0.12), (x: 10.88, y: 0.12), (x: 10.88, y: 8.88), (x: 0.12, y: 8.88)], kind: Base),
         103: Slab(storey: 2, slab_type: 100, outline: [(x: 0.12, y: 0.12), (x: 10.88, y: 0.12), (x: 10.88, y: 8.88), (x: 0.12, y: 8.88)]),
         104: Slab(storey: 3, slab_type: 100, outline: [(x: 0.17, y: 0.17), (x: 10.83, y: 0.17), (x: 10.83, y: 8.83), (x: 0.17, y: 8.83)]),
-        105: SlabOpening(host: 104, outline: [(x: 9.4, y: 5.4), (x: 10.6, y: 5.4), (x: 10.6, y: 8.4), (x: 9.4, y: 8.4)]), // Treppenloch
+        105: SlabOpening(host: 104, outline: [(x: 8.6, y: 5.72), (x: 10.6, y: 5.72), (x: 10.6, y: 8.61), (x: 8.6, y: 8.61)]), // Treppenloch EG-DG
+        106: SlabType(
+            name: "Steildach Sparren 22",
+            layers: [
+                (material: "dachziegel", thickness: 0.06, function: Finish),
+                (material: "daemmung", thickness: 0.22, function: Insulation),
+                (material: "gipskarton", thickness: 0.0125, function: Finish),
+            ],
+        ),
+        107: Roof(
+            storey: 3,
+            roof_type: 106,
+            outline: [(x: 0.0, y: 0.0), (x: 11.0, y: 0.0), (x: 11.0, y: 9.0), (x: 0.0, y: 9.0)],
+            edges: [Eave(slope: 40.0, overhang: 0.5), Verge(overhang: 0.3), Eave(slope: 40.0, overhang: 0.5), Verge(overhang: 0.3)],
+            eave_height: 1.38,
+        ),
+        108: SectionView(name: "Schnitt A-A", mark: "A", start: (x: 9.1, y: -2.6), end: (x: 9.1, y: 11.6), look: Left, depth: 12.0),
+        109: SectionView(name: "Schnitt B-B", mark: "B", start: (x: -2.6, y: 6.8), end: (x: 13.6, y: 6.8), look: Left, depth: 12.0),
+        110: SectionView(name: "Ansicht Süd", start: (x: -1.0, y: -3.0), end: (x: 12.0, y: -3.0), look: Left, depth: 30.0, kind: Elevation),
+        111: SectionView(name: "Ansicht Ost", start: (x: 14.0, y: -1.0), end: (x: 14.0, y: 10.0), look: Left, depth: 30.0, kind: Elevation),
+        112: SectionView(name: "Ansicht Nord", start: (x: 12.0, y: 12.0), end: (x: -1.0, y: 12.0), look: Left, depth: 30.0, kind: Elevation),
+        113: SectionView(name: "Ansicht West", start: (x: -3.0, y: 10.0), end: (x: -3.0, y: -1.0), look: Left, depth: 30.0, kind: Elevation),
+        // Treppen: KG-EG und EG-DG übereinander an der Ostwand, je zwei Läufe mit Halbpodest im Norden.
+        118: Opening(host: 33, offset: 1.0, width: 1.01, height: 2.135, sill_height: 0.0, kind: Plain), // Durchgang Diele - Treppe
+        119: SlabOpening(host: 103, outline: [(x: 8.6, y: 5.99), (x: 10.6, y: 5.99), (x: 10.6, y: 8.61), (x: 8.6, y: 8.61)]), // Treppenloch KG-EG
+        120: Stair(storey: 1, start: (x: 9.1, y: 5.99), direction: (x: 0.0, y: 1.0), width: 1.0, tread: 0.27, flights: [(risers: 7, landing: BackRight), (risers: 7)]),
+        121: Stair(storey: 2, start: (x: 9.1, y: 5.72), direction: (x: 0.0, y: 1.0), width: 1.0, tread: 0.27, flights: [(risers: 8, landing: BackRight), (risers: 8)]),
+        122: Railing(storey: 1, path: Flight(stair: 120, flight: 0, side: Left), height: 0.9),
+        123: Railing(storey: 1, path: Flight(stair: 120, flight: 1, side: Right), height: 0.9),
+        124: Railing(storey: 2, path: Flight(stair: 121, flight: 0, side: Left), height: 0.9),
+        125: Railing(storey: 2, path: Flight(stair: 121, flight: 0, side: Right), height: 0.9),
+        126: Railing(storey: 2, path: Flight(stair: 121, flight: 1, side: Right), height: 0.9),
+        127: Railing(storey: 3, path: Points([(x: 9.6, y: 5.72), (x: 8.6, y: 5.72), (x: 8.6, y: 8.61)]), height: 0.9),
+        // Schleppgaube über Schlafen, Dachfenster über Kind und Bad.
+        128: WallType(
+            name: "Gaubenwand Holzrahmen",
+            layers: [
+                (material: "holz", thickness: 0.024, function: Finish),
+                (material: "daemmung", thickness: 0.16, function: Structure),
+                (material: "gipskarton", thickness: 0.0125, function: Finish),
+            ],
+        ),
+        129: Dormer(roof: 107, edge: 0, offset: 9.0, width: 3.0, setback: 0.2, eave_height: 3.0, slope: 12.0, wall_type: 128, window: Some(width: 1.76, height: 0.9, sill_height: 1.65)),
+        130: RoofWindow(roof: 107, edge: 0, offset: 1.9, width: 0.78, height: 1.4, sill_height: 1.6),
+        131: RoofWindow(roof: 107, edge: 2, offset: 8.0, width: 0.78, height: 1.4, sill_height: 1.6),
+        // 2D-Elemente: Terrasse im EG, Nordpfeil auf Blatt 101, Hinweis im Schnitt A-A.
+        132: Annotation(view: FloorPlan(storey: 2), shape: Polygon(points: [(x: 2.5, y: 0.0), (x: 7.5, y: 0.0), (x: 7.5, y: -3.0), (x: 2.5, y: -3.0)]), dashed: true),
+        133: Annotation(view: FloorPlan(storey: 2), shape: Text(position: (x: 2.7, y: -2.75), text: "Terrasse")),
+        134: Annotation(view: Sheet(sheet: 115), shape: Circle(center: (x: 545.0, y: 370.0), radius: 9.0)),
+        135: Annotation(view: Sheet(sheet: 115), shape: Polygon(points: [(x: 545.0, y: 382.0), (x: 549.0, y: 362.0), (x: 545.0, y: 366.0), (x: 541.0, y: 362.0)], hatch: Some("stahl")), pen: 0.35),
+        136: Annotation(view: Sheet(sheet: 115), shape: Text(position: (x: 543.2, y: 384.0), text: "N", height: 3.5)),
+        137: Annotation(view: Section(view: 108), shape: Text(position: (x: 12.3, y: -0.22), text: "Gelände", height: 1.8)),
+        114: ProjectInfo(client: "Familie Muster (Testdaten)", site: "Musterweg 1, 12345 Musterstadt", architect: "Lot Testbüro", building: SmallResidential),
+        115: PlanSheet(
+            number: "101",
+            title: "Grundrisse KG und EG",
+            format: "A2",
+            date: "23.10.2026",
+            views: [
+                (content: FloorPlan(storey: 1), scale: 100.0, center: (x: 150.0, y: 260.0)),
+                (content: FloorPlan(storey: 2), scale: 100.0, center: (x: 380.0, y: 260.0)),
+            ],
+        ),
+        116: PlanSheet(
+            number: "102",
+            title: "Grundriss DG und Schnitte",
+            format: "A2",
+            date: "23.10.2026",
+            views: [
+                (content: FloorPlan(storey: 3), scale: 100.0, center: (x: 150.0, y: 260.0)),
+                (content: Section(view: 108), scale: 100.0, center: (x: 400.0, y: 320.0)),
+                (content: Section(view: 109), scale: 100.0, center: (x: 400.0, y: 150.0)),
+            ],
+        ),
+        117: PlanSheet(
+            number: "103",
+            title: "Ansichten",
+            format: "A2",
+            date: "23.10.2026",
+            views: [
+                (content: Section(view: 110), scale: 100.0, center: (x: 160.0, y: 310.0)),
+                (content: Section(view: 112), scale: 100.0, center: (x: 410.0, y: 310.0)),
+                (content: Section(view: 111), scale: 100.0, center: (x: 160.0, y: 140.0)),
+                (content: Section(view: 113), scale: 100.0, center: (x: 380.0, y: 140.0)),
+            ],
+        ),
     },
 )

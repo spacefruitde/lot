@@ -8,4 +8,11 @@
     View3d(name: "efh-3d"),
     PlanView(name: "eg-planansicht", storey: 2, scale: 100.0),
     AreaTable(name: "flaechen"),
+    Section(name: "schnitt-a", view: 108, scale: 100.0),
+    Section(name: "schnitt-b", view: 109, scale: 100.0),
+    Section(name: "ansicht-sued", view: 110, scale: 100.0),
+    Section(name: "ansicht-ost", view: 111, scale: 100.0),
+    Section(name: "ansicht-nord", view: 112, scale: 100.0),
+    Section(name: "ansicht-west", view: 113, scale: 100.0),
+    PlanSheets(name: "planblaetter"),
 ]

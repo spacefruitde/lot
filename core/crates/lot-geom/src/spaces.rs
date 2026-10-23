@@ -59,8 +59,13 @@ impl SpaceFinder {
     /// Fläche des Bereichs um den Punkt nach WoFlV: wie [`SpaceFinder::area_at`],
     /// aber kleine Stützen bleiben in der Fläche (§ 3 Abs. 3 Nr. 1).
     pub fn living_area_at(&self, p: [f64; 2]) -> Option<f64> {
+        self.living_region_at(p).map(|a| a.area())
+    }
+
+    /// Die Grundfläche nach WoFlV als Fläche: der Bereich mit kleinen Stützen.
+    pub fn living_region_at(&self, p: [f64; 2]) -> Option<Area> {
         let i = self.index_at(p)?;
-        Some(self.enclosed[i].area() + self.small_columns.intersection(&self.outlines[i]).area())
+        Some(self.enclosed[i].union(&self.small_columns.intersection(&self.outlines[i])))
     }
 
     fn index_at(&self, p: [f64; 2]) -> Option<usize> {

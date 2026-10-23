@@ -60,6 +60,52 @@ pub fn floor_plan_sheet(project: &Project, storey: ElementId, scale: f64, standa
     sheet
 }
 
+/// Schnitt oder Ansicht auf dem kleinsten Blatt, auf das sie passt.
+pub fn section_sheet(
+    project: &Project,
+    geometry: &lot_geom::ModelGeometry,
+    view_id: ElementId,
+    scale: f64,
+    standard: &OfficeStandard,
+) -> Sheet {
+    let Some(Element::SectionView(view)) = project.elements.get(&view_id) else {
+        return Sheet::a4_landscape(format!("{}, Ansicht fehlt", project.name));
+    };
+    let (lo, hi) = crate::section::section_extent(geometry, view).unwrap_or(([0.0, 0.0], [10.0, 10.0]));
+    let pad = 1.0;
+    let paper_w = (hi[0] - lo[0] + 2.0 * pad) * 1000.0 / scale;
+    let paper_h = (hi[1] - lo[1] + 2.0 * pad) * 1000.0 / scale;
+    let (format, width, height) = FORMATS
+        .iter()
+        .copied()
+        .find(|(_, w, h)| paper_w + 2.0 * MARGIN <= *w && paper_h + 2.0 * MARGIN + FOOTER <= *h)
+        .unwrap_or(FORMATS[FORMATS.len() - 1]);
+    let mut sheet = Sheet {
+        title: format!("{}, {}, 1:{}", project.name, view.name, scale),
+        width_mm: width,
+        height_mm: height,
+        objects: Vec::new(),
+    };
+    frame(&mut sheet);
+    let center_model = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0];
+    let center_paper = PaperPoint::new(width / 2.0, (height + FOOTER) / 2.0);
+    let f = 1000.0 / scale;
+    let viewport = Viewport {
+        scale,
+        origin: PaperPoint::new(center_paper.x - center_model[0] * f, center_paper.y - center_model[1] * f),
+    };
+    sheet.objects.extend(crate::section::section(project, geometry, view, standard, viewport));
+    footer(
+        &mut sheet,
+        &format!("{}  ·  {}  ·  M 1:{}  ·  {format}", project.name, view.name, scale),
+        &format!(
+            "Gelände vorläufig {} m. Darstellung nach Bürostandard, Vorschlag.",
+            crate::section::format_height(crate::section::GROUND)
+        ),
+    );
+    sheet
+}
+
 /// Eine Zelle im Wandknoten-Katalog.
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct CatalogCell {
@@ -129,7 +175,17 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
     for (id, e) in &project.elements {
         let keep = match e {
             Element::Storey(_) | Element::WallType(_) | Element::SlabType(_) => true,
-            Element::Slab(_) | Element::SlabOpening(_) => false,
+            Element::Slab(_)
+            | Element::SlabOpening(_)
+            | Element::Roof(_)
+            | Element::RoofWindow(_)
+            | Element::Dormer(_)
+            | Element::Stair(_)
+            | Element::Railing(_)
+            | Element::SectionView(_)
+            | Element::Annotation(_)
+            | Element::ProjectInfo(_)
+            | Element::PlanSheet(_) => false,
             Element::Wall(w) => {
                 let k = inside(w.start.x, w.start.y) || inside(w.end.x, w.end.y);
                 if k {

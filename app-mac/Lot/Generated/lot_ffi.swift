@@ -601,6 +601,16 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 public protocol LotDocumentProtocol: AnyObject, Sendable {
     
+    /**
+     * Inhalt eines 2D-Texts; `None`, wenn das Element kein Text ist.
+     */
+    func annotationText(element: UInt64)  -> String?
+    
+    /**
+     * Schrifthöhe eines 2D-Texts in mm; `None`, wenn das Element kein Text ist.
+     */
+    func annotationTextHeight(element: UInt64)  -> Double?
+    
     func canRedo()  -> Bool
     
     func canUndo()  -> Bool
@@ -625,6 +635,11 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func redo() throws  -> Bool
     
     func save(path: String) throws 
+    
+    /**
+     * Ändert Inhalt und Schrifthöhe (mm auf dem Papier) eines 2D-Texts.
+     */
+    func setAnnotationText(element: UInt64, text: String, height: Double) throws 
     
     func setParam(element: UInt64, kind: ParamKind, value: Double) throws 
     
@@ -742,6 +757,32 @@ public static func openTestproject(path: String)throws  -> LotDocument  {
     
 
     
+    /**
+     * Inhalt eines 2D-Texts; `None`, wenn das Element kein Text ist.
+     */
+open func annotationText(element: UInt64) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_annotation_text(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Schrifthöhe eines 2D-Texts in mm; `None`, wenn das Element kein Text ist.
+     */
+open func annotationTextHeight(element: UInt64) -> Double?  {
+    return try!  FfiConverterOptionDouble.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_annotation_text_height(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),uniffiCallStatus
+    )
+})
+}
+    
 open func canRedo() -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
         uniffiCallStatus in
@@ -822,6 +863,20 @@ open func save(path: String)throws   {try rustCallWithError(FfiConverterTypeLotE
     uniffi_lot_ffi_fn_method_lotdocument_save(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(path),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Ändert Inhalt und Schrifthöhe (mm auf dem Papier) eines 2D-Texts.
+     */
+open func setAnnotationText(element: UInt64, text: String, height: Double)throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_set_annotation_text(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),
+        FfiConverterString.lower(text),
+        FfiConverterDouble.lower(height),uniffiCallStatus
     )
 }
 }
@@ -2100,6 +2155,8 @@ public enum ParamKind: Equatable, Hashable {
     case storeyHeight
     case columnWidth
     case columnDepth
+    case roofEaveHeight
+    case roofSlope
 
 
 
@@ -2146,6 +2203,10 @@ public struct FfiConverterTypeParamKind: FfiConverterRustBuffer {
         case 12: return .columnWidth
         
         case 13: return .columnDepth
+        
+        case 14: return .roofEaveHeight
+        
+        case 15: return .roofSlope
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -2205,6 +2266,14 @@ public struct FfiConverterTypeParamKind: FfiConverterRustBuffer {
         
         case .columnDepth:
             writeInt(&buf, Int32(13))
+        
+        
+        case .roofEaveHeight:
+            writeInt(&buf, Int32(14))
+        
+        
+        case .roofSlope:
+            writeInt(&buf, Int32(15))
         
         }
     }
@@ -2543,6 +2612,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_func_space_usages() != 26934) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_annotation_text() != 38817) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_annotation_text_height() != 27775) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_lotdocument_can_redo() != 21256) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2565,6 +2640,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_save() != 29734) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_set_annotation_text() != 12617) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_set_param() != 46565) {

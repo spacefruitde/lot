@@ -289,6 +289,127 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     return Err(invalid("Eine Decke braucht einen Umriss mit mindestens 0,01 m²"));
                 }
             }
+            Element::ProjectInfo(_) => {}
+            Element::PlanSheet(s) => {
+                if !["A4", "A3", "A2", "A1", "A0"].contains(&s.format.as_str()) {
+                    return Err(invalid("Planblatt: Format A4 bis A0"));
+                }
+                if s.views.iter().any(|v| v.scale <= 0.0) {
+                    return Err(invalid("Planblatt: Der Maßstab muss größer als null sein"));
+                }
+            }
+            Element::RoofWindow(w) => {
+                let Some(roof) = project.roof(w.roof) else { return Err(invalid("Dachfenster: Das Dach fehlt")) };
+                if roof.face(w.edge).is_none_or(|f| f.tan < 1e-9) {
+                    return Err(invalid("Dachfenster: Es braucht eine geneigte Dachfläche an einer Traufe"));
+                }
+                if w.width < 0.2 || w.height < 0.2 {
+                    return Err(invalid("Dachfenster: Breite und Höhe ab 20 cm"));
+                }
+            }
+            Element::Dormer(d) => {
+                let Some(roof) = project.roof(d.roof) else { return Err(invalid("Gaube: Das Dach fehlt")) };
+                if project.wall_type(d.wall_type).is_none() {
+                    return Err(invalid("Gaube: Der Wandaufbau fehlt"));
+                }
+                if d.width < 0.5 || d.overhang < 0.0 {
+                    return Err(invalid("Gaube: Breite ab 50 cm, Überstand nicht negativ"));
+                }
+                if d.ridge_distance(roof).is_none() {
+                    return Err(invalid(
+                        "Gaube: Sie muss aus der Dachfläche ragen, und ihr Dach muss flacher sein als das Hauptdach",
+                    ));
+                }
+            }
+            Element::Annotation(a) => {
+                let view_ok = match a.view {
+                    crate::AnnotationView::FloorPlan { storey } => project.storey(storey).is_some(),
+                    crate::AnnotationView::Section { view } => {
+                        matches!(project.elements.get(&view), Some(Element::SectionView(_)))
+                    }
+                    crate::AnnotationView::Sheet { sheet } => {
+                        matches!(project.elements.get(&sheet), Some(Element::PlanSheet(_)))
+                    }
+                };
+                if !view_ok {
+                    return Err(invalid("2D-Element: Die Ansicht fehlt"));
+                }
+                let enough = match &a.shape {
+                    crate::AnnotationShape::Polyline(p) => p.len() >= 2,
+                    crate::AnnotationShape::Polygon { points, .. } => points.len() >= 3,
+                    crate::AnnotationShape::Circle { radius, .. } => *radius > 0.0,
+                    crate::AnnotationShape::Text { text, height, .. } => !text.trim().is_empty() && *height > 0.0,
+                };
+                if !enough || a.pen <= 0.0 {
+                    return Err(invalid(
+                        "2D-Element: Linie ab zwei, Fläche ab drei Punkten, Kreis mit Radius, Text nicht leer",
+                    ));
+                }
+            }
+            Element::Stair(s) => {
+                if project.storey(s.storey).is_none() {
+                    return Err(invalid("Treppe: Das Geschoss fehlt"));
+                }
+                if s.flights.is_empty() || s.flights.iter().any(|f| f.risers < 2) {
+                    return Err(invalid("Treppe: Jeder Lauf braucht mindestens zwei Steigungen"));
+                }
+                if s.width < 0.3 || s.tread < 0.1 || s.thickness < 0.02 {
+                    return Err(invalid("Treppe: Laufbreite ab 30 cm, Auftritt ab 10 cm, Laufplatte ab 2 cm"));
+                }
+                if s.direction.x.hypot(s.direction.y) < 1e-9 {
+                    return Err(invalid("Treppe: Die Laufrichtung fehlt"));
+                }
+            }
+            Element::Railing(r) => {
+                if project.storey(r.storey).is_none() {
+                    return Err(invalid("Geländer: Das Geschoss fehlt"));
+                }
+                if r.height < 0.3 {
+                    return Err(invalid("Geländer: Die Höhe muss mindestens 30 cm betragen"));
+                }
+                match &r.path {
+                    crate::RailingPath::Points(points) => {
+                        if points.len() < 2 {
+                            return Err(invalid("Geländer: Der Verlauf braucht mindestens zwei Punkte"));
+                        }
+                    }
+                    crate::RailingPath::Flight { stair, flight, .. } => match project.stair(*stair) {
+                        Some(s) if s.storey == r.storey && *flight < s.flights.len() => {}
+                        _ => return Err(invalid("Geländer: Treppe oder Lauf fehlt")),
+                    },
+                }
+            }
+            Element::SectionView(v) => {
+                if v.start.distance(v.end) < MIN_LENGTH || v.depth <= 0.0 {
+                    return Err(invalid("Schnitt: Linie und Blicktiefe müssen größer als null sein"));
+                }
+            }
+            Element::Roof(r) => {
+                if project.storey(r.storey).is_none() {
+                    return Err(invalid("Dach: Das Geschoss fehlt"));
+                }
+                if project.slab_type(r.roof_type).is_none() {
+                    return Err(invalid("Dach: Der Dachaufbau fehlt"));
+                }
+                if r.outline.len() < 3 || r.edges.len() != r.outline.len() {
+                    return Err(invalid("Dach: Jede Umrisskante braucht eine Angabe, Traufe oder Giebel"));
+                }
+                if !r.is_convex() {
+                    return Err(invalid(
+                        "Dächer über verwinkelten Grundrissen folgen später; der Umriss muss konvex sein",
+                    ));
+                }
+                for e in &r.edges {
+                    if let crate::RoofEdge::Eave { slope, .. } = e
+                        && !(0.0..75.0).contains(slope)
+                    {
+                        return Err(invalid("Dach: Die Neigung muss zwischen 0° und 75° liegen"));
+                    }
+                    if e.overhang() < 0.0 {
+                        return Err(invalid("Dach: Der Überstand darf nicht negativ sein"));
+                    }
+                }
+            }
             Element::SlabOpening(o) => {
                 if !matches!(project.elements.get(&o.host), Some(Element::Slab(_))) {
                     return Err(invalid("Der Durchbruch sitzt nicht in einer Decke"));

@@ -84,6 +84,20 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
     let lot_file = out.join("projekt.lot");
     lot_io::project_file::save(&doc, &lot_file)?;
     println!("geschrieben: {}", lot_file.display());
+    // Prüfung der Treppen nach DIN 18065.
+    for c in lot_rules::check_stairs(&project) {
+        let de = |v: f64, d: usize| format!("{v:.d$}").replace('.', ",");
+        let clear = c.headroom.map_or("frei".to_string(), |h| format!("{} m", de(h, 2)));
+        let result = if c.problems.is_empty() { "in Ordnung".to_string() } else { c.problems.join("; ") };
+        println!(
+            "Treppe {}: {} Stg. {}/{}, 2s + a = {} cm, Durchgangshöhe {clear}: {result}",
+            c.stair.0,
+            c.risers,
+            de(c.rise * 100.0, 1),
+            de(c.tread * 100.0, 1),
+            de(c.step * 100.0, 1)
+        );
+    }
     println!("fertig in {:.0} ms", start.elapsed().as_secs_f64() * 1000.0);
     Ok(())
 }

@@ -81,7 +81,9 @@ fn rows(report: &AreaReport) -> Vec<Row> {
     });
     rows.push(Row::Gap);
     rows.push(Row::Value { label: "Wohnfläche nach WoFlV".into(), value: format!("{} m²", m2(report.living())) });
-    rows.push(Row::Note("Ohne Dachschrägen (folgen mit M3) zählen alle Räume mit voller Höhe.".into()));
+    rows.push(Row::Note(
+        "Unter Dachschrägen nach § 4: ab 2 m lichter Höhe ganz, 1 bis 2 m zur Hälfte, unter 1 m nicht.".into(),
+    ));
     if !report.warnings.is_empty() {
         rows.push(Row::Gap);
         rows.push(Row::Heading("Hinweise".into()));

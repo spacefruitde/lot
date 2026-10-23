@@ -37,6 +37,15 @@ pub enum Element {
     SlabType(SlabType),
     Slab(Slab),
     SlabOpening(SlabOpening),
+    Roof(crate::Roof),
+    RoofWindow(crate::RoofWindow),
+    Dormer(crate::Dormer),
+    Stair(crate::Stair),
+    Railing(crate::Railing),
+    SectionView(SectionView),
+    Annotation(crate::Annotation),
+    ProjectInfo(ProjectInfo),
+    PlanSheet(PlanSheet),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -53,6 +62,15 @@ pub enum ElementKind {
     SlabType,
     Slab,
     SlabOpening,
+    Roof,
+    RoofWindow,
+    Dormer,
+    Stair,
+    Railing,
+    SectionView,
+    Annotation,
+    ProjectInfo,
+    PlanSheet,
 }
 
 impl Element {
@@ -69,6 +87,15 @@ impl Element {
             Element::SlabType(_) => ElementKind::SlabType,
             Element::Slab(_) => ElementKind::Slab,
             Element::SlabOpening(_) => ElementKind::SlabOpening,
+            Element::Roof(_) => ElementKind::Roof,
+            Element::RoofWindow(_) => ElementKind::RoofWindow,
+            Element::Dormer(_) => ElementKind::Dormer,
+            Element::Stair(_) => ElementKind::Stair,
+            Element::Railing(_) => ElementKind::Railing,
+            Element::SectionView(_) => ElementKind::SectionView,
+            Element::Annotation(_) => ElementKind::Annotation,
+            Element::ProjectInfo(_) => ElementKind::ProjectInfo,
+            Element::PlanSheet(_) => ElementKind::PlanSheet,
         }
     }
 
@@ -79,11 +106,11 @@ impl Element {
             (Element::Wall(w), Param::WallSagitta) => Some(w.sagitta),
             (Element::Wall(w), Param::WallHeight) => match w.top {
                 Top::Height(h) => Some(h),
-                Top::Storey { .. } => None,
+                Top::Storey { .. } | Top::Roof { .. } => None,
             },
             (Element::Wall(w), Param::WallTopOffset) => match w.top {
                 Top::Storey { offset } => Some(offset),
-                Top::Height(_) => None,
+                Top::Height(_) | Top::Roof { .. } => None,
             },
             (Element::Wall(w), Param::BaseOffset) => Some(w.base_offset),
             (Element::Column(c), Param::BaseOffset) => Some(c.base_offset),
@@ -101,6 +128,11 @@ impl Element {
                 ColumnProfile::Rectangle { depth, .. } => Some(depth),
                 ColumnProfile::Circle { .. } => None,
             },
+            (Element::Roof(r), Param::RoofEaveHeight) => Some(r.eave_height),
+            (Element::Roof(r), Param::RoofSlope) => r.edges.iter().find_map(|e| match e {
+                crate::RoofEdge::Eave { slope, .. } => Some(*slope),
+                crate::RoofEdge::Verge { .. } => None,
+            }),
             _ => None,
         }
     }
@@ -130,6 +162,14 @@ impl Element {
             (Element::Column(c), Param::ColumnDepth) => {
                 if let ColumnProfile::Rectangle { depth, .. } = &mut c.profile {
                     *depth = value;
+                }
+            }
+            (Element::Roof(r), Param::RoofEaveHeight) => r.eave_height = value,
+            (Element::Roof(r), Param::RoofSlope) => {
+                for e in &mut r.edges {
+                    if let crate::RoofEdge::Eave { slope, .. } = e {
+                        *slope = value;
+                    }
                 }
             }
             _ => return false,
@@ -232,6 +272,8 @@ pub enum Top {
     Height(f64),
     /// Bis OKFF des darüberliegenden Geschosses (Geschosshöhe), plus Versatz.
     Storey { offset: f64 },
+    /// Bis unter das Dach desselben Geschosses, plus Versatz (Giebelwände, Wände im Dachgeschoss).
+    Roof { offset: f64 },
 }
 
 /// Wand (IfcWall). Die Bezugslinie läuft von `start` nach `end`.
@@ -693,6 +735,103 @@ pub enum SlabKind {
     Base,
 }
 
+/// Schnitt oder Ansicht (3.02): eine senkrechte Ebene durch die Linie von
+/// `start` nach `end`, mit Blick zur Seite `look` bis `depth` tief. Eine
+/// Ansicht ist ein Schnitt, dessen Ebene außerhalb des Gebäudes liegt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SectionView {
+    /// Etwa „Schnitt A-A“ oder „Ansicht Süd“.
+    pub name: String,
+    /// Kennbuchstabe an der Schnittlinie im Grundriss, etwa „A“; leer bei Ansichten.
+    #[serde(default)]
+    pub mark: String,
+    pub start: Point2,
+    pub end: Point2,
+    pub look: WallSide,
+    /// Blicktiefe in Metern.
+    pub depth: f64,
+    #[serde(default)]
+    pub kind: SectionKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum SectionKind {
+    #[default]
+    Section,
+    Elevation,
+}
+
+impl SectionView {
+    /// Blickrichtung (Einheitsvektor) und Richtung, die im Bild nach rechts zeigt.
+    pub fn frame(&self) -> ((f64, f64), (f64, f64)) {
+        let len = self.start.distance(self.end).max(1e-12);
+        let d = ((self.end.x - self.start.x) / len, (self.end.y - self.start.y) / len);
+        let n = match self.look {
+            WallSide::Left => (-d.1, d.0),
+            WallSide::Right => (d.1, -d.0),
+        };
+        (n, (n.1, -n.0))
+    }
+}
+
+/// Angaben für den Plankopf, einmal je Projekt.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct ProjectInfo {
+    #[serde(default)]
+    pub client: String,
+    /// Bauort, etwa Straße und Ort.
+    #[serde(default)]
+    pub site: String,
+    /// Entwurfsverfasser (Büro).
+    #[serde(default)]
+    pub architect: String,
+    /// Gebäudeart, bestimmt etwa die Grenzwerte für Treppen.
+    #[serde(default)]
+    pub building: BuildingClass,
+}
+
+/// Gebäudeart nach DIN 18065:2020-08, Tabelle 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum BuildingClass {
+    /// Sonstige Gebäude (strengere Grenzwerte).
+    #[default]
+    General,
+    /// Wohngebäude mit nicht mehr als zwei Wohnungen, und innerhalb von Wohnungen.
+    SmallResidential,
+}
+
+/// Planblatt (3.07) mit Plankopf und darauf platzierten Ansichten.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlanSheet {
+    /// Plannummer, etwa „101“.
+    pub number: String,
+    /// Planinhalt, etwa „Grundrisse“.
+    pub title: String,
+    /// Blattformat nach DIN EN ISO 216, quer: „A4“ bis „A0“.
+    pub format: String,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub index: String,
+    pub views: Vec<PlacedView>,
+}
+
+/// Eine Ansicht auf einem Planblatt: Inhalt, Maßstab und Mitte auf dem Blatt in mm.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlacedView {
+    pub content: ViewContent,
+    pub scale: f64,
+    pub center: Point2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ViewContent {
+    /// Grundriss eines Geschosses.
+    FloorPlan { storey: ElementId },
+    /// Schnitt oder Ansicht (Element `SectionView`).
+    Section { view: ElementId },
+}
+
 /// Querschnitt einer Stütze.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ColumnProfile {
@@ -721,6 +860,10 @@ pub enum Param {
     /// Breite einer Rechteckstütze oder Durchmesser einer Rundstütze.
     ColumnWidth,
     ColumnDepth,
+    /// Traufhöhe eines Dachs über OKFF.
+    RoofEaveHeight,
+    /// Neigung aller Traufen eines Dachs, in Grad.
+    RoofSlope,
 }
 
 #[cfg(test)]

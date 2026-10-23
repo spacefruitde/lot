@@ -28,3 +28,9 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0022](0022-tueren-und-fenster.md) | Türen und Fenster | umgesetzt, Vorschlag |
 | [0023](0023-massketten.md) | Assoziative Maßketten | umgesetzt, Vorschlag |
 | [0024](0024-decken-und-bodenplatten.md) | Decken und Bodenplatten | umgesetzt, Vorschlag |
+| [0025](0025-daecher.md) | Dächer | umgesetzt, Vorschlag |
+| [0026](0026-schnitte-und-ansichten.md) | Schnitte und Ansichten | umgesetzt, Vorschlag |
+| [0027](0027-planblaetter.md) | Planblätter und Plankopf | umgesetzt, Vorschlag |
+| [0028](0028-treppen-und-gelaender.md) | Treppen und Geländer | umgesetzt, Vorschlag |
+| [0029](0029-gauben-und-dachfenster.md) | Gauben und Dachfenster | umgesetzt, Vorschlag |
+| [0030](0030-zeichnen-in-2d.md) | 2D-Zeichnen | umgesetzt |

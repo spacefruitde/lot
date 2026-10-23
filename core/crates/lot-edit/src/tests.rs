@@ -558,3 +558,77 @@ fn slab_opening_needs_a_slab_and_cuts_it() {
     let cut = lot_geom::slabs::slab_area(doc.project(), slab_id, &slab).area();
     assert!((full - cut - 1.2 * 2.0).abs() < 1e-6, "{full} - {cut}");
 }
+
+#[test]
+fn gable_roof_covers_the_walls_and_raises_them() {
+    let (mut doc, mut ed) = setup();
+    // 10 × 6 m: Traufen an den langen Seiten.
+    ed.run(&mut doc, &Command::WallTool);
+    for (x, y) in [(0.0, 0.0), (0.0, 6.0), (10.0, 6.0), (10.0, 0.0), (0.0, 0.0)] {
+        click(&mut doc, &mut ed, x, y);
+    }
+    ed.key(&mut doc, Key::Escape);
+    let r = ed.run(&mut doc, &Command::GableRoofFromWalls);
+    assert!(r.model_changed, "{:?}", r.error);
+    let roof = doc.project().roofs_on(ElementId(1)).next().unwrap().1.clone();
+    let eaves = roof.edges.iter().filter(|e| matches!(e, lot_model::RoofEdge::Eave { .. })).count();
+    assert_eq!(eaves, 2);
+    assert!(walls(&doc).iter().all(|w| matches!(w.top, lot_model::Top::Roof { .. })));
+    // Ein Undo nimmt Dach und Wandhöhen zusammen zurück.
+    doc.undo().unwrap();
+    assert!(doc.project().roofs_on(ElementId(1)).next().is_none());
+    assert!(walls(&doc).iter().all(|w| matches!(w.top, lot_model::Top::Storey { .. })));
+}
+
+fn annotations(doc: &Document) -> Vec<lot_model::Annotation> {
+    doc.project()
+        .elements
+        .values()
+        .filter_map(|e| match e {
+            lot_model::Element::Annotation(a) => Some(a.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn line_tool_chains_segments_and_takes_typed_length() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::LineTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    click(&mut doc, &mut ed, 2.0, 0.0);
+    ed.pointer_moved(doc.project(), input(2.0, 3.0));
+    for c in "1,5".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    ed.key(&mut doc, Key::Enter);
+    ed.key(&mut doc, Key::Escape);
+    let a = annotations(&doc);
+    assert_eq!(a.len(), 2);
+    assert_eq!(a[1].shape, lot_model::AnnotationShape::Polyline(vec![Point2::new(2.0, 0.0), Point2::new(2.0, 1.5)]));
+    assert_eq!(a[0].view, lot_model::AnnotationView::FloorPlan { storey: ed.storey });
+}
+
+#[test]
+fn text_tool_places_and_selects_text_which_moves_with_the_selection() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::TextTool);
+    click(&mut doc, &mut ed, 1.0, 1.0);
+    assert_eq!(ed.tool, Tool::Select);
+    assert_eq!(ed.selection.len(), 1);
+    let id = ed.selection[0];
+    // Klick in den Text wählt ihn wieder.
+    ed.key(&mut doc, Key::Escape);
+    click(&mut doc, &mut ed, 1.1, 1.1);
+    assert_eq!(ed.selection, vec![id]);
+    // Ziehen verschiebt ihn.
+    ed.pointer_dragged(doc.project(), input(2.1, 1.1));
+    ed.pointer_up(&mut doc);
+    match &annotations(&doc)[0].shape {
+        lot_model::AnnotationShape::Text { position, text, .. } => {
+            assert_eq!(text, "Text");
+            assert!((position.x - 2.0).abs() < 1e-9 && (position.y - 1.0).abs() < 1e-9, "{position:?}");
+        }
+        other => panic!("{other:?}"),
+    }
+}
