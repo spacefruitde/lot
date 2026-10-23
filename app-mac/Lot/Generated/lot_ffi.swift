@@ -1075,6 +1075,12 @@ public protocol ViewportProtocol: AnyObject, Sendable {
     func addCadUnderlay(source: String) throws  -> UInt64
     
     /**
+     * Legt ein Referenzmodell aus einer IFC-Datei im Projekt an (vorher mit
+     * `add_attachment` abgelegt). Gibt die Zahl der Bauteile zurück.
+     */
+    func addReferenceModel(source: String) throws  -> UInt32
+    
+    /**
      * Legt eine Unterlage im aktuellen Geschoss an, mittig in der Ansicht.
      * `width` und `height` in Einheiten der Vorlage (PDF-Punkte oder Bildpunkte),
      * `scale` in Metern je Einheit (vor dem Kalibrieren geschätzt).
@@ -1239,6 +1245,20 @@ open func addCadUnderlay(source: String)throws  -> UInt64  {
     return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_viewport_add_cad_underlay(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(source),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Legt ein Referenzmodell aus einer IFC-Datei im Projekt an (vorher mit
+     * `add_attachment` abgelegt). Gibt die Zahl der Bauteile zurück.
+     */
+open func addReferenceModel(source: String)throws  -> UInt32  {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_add_reference_model(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(source),uniffiCallStatus
     )
@@ -2962,6 +2982,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_add_cad_underlay() != 38521) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_add_reference_model() != 42523) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_add_underlay() != 28626) {

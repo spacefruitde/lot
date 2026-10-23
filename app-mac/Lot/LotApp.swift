@@ -28,6 +28,7 @@ struct LotApp: App {
                     .keyboardShortcut("o", modifiers: [.command, .shift])
                 Divider()
                 Button("Unterlage laden (PDF, Bild, DXF, DWG) …") { model.importUnderlayWithPanel() }
+                Button("Referenzmodell laden (IFC) …") { model.importReferenceWithPanel() }
             }
             CommandGroup(replacing: .saveItem) {
                 Button("Sichern") { model.save() }

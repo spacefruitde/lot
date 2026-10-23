@@ -63,3 +63,18 @@ fn underlay_file_is_in_the_project_folder() {
     // A4 bei 150 dpi in 1:100: ein Bildpunkt sind 1,69 cm.
     assert!((u.scale - 0.0254 / 150.0 * 100.0).abs() < 1e-6);
 }
+
+#[test]
+fn reference_model_appears_in_the_geometry_and_the_plan() {
+    let (project, dir) = load();
+    let files = lot_io::testproject::attachments(&project, &dir);
+    let g = lot_cli::geometry(&project, &files).unwrap();
+    let parts: Vec<_> = g.elements.iter().filter(|e| e.material == lot_io::ifc::REFERENCE_MATERIAL).collect();
+    assert_eq!(parts.len(), 3);
+    // Die Stütze wird in der Schnittebene des EG geschnitten.
+    let mut objects = Vec::new();
+    let viewport = Viewport { scale: 100.0, origin: PaperPoint::new(0.0, 0.0) };
+    let refs: Vec<lot_geom::ElementGeometry> = parts.into_iter().cloned().collect();
+    lot_plan::reference::draw_reference_cut(&mut objects, &refs, 1.0, viewport);
+    assert!(objects.iter().any(|o| matches!(o, PlanObject::Area(_))));
+}

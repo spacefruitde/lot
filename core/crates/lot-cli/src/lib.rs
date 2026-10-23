@@ -7,9 +7,10 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use lot_io::project_file::Attachments;
 use lot_model::{ElementId, PhaseFilter, Project};
 use lot_plan::Sheet;
-use lot_plan::sheets::{CatalogCell, catalog_sheets, floor_plan_sheet};
+use lot_plan::sheets::{CatalogCell, catalog_sheets};
 use lot_plan::standard::OfficeStandard;
 use serde::Deserialize;
 
@@ -94,7 +95,7 @@ pub fn outputs(project_dir: &Path) -> Result<Vec<Output>> {
 }
 
 /// Die Blätter einer Ausgabe. Leer für Ausgaben ohne Blätter (3D-Bild).
-pub fn sheets(project: &Project, output: &Output, source: &str) -> Vec<Sheet> {
+pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &Attachments) -> Vec<Sheet> {
     let standard = OfficeStandard::default_standard();
     match output {
         Output::M0Sheet { .. } => vec![lot_plan::m0::sheet(project, source)],
@@ -111,7 +112,15 @@ pub fn sheets(project: &Project, output: &Output, source: &str) -> Vec<Sheet> {
                 }
                 None => project.clone(),
             };
-            vec![floor_plan_sheet(&phase_project(&base, *phase), ElementId(*storey), *scale, standard)]
+            let project = phase_project(&base, *phase);
+            let references = lot_io::ifc::references(&project, attachments);
+            let z = project.storey(ElementId(*storey)).map_or(0.0, |s| s.elevation)
+                + lot_plan::floor_plan::DEFAULT_CUT_HEIGHT;
+            vec![lot_plan::sheets::floor_plan_sheet_with(&project, ElementId(*storey), *scale, standard, |viewport| {
+                let mut below = Vec::new();
+                lot_plan::reference::draw_reference_cut(&mut below, &references, z, viewport);
+                below
+            })]
         }
         Output::Catalog { storey, scale, title, cells, .. } => {
             catalog_sheets(project, ElementId(*storey), cells, *scale, standard, title)
@@ -122,14 +131,14 @@ pub fn sheets(project: &Project, output: &Output, source: &str) -> Vec<Sheet> {
         }
         Output::Section { view, scale, phase, .. } => {
             let project = phase_project(project, *phase);
-            match geometry(&project) {
+            match geometry(&project, attachments) {
                 Ok(geometry) => {
                     vec![lot_plan::sheets::section_sheet(&project, &geometry, ElementId(*view), *scale, standard)]
                 }
                 Err(_) => Vec::new(),
             }
         }
-        Output::PlanSheets { .. } => match geometry(project) {
+        Output::PlanSheets { .. } => match geometry(project, attachments) {
             Ok(geometry) => lot_plan::layout::plan_sheets(project, &geometry, standard),
             Err(_) => Vec::new(),
         },
@@ -153,13 +162,20 @@ pub fn phase_project(project: &Project, phase: PhaseFilter) -> Project {
 
 /// 3D-Geometrie für Schnitte und Planblätter; im Umbauplan ohne die Öffnungen,
 /// die die Wand nicht durchbrechen (siehe `Project::without_phase_openings`).
-pub fn geometry(project: &Project) -> Result<lot_geom::ModelGeometry, lot_geom::GeomError> {
+pub fn geometry(project: &Project, attachments: &Attachments) -> Result<lot_geom::ModelGeometry, lot_geom::GeomError> {
     let project = project.variant_view();
-    if project.has_phases() { lot_geom::build(&project.without_phase_openings()) } else { lot_geom::build(&project) }
+    let mut g = if project.has_phases() {
+        lot_geom::build(&project.without_phase_openings())?
+    } else {
+        lot_geom::build(&project)?
+    };
+    // Dazu die Bauteile der Referenzmodelle aus den Dateien des Projekts.
+    g.elements.extend(lot_io::ifc::references(&project, attachments));
+    Ok(g)
 }
 
 /// DXF- und DWG-Dateien einer Ausgabe, falls sie welche verlangt: (Dateiname, Inhalt).
-pub fn cad_files(project: &Project, output: &Output) -> Result<Vec<(String, Vec<u8>)>> {
+pub fn cad_files(project: &Project, output: &Output, attachments: &Attachments) -> Result<Vec<(String, Vec<u8>)>> {
     use lot_io::cad::{CadUnits, dwg_bytes, dxf_bytes, to_cad};
     let standard = OfficeStandard::default_standard();
     let origin = lot_plan::Viewport { scale: 100.0, origin: lot_plan::PaperPoint::new(0.0, 0.0) };
@@ -179,7 +195,7 @@ pub fn cad_files(project: &Project, output: &Output) -> Result<Vec<(String, Vec<
         Output::Section { name, view, scale, phase, cad: true } => {
             let project = phase_project(project, *phase);
             if let (Ok(geometry), Some(lot_model::Element::SectionView(v))) =
-                (geometry(&project), project.elements.get(&ElementId(*view)))
+                (geometry(&project, attachments), project.elements.get(&ElementId(*view)))
             {
                 let viewport = lot_plan::Viewport { scale: *scale, ..origin };
                 let objects = lot_plan::section::section(&project, &geometry, v, standard, viewport);
@@ -187,7 +203,7 @@ pub fn cad_files(project: &Project, output: &Output) -> Result<Vec<(String, Vec<
             }
         }
         Output::PlanSheets { name, cad: true } => {
-            if let Ok(geometry) = geometry(project) {
+            if let Ok(geometry) = geometry(project, attachments) {
                 let sheets = lot_plan::layout::plan_sheets(project, &geometry, standard);
                 for (sheet, page) in sheets.into_iter().zip(page_names(name, project.plan_sheets().len())) {
                     docs.push((page, to_cad(&[("A_Planblatt", sheet.objects)], 1.0, CadUnits::Millimeters)?));

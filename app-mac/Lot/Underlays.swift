@@ -42,6 +42,23 @@ extension AppModel {
         }
     }
 
+    /// Fragt nach einer IFC-Datei und legt sie als Referenzmodell ins Projekt (6.02).
+    func importReferenceWithPanel() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "ifc")].compactMap { $0 }
+        panel.message = "IFC-Modell eines Fachplaners wählen"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try Data(contentsOf: url)
+            document.addAttachment(name: url.lastPathComponent, data: data)
+            guard let viewport else { return }
+            _ = try viewport.addReferenceModel(source: url.lastPathComponent)
+            requestRedraw?()
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+    }
+
     /// Gibt dem Kern die Bilder aller Unterlagen, die er nicht selbst lesen kann.
     func loadMissingUnderlays() {
         guard let viewport else { return }

@@ -548,6 +548,15 @@ pub(crate) fn draw_cut_for(
         draw_cut(objects, cut, standard, style, viewport);
         return;
     }
+    // Was keinen Bauzustand hat (Erdreich, Referenzmodelle), bleibt wie gewohnt.
+    let (cut, plain): (Vec<LayerRegion>, Vec<LayerRegion>) = cut
+        .iter()
+        .cloned()
+        .partition(|r| project.elements.get(&r.element).and_then(lot_model::Element::phase).is_some());
+    if !plain.is_empty() {
+        draw_cut(objects, &plain, standard, style, viewport);
+    }
+    let cut = cut.as_slice();
     let colors = &standard.phases;
     let cut_all = Area::union_all(cut.iter().map(|r| &r.area));
     for phase in [lot_model::Phase::Existing, lot_model::Phase::Demolished, lot_model::Phase::New] {

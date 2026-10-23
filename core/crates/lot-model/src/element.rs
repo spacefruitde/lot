@@ -47,6 +47,7 @@ pub enum Element {
     Underlay(crate::Underlay),
     Terrain(crate::Terrain),
     VariantSet(crate::VariantSet),
+    ReferenceModel(crate::ReferenceModel),
     ProjectInfo(ProjectInfo),
     PlanSheet(PlanSheet),
 }
@@ -75,6 +76,7 @@ pub enum ElementKind {
     Underlay,
     Terrain,
     VariantSet,
+    ReferenceModel,
     ProjectInfo,
     PlanSheet,
 }
@@ -103,6 +105,7 @@ impl Element {
             Element::Underlay(_) => ElementKind::Underlay,
             Element::Terrain(_) => ElementKind::Terrain,
             Element::VariantSet(_) => ElementKind::VariantSet,
+            Element::ReferenceModel(_) => ElementKind::ReferenceModel,
             Element::ProjectInfo(_) => ElementKind::ProjectInfo,
             Element::PlanSheet(_) => ElementKind::PlanSheet,
         }

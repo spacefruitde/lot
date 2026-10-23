@@ -321,6 +321,11 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     ));
                 }
             }
+            Element::ReferenceModel(r) => {
+                if r.source.trim().is_empty() {
+                    return Err(invalid("Referenzmodell: Die Datei fehlt"));
+                }
+            }
             Element::VariantSet(v) => {
                 if v.variants.len() < 2 || v.active >= v.variants.len() {
                     return Err(invalid("Variantengruppe: mindestens zwei Varianten, eine davon aktiv"));

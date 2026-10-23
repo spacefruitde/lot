@@ -32,5 +32,5 @@ pub use project::Project;
 pub use roof::{Dormer, DormerWindow, EavePlane, Roof, RoofEdge, RoofFace, RoofWindow};
 pub use stair::{FlightLayout, Landing, Railing, RailingPath, Stair, StairFlight, StairLayout, Tread};
 pub use terrain::{Terrain, TerrainPoint};
-pub use underlay::{Underlay, pdf_point_scale};
+pub use underlay::{ReferenceModel, Underlay, pdf_point_scale};
 pub use variant::{Variant, VariantSet};

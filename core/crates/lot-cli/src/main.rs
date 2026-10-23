@@ -54,7 +54,7 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
     for output in outputs(project_dir)? {
         if let Output::View3d { name } = &output {
             if with_3d {
-                match render_3d(&project) {
+                match render_3d(&project, &attachments) {
                     Ok(png) => write(&out.join(format!("{name}.png")), &png)?,
                     Err(e) => eprintln!("Hinweis: kein 3D-Bild ({e})"),
                 }
@@ -75,10 +75,10 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
                 lot_plan::area_table::area_csv(&lot_rules::area_report(&lot_cli::phase_project(&project, *phase)));
             write(&out.join(format!("{name}.csv")), csv.as_bytes())?;
         }
-        for (file, bytes) in lot_cli::cad_files(&project, &output)? {
+        for (file, bytes) in lot_cli::cad_files(&project, &output, &attachments)? {
             write(&out.join(file), &bytes)?;
         }
-        let pages = sheets(&project, &output, &source);
+        let pages = sheets(&project, &output, &source, &attachments);
         write(&out.join(format!("{}.pdf", output.name())), &lot_io::pdf::to_pdf_pages(&pages)?)?;
         for (sheet, page) in pages.iter().zip(page_names(output.name(), pages.len())) {
             write(&out.join(format!("{page}.svg")), lot_io::svg::to_svg(sheet).as_bytes())?;
@@ -109,10 +109,12 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
 }
 
 /// Ansicht des Modells als PNG, ohne Fenster gerechnet.
-fn render_3d(project: &lot_model::Project) -> Result<Vec<u8>> {
+fn render_3d(project: &lot_model::Project, attachments: &lot_io::project_file::Attachments) -> Result<Vec<u8>> {
     let (width, height) = (1600, 1000);
-    // Bei Umbauten der Zustand nach dem Umbau.
-    let geometry = lot_geom::build(&project.variant_view().phase_view(lot_model::PhaseFilter::Planned))?;
+    // Bei Umbauten der Zustand nach dem Umbau, dazu die Referenzmodelle.
+    let shown = project.variant_view().phase_view(lot_model::PhaseFilter::Planned);
+    let mut geometry = lot_geom::build(&shown)?;
+    geometry.elements.extend(lot_io::ifc::references(&shown, attachments));
     let mut renderer = lot_render::Renderer::headless(width, height)?;
     let standard = lot_plan::standard::OfficeStandard::default_standard();
     renderer.set_geometry(&geometry, &|m| standard.material(m).color);
@@ -140,6 +142,9 @@ fn render_plan_view(
             objects.extend(lot_io::cad::underlay_objects(u, &v, viewport));
         }
     }
+    // Referenzmodelle in der Schnittebene.
+    let z = project.storey(storey).map_or(0.0, |s| s.elevation) + lot_plan::floor_plan::DEFAULT_CUT_HEIGHT;
+    lot_plan::reference::draw_reference_cut(&mut objects, &lot_io::ifc::references(project, attachments), z, viewport);
     objects.extend(lot_plan::floor_plan::floor_plan(&project.variant_view(), view, standard, viewport));
     renderer.set_plan(objects);
     let quads: Vec<lot_render::UnderlayQuad> = project

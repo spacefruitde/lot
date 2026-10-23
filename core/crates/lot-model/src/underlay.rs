@@ -99,6 +99,36 @@ impl Underlay {
     }
 }
 
+/// Referenzmodell (6.02): ein IFC-Modell eines Fachplaners, im Grundriss, im
+/// Schnitt und im 3D zu sehen, aber nicht zu bearbeiten. Die Datei liegt wie
+/// Unterlagen im Projekt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReferenceModel {
+    /// Dateiname, etwa „tragwerk.ifc“.
+    pub source: String,
+    /// Wohin der Ursprung der IFC-Datei im Lot-Modell kommt, in m.
+    #[serde(default = "zero")]
+    pub origin: Point2,
+    /// Höhe des IFC-Ursprungs über ±0,00, in m.
+    #[serde(default)]
+    pub elevation: f64,
+    /// Drehung um den Ursprung gegen den Uhrzeigersinn, in Grad.
+    #[serde(default)]
+    pub rotation: f64,
+}
+
+fn zero() -> Point2 {
+    Point2::new(0.0, 0.0)
+}
+
+impl ReferenceModel {
+    /// Punkt der IFC-Datei (m) im Lot-Modell.
+    pub fn to_model(&self, p: [f64; 3]) -> [f64; 3] {
+        let (s, c) = self.rotation.to_radians().sin_cos();
+        [self.origin.x + p[0] * c - p[1] * s, self.origin.y + p[0] * s + p[1] * c, self.elevation + p[2]]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

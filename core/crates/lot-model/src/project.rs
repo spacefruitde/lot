@@ -193,6 +193,14 @@ impl Project {
         })
     }
 
+    /// Referenzmodelle (IFC von Fachplanern).
+    pub fn reference_models(&self) -> impl Iterator<Item = (ElementId, &crate::ReferenceModel)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::ReferenceModel(r) => Some((*id, r)),
+            _ => None,
+        })
+    }
+
     /// Variantengruppen, nach Kennung.
     pub fn variant_sets(&self) -> impl Iterator<Item = (ElementId, &crate::VariantSet)> {
         self.elements.iter().filter_map(|(id, e)| match e {

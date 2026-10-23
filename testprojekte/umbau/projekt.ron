@@ -141,6 +141,8 @@ Project(
         94: Terrain(points: [
             (x: -3.0, y: -3.0, z: -0.2), (x: 16.5, y: -3.0, z: -0.25), (x: 16.5, y: 11.5, z: -0.1), (x: -3.0, y: 11.5, z: -0.1),
         ]),
+        // Referenzmodell: Tragwerk des Anbaus als IFC des Tragwerksplaners, Ursprung wie im Lot-Modell.
+        95: ReferenceModel(source: "tragwerk-anbau.ifc"),
         93: ProjectInfo(client: "Familie Altbau (Testdaten)", site: "Altweg 3, 12345 Musterstadt", architect: "Lot Testbüro", building: SmallResidential),
     },
 )

@@ -315,7 +315,7 @@ fn band_of(area: &Area) -> Option<Band> {
 }
 
 /// Schnitt eines geschlossenen Netzes mit der Ebene w = 0, als Fläche in (u, v).
-fn slice(mesh: &TriMesh, uvw: &[[f64; 3]]) -> Area {
+pub(crate) fn slice(mesh: &TriMesh, uvw: &[[f64; 3]]) -> Area {
     // Punkte genau auf der Ebene leicht verschieben, damit jede Kante eindeutig schneidet.
     let w: Vec<f64> = uvw.iter().map(|p| if p[2].abs() < 1e-9 { 1e-9 } else { p[2] }).collect();
     let mut next: HashMap<(u32, u32), (u32, u32)> = HashMap::new();

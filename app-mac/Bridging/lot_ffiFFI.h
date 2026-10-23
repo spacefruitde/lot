@@ -390,6 +390,11 @@ uint64_t uniffi_lot_ffi_fn_constructor_viewport_new(uint64_t ns_view, uint32_t w
 uint64_t uniffi_lot_ffi_fn_method_viewport_add_cad_underlay(uint64_t ptr, RustBuffer source, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ADD_REFERENCE_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ADD_REFERENCE_MODEL
+uint32_t uniffi_lot_ffi_fn_method_viewport_add_reference_model(uint64_t ptr, RustBuffer source, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ADD_UNDERLAY
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_ADD_UNDERLAY
 uint64_t uniffi_lot_ffi_fn_method_viewport_add_underlay(uint64_t ptr, RustBuffer source, uint32_t page, double width, double height, double scale, RustCallStatus *_Nonnull out_status
@@ -889,6 +894,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_undo(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_ADD_CAD_UNDERLAY
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_ADD_CAD_UNDERLAY
 uint16_t uniffi_lot_ffi_checksum_method_viewport_add_cad_underlay(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_ADD_REFERENCE_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_ADD_REFERENCE_MODEL
+uint16_t uniffi_lot_ffi_checksum_method_viewport_add_reference_model(void
     
 );
 #endif

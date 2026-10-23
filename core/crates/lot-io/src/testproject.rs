@@ -43,6 +43,7 @@ pub fn attachments(project: &Project, dir: &Path) -> crate::project_file::Attach
         .values()
         .filter_map(|e| match e {
             lot_model::Element::Underlay(u) => Some(u.source.clone()),
+            lot_model::Element::ReferenceModel(r) => Some(r.source.clone()),
             _ => None,
         })
         .filter_map(|name| std::fs::read(dir.join(&name)).ok().map(|data| (name, data)))
