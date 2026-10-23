@@ -29,10 +29,11 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Laibung | `Reveal` | | |
 | Brüstung, Brüstungshöhe | `sill_height` | | Höhe über Fertigfußboden |
 | Sturz, Sturzhöhe | `head_height` | | |
-| Anschlag | `Rebate` | | |
-| Türaufschlag | `Swing` | | |
-| Raum | `Space` | IfcSpace | |
-| Raumstempel | `SpaceTag` | | |
+| Anschlag (Fenster, Tür) | `Rebate` | | Falz, an dem der Flügel anschlägt |
+| Anschlag DIN links, DIN rechts | `Handing` | | nach DIN 107: Bänder links oder rechts, gesehen von der Seite, zu der die Tür aufschlägt |
+| Türaufschlag | `Door::opens_to`, `FlipDoorSwing` | | Seite der Wand, zu der die Tür aufschlägt |
+| Raum | `Space` | IfcSpace | gespeichert nur als Punkt, Fläche aus den Wänden |
+| Raumstempel | `draw_space_tags` | | Nummer, Name, Netto-Raumfläche |
 | Dach | `Roof` | IfcRoof | |
 | Traufe | `Eave` | | |
 | Ortgang | `Verge` | | |
@@ -41,7 +42,7 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Treppe | `Stair` | IfcStair | |
 | Geländer | `Railing` | IfcRailing | |
 | Höhenkote | `LevelMark` | | |
-| Maßkette | `DimensionChain` | | |
+| Maßkette | `DimensionChain` | IfcAnnotation | speichert Bezüge (`DimRef`), nicht Maße |
 | Stiftset | `PenSet` | | Linienbreiten je Maßstab |
 | Stift | `Pen` | | eine Linienbreite in mm auf dem Papier |
 | Linienart | `LineStyle` | | durchgezogen, gestrichelt |
@@ -66,3 +67,12 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Stich (Pfeilhöhe) | `sagitta` | | Abstand der Bogenmitte von der Sehne, links positiv |
 | Sehne | `chord` | | Gerade zwischen Anfang und Ende einer Bogenwand |
 | Facette | | | gerades Stück einer Bogenwand für die Anschlüsse, höchstens 2 mm vom Bogen |
+| Nutzungsgruppe | `SpaceUsage` | | NUF 1 bis 7, TF, VF nach DIN 277 |
+| Netto-Raumfläche (NRF) | `SpaceArea::net` | | DIN 277, an den fertigen Oberflächen |
+| Brutto-Grundfläche (BGF) | `StoreyAreas::gross` | | DIN 277, innerhalb der Außenkanten |
+| Konstruktions-Grundfläche (KGF) | `StoreyAreas::construction` | | BGF minus NRF |
+| Brutto-Rauminhalt (BRI) | `StoreyAreas::volume` | | vorläufig BGF mal Geschosshöhe |
+| Wohnfläche | `SpaceArea::living` | | nach WoFlV, nur Räume mit `living_space` |
+| Maßhilfslinie | | | kurze Linie vom Bauteil zur Maßlinie |
+| Maßbegrenzung | | | Schrägstrich unter 45° |
+| Rohbaumaß | | | Maß der Öffnung im Rohbau, nach DIN 18100 |

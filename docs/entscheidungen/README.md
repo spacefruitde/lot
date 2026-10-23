@@ -24,3 +24,6 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0018](0018-buerostandard-als-daten.md) | Bürostandard als Daten | umgesetzt, Vorschlag |
 | [0019](0019-bearbeiten-im-kern.md) | Werkzeuge, Fangen und Befehle im Kern | umgesetzt |
 | [0020](0020-gebogene-waende.md) | Gebogene Wände | umgesetzt, Ben prüft |
+| [0021](0021-raeume-und-flaechen.md) | Räume und Flächen | umgesetzt, Vorschlag |
+| [0022](0022-tueren-und-fenster.md) | Türen und Fenster | umgesetzt, Vorschlag |
+| [0023](0023-massketten.md) | Assoziative Maßketten | umgesetzt, Vorschlag |

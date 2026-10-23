@@ -1,0 +1,13 @@
+Geschoss;Nr.;Raum;Nutzung;NRF m²;Wohnfläche m²
+KG;-1.01;Keller;NUF 4;22,76;
+KG;-1.02;Technik;TF;22,76;
+KG;-1.03;Vorrat;NUF 4;36,19;
+EG;0.01;Wohnen, Essen, Kochen;NUF 1;46,26;46,26
+EG;0.02;Diele;VF;13,64;13,64
+EG;0.03;WC;NUF 7;6,21;6,21
+EG;0.04;Garderobe;NUF 7;4,19;4,19
+EG;0.05;Hauswirtschaft;NUF 7;10,85;10,85
+DG;1.01;Kind;NUF 1;16,19;16,19
+DG;1.02;Schlafen;NUF 1;29,80;29,80
+DG;1.03;Bad;NUF 7;25,00;25,00
+DG;1.04;Flur;VF;10,85;10,85

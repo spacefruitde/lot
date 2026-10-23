@@ -53,7 +53,7 @@ pub fn floor_plan_sheet(project: &Project, storey: ElementId, scale: f64, standa
         &mut sheet,
         &format!("{}  ·  Grundriss {storey_name}  ·  M 1:{}  ·  {format}", project.name, scale),
         &format!(
-            "Schnitthöhe +{} m über OKFF. Darstellung nach Bürostandard, Vorschlag M1.",
+            "Schnitthöhe +{} m über OKFF. Darstellung nach Bürostandard, Vorschlag.",
             format_de(DEFAULT_CUT_HEIGHT, 2)
         ),
     );
