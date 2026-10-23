@@ -12,6 +12,7 @@
 pub mod dimensions;
 pub mod joins;
 mod mesh;
+pub mod openings;
 pub mod poly;
 pub mod roofs;
 pub mod slabs;
@@ -130,6 +131,23 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
     .into_iter()
     .flatten()
     .collect();
+    let openings: Vec<_> = project
+        .elements
+        .iter()
+        .filter_map(|(id, e)| match e {
+            lot_model::Element::Opening(o) => Some((*id, o)),
+            _ => None,
+        })
+        .collect();
+    let opening_elements: Vec<ElementGeometry> = parallel_map(&openings, |(id, o)| {
+        openings::opening_solids(project, o)
+            .into_iter()
+            .map(|(layer, material, solid)| ElementGeometry { id: *id, layer, material, mesh: to_trimesh(&solid) })
+            .collect::<Vec<_>>()
+    })
+    .into_iter()
+    .flatten()
+    .collect();
     let under: BTreeMap<ElementId, Manifold> =
         roofs.iter().filter_map(|(_, r)| Some((r.storey, roofs::under_roof(project, r)?))).collect();
     let slab_elements: Vec<ElementGeometry> = slab_solids
@@ -165,6 +183,7 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
             .into_iter()
             .chain(slab_elements)
             .chain(roof_elements)
+            .chain(opening_elements)
             .filter(|e| !e.mesh.is_empty())
             .collect(),
     })

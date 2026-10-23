@@ -70,23 +70,7 @@ pub fn floor_plan(
     }
 
     // 2. bis 4. Geschnittene Bauteile.
-    match style.detail {
-        Detail::Coarse => {
-            let rings: Vec<Vec<PaperPoint>> = cut_all.rings().iter().map(|r| paper(r, viewport)).collect();
-            objects.push(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(Gray::BLACK) }));
-        }
-        Detail::Medium | Detail::Fine => {
-            draw_patterns(&mut objects, &cut, standard, style, viewport);
-            for area in material_areas(&cut).values() {
-                for ring in area.rings() {
-                    objects.push(closed(paper(&ring, viewport), style.pens.layer));
-                }
-            }
-        }
-    }
-    for ring in cut_all.rings() {
-        objects.push(closed(paper(&ring, viewport), style.pens.cut));
-    }
+    draw_cut(&mut objects, &cut, standard, style, viewport);
 
     // 5. Türen und Fenster, Deckendurchbrüche.
     draw_openings(&mut objects, project, view.storey, z_cut, style, viewport);
@@ -94,6 +78,9 @@ pub fn floor_plan(
 
     // 6. Dach.
     draw_roof_lines(&mut objects, project, view.storey, style, viewport);
+
+    // 6a. Schnittlinien.
+    draw_section_marks(&mut objects, project, style, viewport);
 
     // 7. Achsen.
     for (_, grid) in project.grid_lines() {
@@ -149,8 +136,6 @@ fn draw_space_tags(
     }
 }
 
-/// Bautiefe des Fensterrahmens, in Metern. Vorschlag, Ben prüft.
-const WINDOW_FRAME: f64 = 0.07;
 /// Dicke des Türblatts in 1:50, in Metern.
 const DOOR_LEAF: f64 = 0.04;
 /// Strichlänge und Lücke verdeckter Kanten, in mm auf dem Blatt.
@@ -250,7 +235,7 @@ fn draw_openings(
                     objects.push(line(arc, style.pens.hatch, false));
                 }
                 OpeningKind::Window => {
-                    let (f_out, f_in) = window_frame(wall_type, &offsets);
+                    let (f_out, f_in) = lot_geom::openings::window_frame(wall_type, &offsets);
                     let mid = (f_out + f_in) / 2.0;
                     match style.detail {
                         Detail::Coarse => objects.push(line(vec![at(a, mid), at(b, mid)], style.pens.view, false)),
@@ -388,21 +373,49 @@ fn draw_roof_lines(
     }
 }
 
-/// Lage des Fensterrahmens quer zur Wand: (außen, innen) als Abstand von der Bezugslinie.
-fn window_frame(wall_type: &lot_model::WallType, offsets: &[(f64, f64)]) -> (f64, f64) {
-    let structure = wall_type.layers.iter().position(|l| l.function == LayerFunction::Structure);
-    match structure {
-        Some(k) if wall_type.layers[..k].iter().any(|l| l.function == LayerFunction::Insulation) => {
-            // Außen gedämmt: Rahmen innen an der Außenkante der Tragschicht.
-            (offsets[k].0, offsets[k].0 - WINDOW_FRAME)
+/// Schnittlinien (Vorschlag nach DIN 1356-1): nur die breiten Enden der
+/// Strichpunktlinie, Pfeile in Blickrichtung und der Kennbuchstabe an beiden
+/// Enden; die dünne Linie durch das Gebäude entfällt, damit sie keine
+/// Raumstempel kreuzt.
+fn draw_section_marks(objects: &mut Vec<PlanObject>, project: &Project, style: &ScaleStyle, viewport: Viewport) {
+    for (_, view) in project.section_views().filter(|(_, v)| v.kind == lot_model::SectionKind::Section) {
+        let a = viewport.to_paper(view.start.x, view.start.y);
+        let b = viewport.to_paper(view.end.x, view.end.y);
+        let len = (b.x - a.x).hypot(b.y - a.y);
+        if len < 1e-6 {
+            continue;
         }
-        Some(k) => {
-            let mid = (offsets[k].0 + offsets[k].1) / 2.0;
-            (mid + WINDOW_FRAME / 2.0, mid - WINDOW_FRAME / 2.0)
-        }
-        None => {
-            let mid = (offsets[0].0 + offsets[offsets.len() - 1].1) / 2.0;
-            (mid + WINDOW_FRAME / 2.0, mid - WINDOW_FRAME / 2.0)
+        let d = ((b.x - a.x) / len, (b.y - a.y) / len);
+        let (look, _) = view.frame();
+        let line = |points: Vec<PaperPoint>, width: f64, style: LineStyle| {
+            PlanObject::Line(Line { points, closed: false, pen: Pen::mm(width), style, color: Gray::BLACK })
+        };
+        let end = 8.0f64.min(len / 3.0);
+        for (p, dir) in [(a, d), (b, (-d.0, -d.1))] {
+            let q = PaperPoint::new(p.x + dir.0 * end, p.y + dir.1 * end);
+            objects.push(line(vec![p, q], style.pens.cut, LineStyle::Solid));
+            // Pfeil in Blickrichtung, gefüllt.
+            let tip = PaperPoint::new(p.x + look.0 * 5.0, p.y + look.1 * 5.0);
+            let (s0, s1) = (
+                PaperPoint::new(p.x + look.0 * 2.5 + dir.0 * 1.2, p.y + look.1 * 2.5 + dir.1 * 1.2),
+                PaperPoint::new(p.x + look.0 * 2.5 - dir.0 * 1.2, p.y + look.1 * 2.5 - dir.1 * 1.2),
+            );
+            objects.push(line(
+                vec![p, PaperPoint::new(p.x + look.0 * 2.5, p.y + look.1 * 2.5)],
+                style.pens.annotation,
+                LineStyle::Solid,
+            ));
+            objects.push(PlanObject::Area(PlanArea { rings: vec![vec![tip, s0, s1]], fill: Fill::Solid(Gray::BLACK) }));
+            if !view.mark.is_empty() {
+                let at = PaperPoint::new(p.x + look.0 * 8.0, p.y + look.1 * 8.0 - style.text / 2.0);
+                objects.push(PlanObject::Text(Text {
+                    position: at,
+                    text: view.mark.clone(),
+                    height_mm: style.text,
+                    anchor: Anchor::Center,
+                    rotation: 0.0,
+                }));
+            }
         }
     }
 }
@@ -410,6 +423,36 @@ fn window_frame(wall_type: &lot_model::WallType, offsets: &[(f64, f64)]) -> (f64
 /// Fläche im deutschen Format, „24,35 m²“.
 pub fn format_area(m2: f64) -> String {
     format!("{} m²", crate::format_de(m2, 2))
+}
+
+/// Geschnittene Bauteile, im Grundriss wie im Schnitt: je nach Detailgrad
+/// schwarz gefüllt (grob) oder mit Mustern und Materialgrenzen, darüber die
+/// Schnittkante um alles Geschnittene.
+pub(crate) fn draw_cut(
+    objects: &mut Vec<PlanObject>,
+    cut: &[LayerRegion],
+    standard: &OfficeStandard,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let cut_all = Area::union_all(cut.iter().map(|r| &r.area));
+    match style.detail {
+        Detail::Coarse => {
+            let rings: Vec<Vec<PaperPoint>> = cut_all.rings().iter().map(|r| paper(r, viewport)).collect();
+            objects.push(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(Gray::BLACK) }));
+        }
+        Detail::Medium | Detail::Fine => {
+            draw_patterns(objects, cut, standard, style, viewport);
+            for area in material_areas(cut).values() {
+                for ring in area.rings() {
+                    objects.push(closed(paper(&ring, viewport), style.pens.layer));
+                }
+            }
+        }
+    }
+    for ring in cut_all.rings() {
+        objects.push(closed(paper(&ring, viewport), style.pens.cut));
+    }
 }
 
 /// Muster der geschnittenen Schichten.

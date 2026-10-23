@@ -289,6 +289,11 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     return Err(invalid("Eine Decke braucht einen Umriss mit mindestens 0,01 m²"));
                 }
             }
+            Element::SectionView(v) => {
+                if v.start.distance(v.end) < MIN_LENGTH || v.depth <= 0.0 {
+                    return Err(invalid("Schnitt: Linie und Blicktiefe müssen größer als null sein"));
+                }
+            }
             Element::Roof(r) => {
                 if project.storey(r.storey).is_none() {
                     return Err(invalid("Dach: Das Geschoss fehlt"));

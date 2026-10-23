@@ -136,5 +136,11 @@ Project(
             edges: [Eave(slope: 40.0, overhang: 0.5), Gable(overhang: 0.3), Eave(slope: 40.0, overhang: 0.5), Gable(overhang: 0.3)],
             eave_height: 1.38,
         ),
+        108: SectionView(name: "Schnitt A-A", mark: "A", start: (x: 5.6, y: -2.6), end: (x: 5.6, y: 11.6), look: Left, depth: 12.0),
+        109: SectionView(name: "Schnitt B-B", mark: "B", start: (x: -2.6, y: 6.8), end: (x: 13.6, y: 6.8), look: Left, depth: 12.0),
+        110: SectionView(name: "Ansicht Süd", start: (x: -1.0, y: -3.0), end: (x: 12.0, y: -3.0), look: Left, depth: 30.0, kind: Elevation),
+        111: SectionView(name: "Ansicht Ost", start: (x: 14.0, y: -1.0), end: (x: 14.0, y: 10.0), look: Left, depth: 30.0, kind: Elevation),
+        112: SectionView(name: "Ansicht Nord", start: (x: 12.0, y: 12.0), end: (x: -1.0, y: 12.0), look: Left, depth: 30.0, kind: Elevation),
+        113: SectionView(name: "Ansicht West", start: (x: -3.0, y: 10.0), end: (x: -3.0, y: -1.0), look: Left, depth: 30.0, kind: Elevation),
     },
 )

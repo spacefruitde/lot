@@ -31,6 +31,8 @@ pub enum Output {
     PlanView { name: String, storey: u64, scale: f64 },
     /// Flächenaufstellung nach DIN 277 und WoFlV, als Blatt und als CSV.
     AreaTable { name: String },
+    /// Schnitt oder Ansicht (Element `view` im Projekt).
+    Section { name: String, view: u64, scale: f64 },
 }
 
 impl Output {
@@ -41,7 +43,8 @@ impl Output {
             | Output::Catalog { name, .. }
             | Output::View3d { name }
             | Output::PlanView { name, .. }
-            | Output::AreaTable { name } => name,
+            | Output::AreaTable { name }
+            | Output::Section { name, .. } => name,
         }
     }
 }
@@ -68,6 +71,12 @@ pub fn sheets(project: &Project, output: &Output, source: &str) -> Vec<Sheet> {
             catalog_sheets(project, ElementId(*storey), cells, *scale, standard, title)
         }
         Output::AreaTable { .. } => lot_plan::area_table::area_sheets(&project.name, &lot_rules::area_report(project)),
+        Output::Section { view, scale, .. } => match lot_geom::build(project) {
+            Ok(geometry) => {
+                vec![lot_plan::sheets::section_sheet(project, &geometry, ElementId(*view), *scale, standard)]
+            }
+            Err(_) => Vec::new(),
+        },
         Output::View3d { .. } | Output::PlanView { .. } => Vec::new(),
     }
 }

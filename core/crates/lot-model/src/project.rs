@@ -162,6 +162,14 @@ impl Project {
         self.vertical_extent(wall.storey, wall.base_offset, wall.top)
     }
 
+    /// Alle Schnitte und Ansichten, nach Kennung.
+    pub fn section_views(&self) -> impl Iterator<Item = (ElementId, &crate::SectionView)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::SectionView(v) => Some((*id, v)),
+            _ => None,
+        })
+    }
+
     pub fn roofs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Roof)> {
         self.elements.iter().filter_map(move |(id, e)| match e {
             Element::Roof(r) if r.storey == storey => Some((*id, r)),

@@ -10,6 +10,7 @@ pub mod clip;
 pub mod dimensions;
 pub mod floor_plan;
 pub mod m0;
+pub mod section;
 pub mod sheets;
 pub mod standard;
 

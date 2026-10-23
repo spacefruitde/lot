@@ -17,8 +17,8 @@ mod roof;
 pub use document::{Document, ModelError};
 pub use element::{
     CircularArc, Column, ColumnProfile, DimRef, DimensionChain, Door, Element, ElementId, ElementKind, GridLine,
-    Handing, Layer, LayerFunction, Opening, OpeningKind, Param, Point2, Slab, SlabKind, SlabOpening, SlabType, Space,
-    SpaceUsage, Storey, Top, Wall, WallAlignment, WallEnd, WallSide, WallType,
+    Handing, Layer, LayerFunction, Opening, OpeningKind, Param, Point2, SectionKind, SectionView, Slab, SlabKind,
+    SlabOpening, SlabType, Space, SpaceUsage, Storey, Top, Wall, WallAlignment, WallEnd, WallSide, WallType,
 };
 pub use operation::Operation;
 pub use project::Project;

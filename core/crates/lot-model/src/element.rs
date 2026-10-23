@@ -38,6 +38,7 @@ pub enum Element {
     Slab(Slab),
     SlabOpening(SlabOpening),
     Roof(crate::Roof),
+    SectionView(SectionView),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -55,6 +56,7 @@ pub enum ElementKind {
     Slab,
     SlabOpening,
     Roof,
+    SectionView,
 }
 
 impl Element {
@@ -72,6 +74,7 @@ impl Element {
             Element::Slab(_) => ElementKind::Slab,
             Element::SlabOpening(_) => ElementKind::SlabOpening,
             Element::Roof(_) => ElementKind::Roof,
+            Element::SectionView(_) => ElementKind::SectionView,
         }
     }
 
@@ -709,6 +712,45 @@ pub enum SlabKind {
     Floor,
     /// Bodenplatte des untersten Geschosses
     Base,
+}
+
+/// Schnitt oder Ansicht (3.02): eine senkrechte Ebene durch die Linie von
+/// `start` nach `end`, mit Blick zur Seite `look` bis `depth` tief. Eine
+/// Ansicht ist ein Schnitt, dessen Ebene außerhalb des Gebäudes liegt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SectionView {
+    /// Etwa „Schnitt A-A“ oder „Ansicht Süd“.
+    pub name: String,
+    /// Kennbuchstabe an der Schnittlinie im Grundriss, etwa „A“; leer bei Ansichten.
+    #[serde(default)]
+    pub mark: String,
+    pub start: Point2,
+    pub end: Point2,
+    pub look: WallSide,
+    /// Blicktiefe in Metern.
+    pub depth: f64,
+    #[serde(default)]
+    pub kind: SectionKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum SectionKind {
+    #[default]
+    Section,
+    Elevation,
+}
+
+impl SectionView {
+    /// Blickrichtung (Einheitsvektor) und Richtung, die im Bild nach rechts zeigt.
+    pub fn frame(&self) -> ((f64, f64), (f64, f64)) {
+        let len = self.start.distance(self.end).max(1e-12);
+        let d = ((self.end.x - self.start.x) / len, (self.end.y - self.start.y) / len);
+        let n = match self.look {
+            WallSide::Left => (-d.1, d.0),
+            WallSide::Right => (d.1, -d.0),
+        };
+        (n, (n.1, -n.0))
+    }
 }
 
 /// Querschnitt einer Stütze.
