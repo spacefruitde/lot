@@ -76,6 +76,13 @@ impl Project {
         })
     }
 
+    pub fn rooms_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Room)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Room(r) if r.storey == storey => Some((*id, r)),
+            _ => None,
+        })
+    }
+
     pub fn grid_lines(&self) -> impl Iterator<Item = (ElementId, &crate::GridLine)> {
         self.elements.iter().filter_map(|(id, e)| match e {
             Element::GridLine(g) => Some((*id, g)),

@@ -32,6 +32,7 @@ pub enum Element {
     Wall(Wall),
     Opening(Opening),
     Column(Column),
+    Room(Room),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -43,6 +44,7 @@ pub enum ElementKind {
     Wall,
     Opening,
     Column,
+    Room,
 }
 
 impl Element {
@@ -54,6 +56,7 @@ impl Element {
             Element::Wall(_) => ElementKind::Wall,
             Element::Opening(_) => ElementKind::Opening,
             Element::Column(_) => ElementKind::Column,
+            Element::Room(_) => ElementKind::Room,
         }
     }
 
@@ -427,6 +430,94 @@ pub struct Column {
     #[serde(default)]
     pub base_offset: f64,
     pub top: Top,
+}
+
+/// Raum (IfcSpace). Gespeichert wird nur ein Punkt im Raum; die Fläche ergibt
+/// sich aus den umgebenden Wänden (CLAUDE.md, Regel 6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Room {
+    pub storey: ElementId,
+    /// Ein Punkt im Raum, zugleich Lage des Raumstempels.
+    pub position: Point2,
+    /// Raumnummer, etwa „0.01“.
+    #[serde(default)]
+    pub number: String,
+    pub name: String,
+    #[serde(default)]
+    pub usage: RoomUsage,
+}
+
+/// Nutzungsgruppe nach DIN 277:2021-08. Die Netto-Raumfläche (NRF) teilt sich
+/// in Nutzungsfläche (NUF 1 bis 7), Technikfläche (TF) und Verkehrsfläche (VF).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum RoomUsage {
+    /// NUF 1 Wohnen und Aufenthalt
+    #[default]
+    Living,
+    /// NUF 2 Büroarbeit
+    Office,
+    /// NUF 3 Produktion, Hand- und Maschinenarbeit, Forschung und Entwicklung
+    Production,
+    /// NUF 4 Lagern, Verteilen und Verkaufen
+    Storage,
+    /// NUF 5 Bildung, Unterricht und Kultur
+    Education,
+    /// NUF 6 Heilen und Pflegen
+    Care,
+    /// NUF 7 Sonstige Nutzungen (etwa Sanitärräume, Abstellräume)
+    Other,
+    /// TF Technikfläche
+    Technical,
+    /// VF Verkehrsfläche
+    Circulation,
+}
+
+impl RoomUsage {
+    pub const ALL: [RoomUsage; 9] = [
+        RoomUsage::Living,
+        RoomUsage::Office,
+        RoomUsage::Production,
+        RoomUsage::Storage,
+        RoomUsage::Education,
+        RoomUsage::Care,
+        RoomUsage::Other,
+        RoomUsage::Technical,
+        RoomUsage::Circulation,
+    ];
+
+    /// Kurzzeichen nach DIN 277:2021-08, etwa „NUF 1“ oder „VF“.
+    pub fn code(self) -> &'static str {
+        match self {
+            RoomUsage::Living => "NUF 1",
+            RoomUsage::Office => "NUF 2",
+            RoomUsage::Production => "NUF 3",
+            RoomUsage::Storage => "NUF 4",
+            RoomUsage::Education => "NUF 5",
+            RoomUsage::Care => "NUF 6",
+            RoomUsage::Other => "NUF 7",
+            RoomUsage::Technical => "TF",
+            RoomUsage::Circulation => "VF",
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            RoomUsage::Living => "Wohnen und Aufenthalt",
+            RoomUsage::Office => "Büroarbeit",
+            RoomUsage::Production => "Produktion, Hand- und Maschinenarbeit, Forschung",
+            RoomUsage::Storage => "Lagern, Verteilen und Verkaufen",
+            RoomUsage::Education => "Bildung, Unterricht und Kultur",
+            RoomUsage::Care => "Heilen und Pflegen",
+            RoomUsage::Other => "Sonstige Nutzungen",
+            RoomUsage::Technical => "Technikfläche",
+            RoomUsage::Circulation => "Verkehrsfläche",
+        }
+    }
+
+    /// Ob die Fläche zur Nutzungsfläche (NUF) gehört.
+    pub fn is_usable(self) -> bool {
+        !matches!(self, RoomUsage::Technical | RoomUsage::Circulation)
+    }
 }
 
 /// Querschnitt einer Stütze.

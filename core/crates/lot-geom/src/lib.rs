@@ -3,16 +3,18 @@
 //! Geometrie ist immer abgeleitet und wird nie gespeichert (CLAUDE.md, Regel 6).
 //!
 //! - [`joins`]: Wandanschlüsse im Grundriss, je Schicht eine Fläche
+//! - [`rooms`]: Räume als von Wänden umschlossene Flächen
 //! - [`build`]: 3D-Körper aus den Schichtflächen, Höhenabschnitt für
 //!   Höhenabschnitt hochgezogen und mit manifold-rust vereinigt (ADR 0004)
 
 pub mod joins;
 mod mesh;
 pub mod poly;
+pub mod rooms;
 
 use std::collections::BTreeMap;
 
-pub use joins::{Band, LayerRegion, column_area, layer_regions, wall_section};
+pub use joins::{Band, LayerRegion, column_area, layer_regions, solid_regions, wall_section};
 use lot_model::{Element, ElementId, Project};
 use manifold_rust::linalg::{Vec2, Vec3};
 use manifold_rust::manifold::Manifold;

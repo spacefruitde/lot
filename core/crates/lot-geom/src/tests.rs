@@ -544,3 +544,80 @@ fn every_arc_layer_is_one_piece() {
         }
     }
 }
+
+/// Rechteck 6 × 4 m aus tragenden Innenwänden (20,5 cm, Achse mittig), geteilt
+/// durch eine Trennwand bei x = 2 mit Tür. Gibt die Trennwand zurück.
+fn two_rooms() -> (Project, ElementId) {
+    let mut p = project();
+    for (a, b) in
+        [((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 4.0)), ((6.0, 4.0), (0.0, 4.0)), ((0.0, 4.0), (0.0, 0.0))]
+    {
+        add_wall(&mut p, INNEN, a, b, WallAlignment::Center);
+    }
+    let split = add_wall(&mut p, TRENN, (2.0, 0.0), (2.0, 4.0), WallAlignment::Center);
+    let id = p.next_id();
+    p.elements.insert(
+        id,
+        Element::Opening(lot_model::Opening {
+            host: split,
+            offset: 1.0,
+            width: 0.885,
+            height: 2.135,
+            sill_height: 0.0,
+        }),
+    );
+    (p, split)
+}
+
+#[test]
+fn walls_enclose_rooms_and_doors_do_not_connect_them() {
+    let (p, _) = two_rooms();
+    let finder = rooms::RoomFinder::new(&p, STOREY);
+    assert_eq!(finder.enclosed.len(), 2);
+    // Lichte Maße an der fertigen Oberfläche: Innenwand 20,5 cm, Trennwand 14,5 cm.
+    let left = finder.area_at([1.0, 2.0]).unwrap().area();
+    let right = finder.area_at([4.0, 2.0]).unwrap().area();
+    let height = 4.0 - 0.205;
+    assert!((left - (2.0 - 0.1025 - 0.0725) * height).abs() < 1e-6, "links {left}");
+    assert!((right - (4.0 - 0.1025 - 0.0725) * height).abs() < 1e-6, "rechts {right}");
+    assert!(finder.area_at([7.0, 2.0]).is_none(), "außen ist kein Raum");
+}
+
+#[test]
+fn column_in_room_is_cut_out() {
+    let (mut p, _) = two_rooms();
+    let id = p.next_id();
+    p.elements.insert(
+        id,
+        Element::Column(Column {
+            storey: STOREY,
+            position: Point2::new(4.0, 2.0),
+            profile: ColumnProfile::Rectangle { width: 0.3, depth: 0.3 },
+            rotation: 0.0,
+            material: "stahlbeton".into(),
+            base_offset: 0.0,
+            top: Top::Storey { offset: 0.0 },
+        }),
+    );
+    let finder = rooms::RoomFinder::new(&p, STOREY);
+    let right = finder.area_at([3.0, 1.0]).unwrap().area();
+    assert!((right - ((4.0 - 0.175) * 3.795 - 0.09)).abs() < 1e-6, "{right}");
+    // Der Punkt auf der Stütze liegt in keinem Raum.
+    assert!(finder.area_at([4.0, 2.0]).is_none());
+}
+
+#[test]
+fn open_walls_enclose_nothing() {
+    let mut p = project();
+    for (a, b) in [((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 4.0)), ((0.0, 4.0), (0.0, 0.0))] {
+        add_wall(&mut p, INNEN, a, b, WallAlignment::Center);
+    }
+    assert!(rooms::RoomFinder::new(&p, STOREY).enclosed.is_empty());
+}
+
+#[test]
+fn interior_point_lies_inside_an_l_shape() {
+    let l = Area::from_ring(&[[0.0, 0.0], [4.0, 0.0], [4.0, 1.0], [1.0, 1.0], [1.0, 4.0], [0.0, 4.0]]);
+    let p = rooms::interior_point(&l).unwrap();
+    assert!(l.contains(p), "{p:?}");
+}

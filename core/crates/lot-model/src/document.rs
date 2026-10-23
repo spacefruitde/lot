@@ -254,6 +254,14 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     return Err(invalid("Die Öffnung ragt oben oder unten aus der Wand"));
                 }
             }
+            Element::Room(r) => {
+                if project.storey(r.storey).is_none() {
+                    return Err(invalid(format!("Raum {}: Das Geschoss fehlt", r.name)));
+                }
+                if r.name.trim().is_empty() {
+                    return Err(invalid("Ein Raum braucht einen Namen"));
+                }
+            }
             Element::Column(c) => {
                 if project.storey(c.storey).is_none() {
                     return Err(invalid(format!("Stütze {}: Das Geschoss fehlt", id.0)));

@@ -8,6 +8,7 @@
 //! 3. Grenzen zwischen Schichten aus verschiedenem Material
 //! 4. Umriss aller geschnittenen Bauteile (Schnittkante)
 //! 5. Achsen mit Achskreisen
+//! 6. Raumstempel: Nummer, Name, Netto-Raumfläche
 //!
 //! Gleiches Material benachbarter Schichten und Wände wird zu einer Fläche
 //! vereinigt, damit an Anschlüssen keine Fugen erscheinen.
@@ -85,7 +86,55 @@ pub fn floor_plan(
     for (_, grid) in project.grid_lines() {
         draw_grid_line(&mut objects, grid, style, viewport);
     }
+
+    // 6. Raumstempel.
+    draw_room_stamps(&mut objects, project, view.storey, style, viewport);
     objects
+}
+
+/// Raumstempel (3.06), Vorschlag: Nummer klein über dem Namen, darunter die
+/// Netto-Raumfläche nach DIN 277:2021-08. Ein Raum ohne geschlossene Wände
+/// zeigt „Fläche offen“.
+fn draw_room_stamps(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    storey: ElementId,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let rooms: Vec<_> = project.rooms_on(storey).collect();
+    if rooms.is_empty() {
+        return;
+    }
+    let finder = lot_geom::rooms::RoomFinder::new(project, storey);
+    for (_, room) in rooms {
+        let area = finder.area_at([room.position.x, room.position.y]).map(|a| a.area());
+        let mut lines: Vec<(String, f64)> = Vec::new();
+        if !room.number.is_empty() {
+            lines.push((room.number.clone(), style.room_text));
+        }
+        lines.push((room.name.clone(), style.room_name));
+        lines.push((area.map_or_else(|| "Fläche offen".to_string(), format_area), style.room_text));
+        // Zeilenabstand das 1,6-fache der Schrifthöhe, der Block steht mittig auf dem Raumpunkt.
+        let total: f64 = lines.iter().map(|(_, h)| h * 1.6).sum::<f64>() - lines.last().map_or(0.0, |(_, h)| h * 0.6);
+        let center = viewport.to_paper(room.position.x, room.position.y);
+        let mut top = center.y + total / 2.0;
+        for (text, height) in lines {
+            top -= height;
+            objects.push(PlanObject::Text(Text {
+                position: PaperPoint::new(center.x, top),
+                text,
+                height_mm: height,
+                anchor: Anchor::Center,
+            }));
+            top -= height * 0.6;
+        }
+    }
+}
+
+/// Fläche im deutschen Format, „24,35 m²“.
+pub fn format_area(m2: f64) -> String {
+    format!("{m2:.2} m²").replace('.', ",")
 }
 
 /// Muster der geschnittenen Schichten.
