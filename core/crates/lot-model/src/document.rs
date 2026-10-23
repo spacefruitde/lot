@@ -262,6 +262,33 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     return Err(invalid("Die Öffnung ragt oben oder unten aus der Wand"));
                 }
             }
+            Element::SlabType(t) => {
+                if t.layers.is_empty() || t.layers.iter().any(|l| l.thickness < 0.001) {
+                    return Err(invalid(format!(
+                        "Deckenaufbau {}: Jede Schicht muss mindestens 1 mm dick sein",
+                        t.name
+                    )));
+                }
+            }
+            Element::Slab(s) => {
+                if project.storey(s.storey).is_none() {
+                    return Err(invalid("Decke: Das Geschoss fehlt"));
+                }
+                if project.slab_type(s.slab_type).is_none() {
+                    return Err(invalid("Decke: Der Deckenaufbau fehlt"));
+                }
+                let n = s.outline.len();
+                let area: f64 = (0..n)
+                    .map(|i| {
+                        let (a, b) = (s.outline[i], s.outline[(i + 1) % n]);
+                        a.x * b.y - b.x * a.y
+                    })
+                    .sum::<f64>()
+                    / 2.0;
+                if n < 3 || area.abs() < 0.01 {
+                    return Err(invalid("Eine Decke braucht einen Umriss mit mindestens 0,01 m²"));
+                }
+            }
             Element::DimensionChain(d) => {
                 if project.storey(d.storey).is_none() {
                     return Err(invalid("Maßkette: Das Geschoss fehlt"));

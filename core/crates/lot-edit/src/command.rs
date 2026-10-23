@@ -23,6 +23,8 @@ pub enum Command {
     FlipDoorHinge,
     /// Maßketten an den gewählten Wänden: Öffnungen und Gesamtmaß, außen.
     DimensionWalls,
+    /// Decke im aktuellen Geschoss aus den Wänden darunter, im untersten Geschoss Bodenplatte.
+    SlabFromWalls,
     /// Einen Raum in jeden umschlossenen Bereich ohne Raum setzen.
     DetectSpaces,
     SetWallType(u64),

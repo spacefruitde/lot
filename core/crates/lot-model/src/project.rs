@@ -76,6 +76,28 @@ impl Project {
         })
     }
 
+    pub fn slabs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Slab)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Slab(s) if s.storey == storey => Some((*id, s)),
+            _ => None,
+        })
+    }
+
+    pub fn slab_type(&self, id: ElementId) -> Option<&crate::SlabType> {
+        match self.elements.get(&id) {
+            Some(Element::SlabType(t)) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// Alle Deckenaufbauten, nach Kennung.
+    pub fn slab_types(&self) -> impl Iterator<Item = (ElementId, &crate::SlabType)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::SlabType(t) => Some((*id, t)),
+            _ => None,
+        })
+    }
+
     pub fn dimensions_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::DimensionChain)> {
         self.elements.iter().filter_map(move |(id, e)| match e {
             Element::DimensionChain(d) if d.storey == storey => Some((*id, d)),
@@ -170,6 +192,29 @@ impl Project {
         ];
         for (i, (name, layers)) in types.into_iter().enumerate() {
             p.elements.insert(ElementId(10 + i as u64), Element::WallType(WallType { name: name.into(), layers }));
+        }
+        let slabs = [
+            (
+                "Geschossdecke StB 20",
+                vec![
+                    layer("estrich", 0.05, Finish),
+                    layer("daemmung", 0.03, Insulation),
+                    layer("stahlbeton", 0.2, Structure),
+                    layer("putz", 0.015, Finish),
+                ],
+            ),
+            (
+                "Bodenplatte StB 25",
+                vec![
+                    layer("estrich", 0.06, Finish),
+                    layer("daemmung_hart", 0.1, Insulation),
+                    layer("stahlbeton", 0.25, Structure),
+                ],
+            ),
+        ];
+        for (i, (name, layers)) in slabs.into_iter().enumerate() {
+            p.elements
+                .insert(ElementId(20 + i as u64), Element::SlabType(crate::SlabType { name: name.into(), layers }));
         }
         p
     }

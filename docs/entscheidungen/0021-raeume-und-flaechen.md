@@ -23,5 +23,5 @@ M2 verlangt Räume (2.03), Raumstempel (3.06) und Flächen nach DIN 277 (4.01), 
 ## Folgen
 
 - Offene Grundrisse ohne trennende Wände (Wohnen und Flur in einem) brauchen später Raumtrennlinien. Bis dahin ist der ganze Bereich ein Raum.
-- Dachschrägen (M3) fehlen noch: Die Anrechnung nach WoFlV § 4 (unter 1 m gar nicht, 1 bis 2 m zur Hälfte) greift erst mit Dächern. Ebenso fehlt beim BRI die Höhe bis Unterkante Bodenplatte und Oberkante Dach.
+- Dachschrägen (M3) fehlen noch: Die Anrechnung nach WoFlV § 4 (unter 1 m gar nicht, 1 bis 2 m zur Hälfte) greift erst mit Dächern. Beim BRI fehlt bis dahin die Höhe bis Oberkante Dach; die Bodenplatte zählt seit ADR 0024 mit.
 - Innenhöfe, die von Wänden umschlossen sind, zählen bis dahin zur NRF „ohne Raum“ und zur BGF.

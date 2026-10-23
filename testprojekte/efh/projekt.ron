@@ -100,5 +100,25 @@ Project(
         78: DimensionChain(storey: 2, position: (x: 12.7, y: 9.0), direction: (x: 0.0, y: -1.0), refs: [WallEnd(wall: 29, end: Start, side: Left), WallEnd(wall: 29, end: End, side: Left)]),
         79: DimensionChain(storey: 2, position: (x: 11.0, y: -1.0), direction: (x: -1.0, y: 0.0), refs: [WallEnd(wall: 30, end: Start, side: Left), Jamb(opening: 36, end: Start, side: Left), Jamb(opening: 36, end: End, side: Left), Jamb(opening: 37, end: Start, side: Left), Jamb(opening: 37, end: End, side: Left), Jamb(opening: 38, end: Start, side: Left), Jamb(opening: 38, end: End, side: Left), WallEnd(wall: 30, end: End, side: Left)]),
         80: DimensionChain(storey: 2, position: (x: 11.0, y: -1.7), direction: (x: -1.0, y: 0.0), refs: [WallEnd(wall: 30, end: Start, side: Left), WallEnd(wall: 30, end: End, side: Left)]),
+        100: SlabType(
+            name: "Geschossdecke StB 20",
+            layers: [
+                (material: "estrich", thickness: 0.05, function: Finish),
+                (material: "daemmung", thickness: 0.03, function: Insulation),
+                (material: "stahlbeton", thickness: 0.2, function: Structure),
+                (material: "putz", thickness: 0.015, function: Finish),
+            ],
+        ),
+        101: SlabType(
+            name: "Bodenplatte StB 25",
+            layers: [
+                (material: "estrich", thickness: 0.06, function: Finish),
+                (material: "daemmung_hart", thickness: 0.1, function: Insulation),
+                (material: "stahlbeton", thickness: 0.25, function: Structure),
+            ],
+        ),
+        102: Slab(storey: 1, slab_type: 101, outline: [(x: 0.12, y: 0.12), (x: 10.88, y: 0.12), (x: 10.88, y: 8.88), (x: 0.12, y: 8.88)], kind: Base),
+        103: Slab(storey: 2, slab_type: 100, outline: [(x: 0.12, y: 0.12), (x: 10.88, y: 0.12), (x: 10.88, y: 8.88), (x: 0.12, y: 8.88)]),
+        104: Slab(storey: 3, slab_type: 100, outline: [(x: 0.17, y: 0.17), (x: 10.83, y: 0.17), (x: 10.83, y: 8.83), (x: 0.17, y: 8.83)]),
     },
 )

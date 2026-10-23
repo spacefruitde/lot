@@ -27,3 +27,4 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0021](0021-raeume-und-flaechen.md) | Räume und Flächen | umgesetzt, Vorschlag |
 | [0022](0022-tueren-und-fenster.md) | Türen und Fenster | umgesetzt, Vorschlag |
 | [0023](0023-massketten.md) | Assoziative Maßketten | umgesetzt, Vorschlag |
+| [0024](0024-decken-und-bodenplatten.md) | Decken und Bodenplatten | umgesetzt, Vorschlag |

@@ -8,8 +8,9 @@
 //! - Brutto-Grundfläche (BGF): Grundfläche innerhalb der äußeren Maße der
 //!   Bauteile, einschließlich Bekleidung (Putz, Dämmung).
 //! - Konstruktions-Grundfläche (KGF): BGF minus NRF, also Wände und Stützen.
-//! - Brutto-Rauminhalt (BRI): BGF mal Höhe. Bis Bodenplatte und Dach im Modell
-//!   sind (M3), gilt hier vorläufig die Geschosshöhe von OKFF bis OKFF.
+//! - Brutto-Rauminhalt (BRI): BGF mal Höhe, je Geschoss von OKFF bis OKFF,
+//!   im untersten Geschoss zusätzlich die Dicke der Bodenplatte. Bis das Dach im
+//!   Modell ist (M3), endet das oberste Geschoss vorläufig an seiner Geschosshöhe.
 //!
 //! **WoFlV vom 25.11.2003** (BGBl. I S. 2346):
 //!
@@ -52,12 +53,12 @@ pub struct StoreyAreas {
     pub unassigned: f64,
     /// Konstruktions-Grundfläche, m²
     pub construction: f64,
-    /// Höhe für den Brutto-Rauminhalt (vorläufig Geschosshöhe), m
+    /// Höhe für den Brutto-Rauminhalt (Geschosshöhe, unten mit Bodenplatte), m
     pub height: f64,
 }
 
 impl StoreyAreas {
-    /// Brutto-Rauminhalt, m³ (vorläufig BGF mal Geschosshöhe).
+    /// Brutto-Rauminhalt, m³ (BGF mal Höhe).
     pub fn volume(&self) -> f64 {
         self.gross * self.height
     }
@@ -153,6 +154,11 @@ pub fn area_report(project: &Project) -> AreaReport {
         let net: f64 = finder.enclosed.iter().map(|a| a.area()).sum();
         let assigned: f64 = claimed.iter().map(|(i, _)| finder.enclosed[*i].area()).sum();
         let gross = finder.gross_area();
+        let base = project
+            .slabs_on(storey_id)
+            .filter(|(_, s)| s.kind == lot_model::SlabKind::Base)
+            .filter_map(|(_, s)| project.slab_type(s.slab_type).map(|t| t.thickness()))
+            .fold(0.0, f64::max);
         report.storeys.push(StoreyAreas {
             storey: storey_id,
             name: storey.name.clone(),
@@ -161,7 +167,7 @@ pub fn area_report(project: &Project) -> AreaReport {
             net,
             unassigned: net - assigned,
             construction: gross - net,
-            height: storey.height,
+            height: storey.height + base,
         });
     }
     report

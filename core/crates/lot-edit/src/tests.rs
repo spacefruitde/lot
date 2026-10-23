@@ -521,3 +521,21 @@ fn dimension_chain_follows_the_wall() {
     assert_eq!(measures(&doc, &dims[1]), vec![7.0]);
     assert_eq!(measures(&doc, &dims[0]), vec![1.37, 1.26, 4.37]);
 }
+
+#[test]
+fn slab_from_walls_rests_on_the_storey_below() {
+    let (mut doc, mut ed) = setup();
+    two_spaces(&mut doc, &mut ed);
+    // Im untersten Geschoss: Bodenplatte.
+    ed.run(&mut doc, &Command::SlabFromWalls);
+    let base: Vec<_> = doc.project().slabs_on(ElementId(1)).map(|(_, s)| s.clone()).collect();
+    assert_eq!(base.len(), 1);
+    assert_eq!(base[0].kind, lot_model::SlabKind::Base);
+    // Darüber: Decke auf den Wänden darunter, auch ohne eigene Wände.
+    ed.run(&mut doc, &Command::AddStorey);
+    let r = ed.run(&mut doc, &Command::SlabFromWalls);
+    assert!(r.model_changed, "{:?}", r.error);
+    let upper: Vec<_> = doc.project().slabs_on(ed.storey).map(|(_, s)| s.clone()).collect();
+    assert_eq!(upper[0].kind, lot_model::SlabKind::Floor);
+    assert_eq!(upper[0].outline.len(), 4);
+}

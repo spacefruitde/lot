@@ -655,3 +655,53 @@ fn dimension_corners_follow_the_l_corner() {
     // Das freie Anfangsende bleibt, wo es ist.
     assert!(inner[0].along.abs() < 1e-9);
 }
+
+#[test]
+fn slab_outline_lies_on_the_outer_face_of_the_structure() {
+    // Rechteck 8 × 6 m aus WDVS-Außenwänden, Bezugslinie außen, im Uhrzeigersinn:
+    // Außenputz 1,5 cm und Dämmung 16 cm liegen außerhalb der Tragschicht.
+    let mut p = project();
+    for (a, b) in
+        [((0.0, 0.0), (0.0, 6.0)), ((0.0, 6.0), (8.0, 6.0)), ((8.0, 6.0), (8.0, 0.0)), ((8.0, 0.0), (0.0, 0.0))]
+    {
+        add_wall(&mut p, WDVS, a, b, WallAlignment::Exterior);
+    }
+    let rings = slabs::slab_outlines(&p, STOREY);
+    assert_eq!(rings.len(), 1);
+    let area = Area::from_ring(&rings[0]);
+    let (lo, hi) = area.bounds().unwrap();
+    assert!((lo[0] - 0.175).abs() < 1e-6 && (hi[0] - 7.825).abs() < 1e-6, "{lo:?} {hi:?}");
+    assert!((area.area() - 7.65 * 5.65).abs() < 1e-6);
+}
+
+#[test]
+fn slab_layers_stack_down_from_the_floor_level() {
+    let mut p = project();
+    let ty = p.next_id();
+    p.elements.insert(
+        ty,
+        Element::SlabType(lot_model::SlabType {
+            name: "Decke".into(),
+            layers: vec![
+                layer("estrich", 0.05, LayerFunction::Finish),
+                layer("stahlbeton", 0.2, LayerFunction::Structure),
+            ],
+        }),
+    );
+    let id = p.next_id();
+    p.elements.insert(
+        id,
+        Element::Slab(lot_model::Slab {
+            storey: STOREY,
+            slab_type: ty,
+            outline: vec![Point2::new(0.0, 0.0), Point2::new(4.0, 0.0), Point2::new(4.0, 3.0), Point2::new(0.0, 3.0)],
+            top_offset: 0.0,
+            kind: lot_model::SlabKind::Floor,
+        }),
+    );
+    let g = build(&p).unwrap();
+    let layers: Vec<_> = g.elements.iter().filter(|e| e.id == id).collect();
+    assert_eq!(layers.len(), 2);
+    let (lo, hi) = layers[1].mesh.bounds().unwrap();
+    assert!((hi[2] + 0.05).abs() < 1e-9 && (lo[2] + 0.25).abs() < 1e-9, "Rohdecke von -0,25 bis -0,05: {lo:?} {hi:?}");
+}

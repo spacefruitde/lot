@@ -21,6 +21,8 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Geschoss | `Storey` | IfcBuildingStorey | |
 | Achsraster | `Grid` | IfcGrid | |
 | Decke, Bodenplatte | `Slab` | IfcSlab | Bodenplatte als `SlabKind::Base` |
+| Deckenaufbau | `SlabType` | IfcSlabType | Schichten von oben nach unten |
+| Estrich | `estrich` (Material) | | |
 | Stütze | `Column` | IfcColumn | |
 | Unterzug | `Beam` | IfcBeam | |
 | Öffnung | `Opening` | IfcOpeningElement | |

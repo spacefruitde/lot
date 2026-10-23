@@ -235,6 +235,11 @@ impl LotDocument {
             Some(lot_model::Element::Storey(s)) => format!("Geschoss {}", s.name),
             Some(lot_model::Element::Column(_)) => "Stütze".into(),
             Some(lot_model::Element::DimensionChain(_)) => "Maßkette".into(),
+            Some(lot_model::Element::Slab(s)) => match s.kind {
+                lot_model::SlabKind::Floor => "Decke".into(),
+                lot_model::SlabKind::Base => "Bodenplatte".into(),
+            },
+            Some(lot_model::Element::SlabType(t)) => format!("Deckenaufbau {}", t.name),
             Some(lot_model::Element::Space(r)) => format!("Raum {} {}", r.number, r.name).trim_end().to_string(),
             Some(lot_model::Element::GridLine(g)) => format!("Achse {}", g.label),
             Some(lot_model::Element::WallType(t)) => format!("Wandaufbau {}", t.name),

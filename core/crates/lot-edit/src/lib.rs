@@ -468,6 +468,7 @@ impl Editor {
             }),
             Command::FlipDoorHinge => self.change_doors(doc, "Anschlag wechseln", |d| d.hinge = d.hinge.other()),
             Command::DimensionWalls => self.dimension_walls(doc),
+            Command::SlabFromWalls => self.slab_from_walls(doc),
             Command::DetectSpaces => self.detect_spaces(doc),
             Command::SetWallType(id) => {
                 let id = ElementId(*id);
@@ -514,6 +515,7 @@ impl Editor {
                     .map(|(id, _)| id)
                     .chain(p.columns_on(self.storey).map(|(id, _)| id))
                     .chain(p.spaces_on(self.storey).map(|(id, _)| id))
+                    .chain(p.slabs_on(self.storey).map(|(id, _)| id))
                     .collect();
                 Response::redraw()
             }
@@ -548,6 +550,12 @@ impl Editor {
             CommandInfo::new(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "", "Auswahl"),
             CommandInfo::new(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "", "Auswahl"),
             CommandInfo::new(Command::DimensionWalls, "Bemaßen: Maßketten an den gewählten Wänden", "M", "Auswahl"),
+            CommandInfo::new(
+                Command::SlabFromWalls,
+                "Decke aus Wänden (im untersten Geschoss Bodenplatte)",
+                "",
+                "Geschoss",
+            ),
             CommandInfo::new(Command::DetectSpaces, "Räume erkennen (jeder umschlossene Bereich)", "", "Werkzeug"),
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
@@ -872,6 +880,51 @@ impl Editor {
             return Response { error: Some("Keine Wand gewählt".into()), ..Response::redraw() };
         }
         Response::from_result(doc.apply(Operation::Group { label: "Bemaßen".into(), ops }))
+    }
+
+    /// Decke mit Oberkante auf OKFF des aktuellen Geschosses. Sie liegt auf den
+    /// Wänden des Geschosses darunter und folgt der Außenkante ihrer Tragschicht;
+    /// im untersten Geschoss wird sie zur Bodenplatte unter den eigenen Wänden.
+    fn slab_from_walls(&mut self, doc: &mut Document) -> Response {
+        use lot_model::{Slab, SlabKind};
+        let project = doc.project();
+        let storeys = project.storeys();
+        let Some(index) = storeys.iter().position(|(id, _)| *id == self.storey) else { return Response::default() };
+        let (support, kind) =
+            if index == 0 { (self.storey, SlabKind::Base) } else { (storeys[index - 1].0, SlabKind::Floor) };
+        let types: Vec<_> = project.slab_types().collect();
+        let base_type = types.iter().find(|(_, t)| t.name.contains("Bodenplatte")).or(types.last()).map(|(id, _)| *id);
+        let floor_type =
+            types.iter().find(|(_, t)| !t.name.contains("Bodenplatte")).or(types.first()).map(|(id, _)| *id);
+        let Some(slab_type) = (if kind == SlabKind::Base { base_type } else { floor_type }) else {
+            return Response {
+                error: Some("Im Projekt gibt es noch keinen Deckenaufbau".into()),
+                ..Response::redraw()
+            };
+        };
+        let outlines = lot_geom::slabs::slab_outlines(project, support);
+        if outlines.is_empty() {
+            return Response {
+                error: Some("Für eine Decke fehlen geschlossene Wände im Geschoss darunter".into()),
+                ..Response::redraw()
+            };
+        }
+        let first = project.next_id().0;
+        let ops = outlines
+            .into_iter()
+            .enumerate()
+            .map(|(i, ring)| Operation::Insert {
+                id: ElementId(first + i as u64),
+                element: Element::Slab(Slab {
+                    storey: self.storey,
+                    slab_type,
+                    outline: ring.into_iter().map(|p| Point2::new(p[0], p[1])).collect(),
+                    top_offset: 0.0,
+                    kind,
+                }),
+            })
+            .collect();
+        Response::from_result(doc.apply(Operation::Group { label: "Decke aus Wänden".into(), ops }))
     }
 
     fn change_doors(&mut self, doc: &mut Document, label: &str, change: impl Fn(&mut lot_model::Door)) -> Response {

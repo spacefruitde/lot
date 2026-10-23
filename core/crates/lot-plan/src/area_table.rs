@@ -76,7 +76,7 @@ fn rows(report: &AreaReport) -> Vec<Row> {
     });
     rows.push(Row::Value { label: "Brutto-Grundfläche BGF".into(), value: format!("{} m²", m2(report.gross())) });
     rows.push(Row::Value {
-        label: "Brutto-Rauminhalt BRI (vorläufig: BGF mal Geschosshöhe)".into(),
+        label: "Brutto-Rauminhalt BRI (vorläufig ohne Dach)".into(),
         value: format!("{} m³", m2(report.volume())),
     });
     rows.push(Row::Gap);

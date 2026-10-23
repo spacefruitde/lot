@@ -34,6 +34,8 @@ pub enum Element {
     Column(Column),
     Space(Space),
     DimensionChain(DimensionChain),
+    SlabType(SlabType),
+    Slab(Slab),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -47,6 +49,8 @@ pub enum ElementKind {
     Column,
     Space,
     DimensionChain,
+    SlabType,
+    Slab,
 }
 
 impl Element {
@@ -60,6 +64,8 @@ impl Element {
             Element::Column(_) => ElementKind::Column,
             Element::Space(_) => ElementKind::Space,
             Element::DimensionChain(_) => ElementKind::DimensionChain,
+            Element::SlabType(_) => ElementKind::SlabType,
+            Element::Slab(_) => ElementKind::Slab,
         }
     }
 
@@ -636,6 +642,43 @@ pub enum DimRef {
 pub enum WallEnd {
     Start,
     End,
+}
+
+/// Deckenaufbau (IfcSlabType): Schichten von oben nach unten, etwa Estrich,
+/// Trittschalldämmung, Rohdecke, Putz.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SlabType {
+    pub name: String,
+    pub layers: Vec<Layer>,
+}
+
+impl SlabType {
+    pub fn thickness(&self) -> f64 {
+        self.layers.iter().map(|l| l.thickness).sum()
+    }
+}
+
+/// Decke oder Bodenplatte (IfcSlab). Die Oberkante liegt auf OKFF des
+/// Geschosses plus `top_offset`, die Schichten reichen nach unten.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Slab {
+    pub storey: ElementId,
+    pub slab_type: ElementId,
+    /// Umriss in Metern, Richtung egal.
+    pub outline: Vec<Point2>,
+    #[serde(default)]
+    pub top_offset: f64,
+    #[serde(default)]
+    pub kind: SlabKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum SlabKind {
+    /// Geschossdecke
+    #[default]
+    Floor,
+    /// Bodenplatte des untersten Geschosses
+    Base,
 }
 
 /// Querschnitt einer Stütze.

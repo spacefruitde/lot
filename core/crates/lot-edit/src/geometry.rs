@@ -257,6 +257,11 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
                 n.position = shift(r.position);
                 changes.push((*id, Element::Space(n)));
             }
+            Some(Element::Slab(s)) => {
+                let mut n = s.clone();
+                n.outline = s.outline.iter().map(|p| shift(*p)).collect();
+                changes.push((*id, Element::Slab(n)));
+            }
             Some(Element::DimensionChain(d)) => {
                 let mut n = d.clone();
                 n.position = shift(d.position);
