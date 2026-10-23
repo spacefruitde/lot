@@ -275,6 +275,16 @@ uint64_t uniffi_lot_ffi_fn_constructor_lotdocument_open(RustBuffer path, RustCal
 uint64_t uniffi_lot_ffi_fn_constructor_lotdocument_open_testproject(RustBuffer path, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_ANNOTATION_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_ANNOTATION_TEXT
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_annotation_text(uint64_t ptr, uint64_t element, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_ANNOTATION_TEXT_HEIGHT
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_ANNOTATION_TEXT_HEIGHT
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_annotation_text_height(uint64_t ptr, uint64_t element, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_CAN_REDO
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_CAN_REDO
 int8_t uniffi_lot_ffi_fn_method_lotdocument_can_redo(uint64_t ptr, RustCallStatus *_Nonnull out_status
@@ -313,6 +323,11 @@ int8_t uniffi_lot_ffi_fn_method_lotdocument_redo(uint64_t ptr, RustCallStatus *_
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SAVE
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SAVE
 void uniffi_lot_ffi_fn_method_lotdocument_save(uint64_t ptr, RustBuffer path, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_ANNOTATION_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_ANNOTATION_TEXT
+void uniffi_lot_ffi_fn_method_lotdocument_set_annotation_text(uint64_t ptr, uint64_t element, RustBuffer text, double height, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_PARAM
@@ -722,6 +737,18 @@ uint16_t uniffi_lot_ffi_checksum_func_space_usages(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ANNOTATION_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ANNOTATION_TEXT
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_annotation_text(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ANNOTATION_TEXT_HEIGHT
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ANNOTATION_TEXT_HEIGHT
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_annotation_text_height(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_CAN_REDO
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_CAN_REDO
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_can_redo(void
@@ -767,6 +794,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_redo(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SAVE
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SAVE
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_save(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_ANNOTATION_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_ANNOTATION_TEXT
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_annotation_text(void
     
 );
 #endif
