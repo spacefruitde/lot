@@ -322,6 +322,23 @@ impl Project {
                 e.set_phase(crate::Phase::New);
             }
         }
+        if filter == crate::PhaseFilter::Planned {
+            // Nach dem Umbau sind Ausbrüche offen: Neue Öffnungen in Bestand
+            // durchbrechen die Wand wie Öffnungen im Bestand.
+            let existing: Vec<ElementId> = out
+                .elements
+                .iter()
+                .filter(|(_, e)| e.phase() == Some(crate::Phase::Existing))
+                .map(|(id, _)| *id)
+                .collect();
+            for e in out.elements.values_mut() {
+                if let Element::Opening(o) = e
+                    && existing.contains(&o.host)
+                {
+                    o.phase = crate::Phase::Existing;
+                }
+            }
+        }
         out
     }
 

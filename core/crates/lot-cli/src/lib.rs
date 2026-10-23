@@ -35,6 +35,9 @@ pub enum Output {
         /// Gruppe und Variante, die statt der aktiven gezeigt wird (2.04).
         #[serde(default)]
         variant: Option<(u64, usize)>,
+        /// Referenzmodelle (IFC) hellgrau unter dem Grundriss.
+        #[serde(default)]
+        references: bool,
     },
     /// Katalog von Ausschnitten, etwa der Wandknoten.
     Catalog { name: String, storey: u64, scale: f64, title: String, cells: Vec<CatalogCell> },
@@ -99,7 +102,7 @@ pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &At
     let standard = OfficeStandard::default_standard();
     match output {
         Output::M0Sheet { .. } => vec![lot_plan::m0::sheet(project, source)],
-        Output::FloorPlan { storey, scale, phase, variant, .. } => {
+        Output::FloorPlan { storey, scale, phase, variant, references, .. } => {
             let base = match variant {
                 Some((set, index)) => {
                     let mut p = project.with_variant(ElementId(*set), *index);
@@ -113,7 +116,8 @@ pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &At
                 None => project.clone(),
             };
             let project = phase_project(&base, *phase);
-            let references = lot_io::ifc::references(&project, attachments);
+            let references =
+                if *references { lot_io::ifc::references(&project, attachments) } else { Vec::new() };
             let z = project.storey(ElementId(*storey)).map_or(0.0, |s| s.elevation)
                 + lot_plan::floor_plan::DEFAULT_CUT_HEIGHT;
             vec![lot_plan::sheets::floor_plan_sheet_with(&project, ElementId(*storey), *scale, standard, |viewport| {

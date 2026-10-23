@@ -46,6 +46,9 @@ fn conversion_plan_is_coloured_by_phase() {
     let planned = project.phase_view(PhaseFilter::Planned);
     assert!(!planned.elements.contains_key(&ElementId(25)) && !planned.elements.contains_key(&ElementId(29)));
     assert!(planned.elements.contains_key(&ElementId(50)));
+    // Der Durchbruch ist nach dem Umbau offen, im Umbauplan noch gelb angelegt.
+    assert!(planned.opening_cuts_in_plan(ElementId(53)));
+    assert!(!project.opening_cuts_in_plan(ElementId(53)));
     let report = lot_rules::area_report(&planned);
     let living = report.spaces().find(|s| s.name == "Wohnen, Kochen").unwrap();
     // Wohnzimmer 21,40 + Küche 15,73 + Wand 1,24 (0,27 · 4,6 ohne die Öffnung im Bestand).
