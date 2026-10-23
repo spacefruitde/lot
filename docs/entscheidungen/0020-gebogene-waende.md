@@ -21,6 +21,6 @@ PLAN.md, Abschnitt 2: „Gebogene Wände sind möglich, intern werden sie facett
 
 ## Folgen
 
-- Das Dämmstoffmuster läuft entlang des Bogens; seine Periode gilt auf der Bezugslinie und wird nach außen etwas länger, nach innen etwas kürzer.
+- Das Dämmstoffmuster läuft entlang des Bogens, mit derselben Periode in Schichtmitte wie auf geraden Wänden.
 - Wände, die mit Wänden verschoben werden, folgen an Bogenwänden ohne Richtungsbezug mit (an geraden Wänden bleiben sie in ihrer Richtung).
 - DXF und IFC (M4) geben Bögen als echte Bögen aus, nicht als Facetten.

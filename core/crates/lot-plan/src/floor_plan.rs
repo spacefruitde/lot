@@ -161,7 +161,8 @@ fn insulation(objects: &mut Vec<PlanObject>, region: &LayerRegion, soft: bool, p
     }
     let mid = (band.left + band.right) / 2.0;
     let amplitude = thickness / 2.0 * 0.9;
-    let period = thickness;
+    // Auf Bögen gilt die Periode in Schichtmitte; gemessen wird auf der Bezugslinie.
+    let period = thickness * band.arc.map_or(1.0, |a| a.radius / a.radius_at(mid).max(1e-9));
     let point = |s: f64, t: f64| {
         let [x, y] = band.point(s, t);
         viewport.to_paper(x, y)

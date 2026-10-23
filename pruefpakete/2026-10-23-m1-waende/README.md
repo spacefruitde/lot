@@ -76,7 +76,6 @@ Für das 3D fasse ich gleiche Höhenabschnitte einer Wand zusammen und rechne au
 
 ## Bekannte Lücken
 
-- Dämmstoffmuster auf Bögen: Die Zickzacklinie hat ihre Periode auf der Bezugslinie, außen wird sie etwas länger, innen etwas kürzer.
 - Fenster und Türen sind im Grundriss nur Lücken mit Brüstungslinie. Symbole, Anschläge und Maßketten kommen mit M2.
 - Der Bürostandard ist eine Datei im Code (`core/crates/lot-plan/src/buerostandard.ron`). Eigene Standards je Büro kommen mit M5.
 - Referenzen für die Golden-Tests habe ich nicht angelegt. Sobald du die Knoten freigibst, lege ich sie aus genau diesen Ausgaben an.
