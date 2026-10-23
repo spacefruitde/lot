@@ -150,7 +150,7 @@ pub fn section(
             }));
         }
         // 5. Höhenkoten.
-        draw_height_marks(&mut objects, project, view.kind, lo[0] - 0.8, style, viewport);
+        draw_level_marks(&mut objects, project, view.kind, lo[0] - 0.8, style, viewport);
     }
     objects
 }
@@ -524,7 +524,7 @@ pub fn format_height(z: f64) -> String {
 
 /// Höhenkoten bei `u`: OKFF jedes Geschosses (offenes Dreieck, Fertigmaß nach
 /// DIN 1356-1), Traufe und First der Dächer.
-fn draw_height_marks(
+fn draw_level_marks(
     objects: &mut Vec<PlanObject>,
     project: &Project,
     kind: SectionKind,

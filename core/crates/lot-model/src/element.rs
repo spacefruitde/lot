@@ -116,7 +116,7 @@ impl Element {
             (Element::Roof(r), Param::RoofEaveHeight) => Some(r.eave_height),
             (Element::Roof(r), Param::RoofSlope) => r.edges.iter().find_map(|e| match e {
                 crate::RoofEdge::Eave { slope, .. } => Some(*slope),
-                crate::RoofEdge::Gable { .. } => None,
+                crate::RoofEdge::Verge { .. } => None,
             }),
             _ => None,
         }

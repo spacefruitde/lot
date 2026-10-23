@@ -30,13 +30,13 @@ pub enum RoofEdge {
     /// Traufe: Neigung in Grad, Dachüberstand waagerecht gemessen.
     Eave { slope: f64, overhang: f64 },
     /// Giebel (Ortgang): senkrechter Abschluss, Überstand waagerecht.
-    Gable { overhang: f64 },
+    Verge { overhang: f64 },
 }
 
 impl RoofEdge {
     pub fn overhang(&self) -> f64 {
         match *self {
-            RoofEdge::Eave { overhang, .. } | RoofEdge::Gable { overhang } => overhang,
+            RoofEdge::Eave { overhang, .. } | RoofEdge::Verge { overhang } => overhang,
         }
     }
 }
@@ -91,7 +91,7 @@ impl Roof {
                     let r = slope.to_radians();
                     Some(EavePlane { origin: self.outline[i], inward: self.inward(i), tan: r.tan(), cos: r.cos() })
                 }
-                RoofEdge::Gable { .. } => None,
+                RoofEdge::Verge { .. } => None,
             })
             .collect()
     }
@@ -170,9 +170,9 @@ mod tests {
             outline: vec![Point2::new(0.0, 0.0), Point2::new(10.0, 0.0), Point2::new(10.0, 8.0), Point2::new(0.0, 8.0)],
             edges: vec![
                 RoofEdge::Eave { slope: 45.0, overhang: 0.5 },
-                RoofEdge::Gable { overhang: 0.3 },
+                RoofEdge::Verge { overhang: 0.3 },
                 RoofEdge::Eave { slope: 45.0, overhang: 0.5 },
-                RoofEdge::Gable { overhang: 0.3 },
+                RoofEdge::Verge { overhang: 0.3 },
             ],
             eave_height: 1.0,
         }
@@ -202,7 +202,7 @@ mod tests {
     #[test]
     fn flat_roof_without_eaves_stays_level() {
         let mut r = gable_roof();
-        r.edges = vec![RoofEdge::Gable { overhang: 0.0 }; 4];
+        r.edges = vec![RoofEdge::Verge { overhang: 0.0 }; 4];
         assert_eq!(r.top_at(Point2::new(5.0, 4.0)), 1.0);
         assert!(r.is_convex());
     }

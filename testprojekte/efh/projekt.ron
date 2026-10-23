@@ -133,7 +133,7 @@ Project(
             storey: 3,
             roof_type: 106,
             outline: [(x: 0.0, y: 0.0), (x: 11.0, y: 0.0), (x: 11.0, y: 9.0), (x: 0.0, y: 9.0)],
-            edges: [Eave(slope: 40.0, overhang: 0.5), Gable(overhang: 0.3), Eave(slope: 40.0, overhang: 0.5), Gable(overhang: 0.3)],
+            edges: [Eave(slope: 40.0, overhang: 0.5), Verge(overhang: 0.3), Eave(slope: 40.0, overhang: 0.5), Verge(overhang: 0.3)],
             eave_height: 1.38,
         ),
         108: SectionView(name: "Schnitt A-A", mark: "A", start: (x: 5.6, y: -2.6), end: (x: 5.6, y: 11.6), look: Left, depth: 12.0),

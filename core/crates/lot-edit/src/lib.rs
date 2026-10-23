@@ -1021,7 +1021,7 @@ impl Editor {
                 if (x * ly - y * lx).abs() < 0.05 {
                     RoofEdge::Eave { slope, overhang: 0.5 }
                 } else {
-                    RoofEdge::Gable { overhang: 0.3 }
+                    RoofEdge::Verge { overhang: 0.3 }
                 }
             })
             .collect();

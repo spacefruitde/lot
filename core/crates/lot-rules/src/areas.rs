@@ -366,9 +366,9 @@ mod roof_tests {
                 ],
                 edges: vec![
                     RoofEdge::Eave { slope: 45.0, overhang: 0.0 },
-                    RoofEdge::Gable { overhang: 0.0 },
-                    RoofEdge::Gable { overhang: 0.0 },
-                    RoofEdge::Gable { overhang: 0.0 },
+                    RoofEdge::Verge { overhang: 0.0 },
+                    RoofEdge::Verge { overhang: 0.0 },
+                    RoofEdge::Verge { overhang: 0.0 },
                 ],
                 eave_height: 0.5 + thickness / r.cos(),
             }),
