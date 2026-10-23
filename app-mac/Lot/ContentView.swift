@@ -21,6 +21,9 @@ struct ContentView: View {
                 InspectorView()
                     .inspectorColumnWidth(min: 240, ideal: 280)
             }
+            .sheet(isPresented: $model.showReport) {
+                CheckReportView()
+            }
             .toolbar { toolbar }
             .navigationTitle(model.title)
             .navigationSubtitle(subtitle)
@@ -73,6 +76,8 @@ struct ContentView: View {
             Button { model.zoomToFit() } label: { Label("Alles zeigen", systemImage: "arrow.up.left.and.arrow.down.right") }
             Button { model.showPalette.toggle() } label: { Label("Befehle", systemImage: "command") }
                 .help("Befehlspalette (⌘K)")
+            Button { model.runChecks() } label: { Label("Prüfen", systemImage: "checkmark.seal") }
+                .help("Prüfbericht: Abstandsflächen, Barrierefreiheit, Rettungswege (⇧⌘P)")
             Button { showInspector.toggle() } label: { Label("Eigenschaften", systemImage: "sidebar.right") }
         }
     }

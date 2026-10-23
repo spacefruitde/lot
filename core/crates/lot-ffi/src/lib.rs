@@ -149,6 +149,57 @@ pub struct ParamValue {
     pub value: f64,
 }
 
+/// Ein Befund des Prüfberichts für die App.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct FindingInfo {
+    /// Abschnitt, etwa „Abstandsflächen“.
+    pub section: String,
+    /// 0 erfüllt, 1 Hinweis, 2 nicht erfüllt.
+    pub status: u32,
+    pub text: String,
+    pub source: String,
+    /// Geschoss und Ort im Grundriss, falls der Befund einen hat.
+    pub storey: Option<u64>,
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Setzt den Bürostandard für die Sitzung: der eingebaute mit den
+/// Abweichungen aus `text` (Inhalt von `buerostandard.ron`). Einmal beim Start,
+/// bevor ein Plan gezeichnet wird.
+#[uniffi::export]
+pub fn install_office_standard(text: String) -> Result<(), LotError> {
+    let standard = lot_plan::standard::OfficeStandard::with_overrides(&text).map_err(LotError::Failed)?;
+    if lot_plan::standard::OfficeStandard::install(standard) {
+        Ok(())
+    } else {
+        Err(LotError::Failed("Der Bürostandard ist schon gesetzt".into()))
+    }
+}
+
+/// Der Prüfbericht eines Projekts als Liste für die App.
+pub(crate) fn findings_of(report: &lot_rules::CheckReport) -> Vec<FindingInfo> {
+    report
+        .sections
+        .iter()
+        .flat_map(|s| {
+            s.findings.iter().map(move |f| FindingInfo {
+                section: s.title.clone(),
+                status: match f.status {
+                    lot_rules::Status::Ok => 0,
+                    lot_rules::Status::Note => 1,
+                    lot_rules::Status::Fail => 2,
+                },
+                text: f.text.clone(),
+                source: f.source.clone(),
+                storey: f.storey.map(|id| id.0),
+                x: f.at.map_or(0.0, |p| p.x),
+                y: f.at.map_or(0.0, |p| p.y),
+            })
+        })
+        .collect()
+}
+
 #[derive(uniffi::Object)]
 pub struct LotDocument {
     inner: Mutex<Document>,
@@ -446,6 +497,24 @@ impl LotDocument {
             .collect()
     }
 
+    /// Prüfbericht (5.01 bis 5.05): Gebäudeklasse, Abstandsflächen, Maß der
+    /// baulichen Nutzung, Barrierefreiheit, Rettungswege, Treppen.
+    pub fn check_report(&self) -> Vec<FindingInfo> {
+        let project = self.lock().project().variant_view();
+        match lot_geom::build(&project) {
+            Ok(geometry) => findings_of(&lot_rules::check_project(&project, &geometry)),
+            Err(e) => vec![FindingInfo {
+                section: "Prüfung".into(),
+                status: 2,
+                text: format!("Geometrie nicht berechenbar: {e}"),
+                source: String::new(),
+                storey: None,
+                x: 0.0,
+                y: 0.0,
+            }],
+        }
+    }
+
     pub fn can_undo(&self) -> bool {
         self.lock().can_undo()
     }
@@ -501,6 +570,13 @@ mod tests {
         let opened = LotDocument::open(path).unwrap();
         assert_eq!(value(&opened, ParamKind::WallHeight), 2.75);
         assert_eq!(opened.name(), "M0 Wand mit Fenster");
+    }
+
+    #[test]
+    fn check_report_lists_findings() {
+        let doc = LotDocument::new_sample();
+        let findings = doc.check_report();
+        assert!(findings.iter().any(|f| f.section == "Gebäudeklasse" && f.status == 0), "{findings:?}");
     }
 
     #[test]
