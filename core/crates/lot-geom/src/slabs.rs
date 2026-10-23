@@ -30,13 +30,22 @@ pub fn slab_outlines(project: &Project, storey: ElementId) -> Vec<Ring> {
     Area::union_all(inner).rings().into_iter().filter(|r| crate::signed_area(r) > 0.0).collect()
 }
 
+/// Grundfläche einer Decke ohne ihre Durchbrüche.
+pub fn slab_area(project: &Project, id: ElementId, slab: &Slab) -> Area {
+    let ring: Ring = slab.outline.iter().map(|p| [p.x, p.y]).collect();
+    let holes: Vec<Area> = project
+        .slab_openings_in(id)
+        .map(|(_, o)| Area::from_ring(&o.outline.iter().map(|p| [p.x, p.y]).collect::<Ring>()))
+        .collect();
+    Area::from_ring(&ring).difference(&Area::union_all(holes.iter()))
+}
+
 /// Körper je Schicht einer Decke, von oben nach unten: (Schicht, Material, Körper).
-pub fn slab_solids(project: &Project, slab: &Slab) -> Vec<(usize, String, Manifold)> {
+pub fn slab_solids(project: &Project, id: ElementId, slab: &Slab) -> Vec<(usize, String, Manifold)> {
     let (Some(storey), Some(slab_type)) = (project.storey(slab.storey), project.slab_type(slab.slab_type)) else {
         return Vec::new();
     };
-    let ring: Ring = slab.outline.iter().map(|p| [p.x, p.y]).collect();
-    let area = Area::from_ring(&ring);
+    let area = slab_area(project, id, slab);
     let mut top = storey.elevation + slab.top_offset;
     slab_type
         .layers

@@ -91,7 +91,7 @@ Project(
         69: Space(storey: 3, position: (x: 2.0, y: 2.5), number: "1.01", name: "Kind", usage: Living),
         70: Space(storey: 3, position: (x: 7.5, y: 2.5), number: "1.02", name: "Schlafen", usage: Living),
         71: Space(storey: 3, position: (x: 3.75, y: 7.0), number: "1.03", name: "Bad", usage: Other),
-        72: Space(storey: 3, position: (x: 9.25, y: 7.0), number: "1.04", name: "Flur", usage: Circulation),
+        72: Space(storey: 3, position: (x: 8.5, y: 7.0), number: "1.04", name: "Flur", usage: Circulation),
         73: DimensionChain(storey: 2, position: (x: -1.0, y: 0.0), direction: (x: 0.0, y: 1.0), refs: [WallEnd(wall: 27, end: Start, side: Left), Jamb(opening: 39, end: Start, side: Left), Jamb(opening: 39, end: End, side: Left), Jamb(opening: 40, end: Start, side: Left), Jamb(opening: 40, end: End, side: Left), WallEnd(wall: 27, end: End, side: Left)]),
         74: DimensionChain(storey: 2, position: (x: -1.7, y: 0.0), direction: (x: 0.0, y: 1.0), refs: [WallEnd(wall: 27, end: Start, side: Left), WallEnd(wall: 27, end: End, side: Left)]),
         75: DimensionChain(storey: 2, position: (x: 0.0, y: 10.0), direction: (x: 1.0, y: 0.0), refs: [WallEnd(wall: 28, end: Start, side: Left), Jamb(opening: 41, end: Start, side: Left), Jamb(opening: 41, end: End, side: Left), Jamb(opening: 42, end: Start, side: Left), Jamb(opening: 42, end: End, side: Left), WallEnd(wall: 28, end: End, side: Left)]),
@@ -120,5 +120,6 @@ Project(
         102: Slab(storey: 1, slab_type: 101, outline: [(x: 0.12, y: 0.12), (x: 10.88, y: 0.12), (x: 10.88, y: 8.88), (x: 0.12, y: 8.88)], kind: Base),
         103: Slab(storey: 2, slab_type: 100, outline: [(x: 0.12, y: 0.12), (x: 10.88, y: 0.12), (x: 10.88, y: 8.88), (x: 0.12, y: 8.88)]),
         104: Slab(storey: 3, slab_type: 100, outline: [(x: 0.17, y: 0.17), (x: 10.83, y: 0.17), (x: 10.83, y: 8.83), (x: 0.17, y: 8.83)]),
+        105: SlabOpening(host: 104, outline: [(x: 9.4, y: 5.4), (x: 10.6, y: 5.4), (x: 10.6, y: 8.4), (x: 9.4, y: 8.4)]), // Treppenloch
     },
 )

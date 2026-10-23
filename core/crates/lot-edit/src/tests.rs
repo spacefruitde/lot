@@ -539,3 +539,22 @@ fn slab_from_walls_rests_on_the_storey_below() {
     assert_eq!(upper[0].kind, lot_model::SlabKind::Floor);
     assert_eq!(upper[0].outline.len(), 4);
 }
+
+#[test]
+fn slab_opening_needs_a_slab_and_cuts_it() {
+    let (mut doc, mut ed) = setup();
+    two_spaces(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::SlabOpeningTool);
+    click(&mut doc, &mut ed, 3.0, 1.0);
+    let r = click(&mut doc, &mut ed, 4.2, 3.0);
+    assert!(r.error.is_some(), "ohne Decke kein Durchbruch");
+    ed.run(&mut doc, &Command::SlabFromWalls);
+    ed.run(&mut doc, &Command::SlabOpeningTool);
+    click(&mut doc, &mut ed, 3.0, 1.0);
+    let r = click(&mut doc, &mut ed, 4.2, 3.0);
+    assert!(r.model_changed, "{:?}", r.error);
+    let (slab_id, slab) = doc.project().slabs_on(ElementId(1)).next().map(|(id, s)| (id, s.clone())).unwrap();
+    let full = lot_geom::Area::from_ring(&slab.outline.iter().map(|p| [p.x, p.y]).collect::<Vec<_>>()).area();
+    let cut = lot_geom::slabs::slab_area(doc.project(), slab_id, &slab).area();
+    assert!((full - cut - 1.2 * 2.0).abs() < 1e-6, "{full} - {cut}");
+}

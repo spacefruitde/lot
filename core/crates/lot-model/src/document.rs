@@ -289,6 +289,14 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     return Err(invalid("Eine Decke braucht einen Umriss mit mindestens 0,01 m²"));
                 }
             }
+            Element::SlabOpening(o) => {
+                if !matches!(project.elements.get(&o.host), Some(Element::Slab(_))) {
+                    return Err(invalid("Der Durchbruch sitzt nicht in einer Decke"));
+                }
+                if o.outline.len() < 3 {
+                    return Err(invalid("Ein Durchbruch braucht mindestens drei Eckpunkte"));
+                }
+            }
             Element::DimensionChain(d) => {
                 if project.storey(d.storey).is_none() {
                     return Err(invalid("Maßkette: Das Geschoss fehlt"));

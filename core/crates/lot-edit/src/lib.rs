@@ -80,6 +80,8 @@ pub enum Tool {
     Door,
     /// Fenster: ein Klick auf die Wand
     Window,
+    /// Deckendurchbruch: zwei Ecken eines Rechtecks in der Decke des Geschosses
+    SlabOpening,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -164,7 +166,7 @@ impl Editor {
                 self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
                 Response::redraw()
             }
-            Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column => {
+            Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column | Tool::SlabOpening => {
                 self.pointer = Some(snap::snap(
                     project,
                     self.storey,
@@ -211,6 +213,20 @@ impl Editor {
                 let p = Point2::new((input.point.x / 0.01).round() * 0.01, (input.point.y / 0.01).round() * 0.01);
                 let space = self.new_space(doc.project(), p, 0);
                 Response::from_result(doc.insert(Element::Space(space)).map(|_| ()))
+            }
+            Tool::SlabOpening => {
+                let p = snap::snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
+                self.pointer = None;
+                match self.chain_start {
+                    None => {
+                        self.chain_start = Some(p);
+                        Response::redraw()
+                    }
+                    Some(start) => {
+                        self.end_chain();
+                        self.add_slab_opening(doc, start, p)
+                    }
+                }
             }
             Tool::Grid => {
                 let p = snap::snap(
@@ -461,6 +477,7 @@ impl Editor {
             Command::SpaceTool => self.set_tool(Tool::Space),
             Command::DoorTool => self.set_tool(Tool::Door),
             Command::WindowTool => self.set_tool(Tool::Window),
+            Command::SlabOpeningTool => self.set_tool(Tool::SlabOpening),
             Command::FlipDoorSwing => self.change_doors(doc, "Aufschlag wechseln", |d| {
                 // Die Bänder bleiben, wo sie sind: mit der Seite wechselt auch DIN links und rechts.
                 d.opens_to = d.opens_to.other();
@@ -547,6 +564,7 @@ impl Editor {
             CommandInfo::new(Command::SpaceTool, "Raum setzen", "R", "Werkzeug"),
             CommandInfo::new(Command::DoorTool, "Tür setzen", "T", "Werkzeug"),
             CommandInfo::new(Command::WindowTool, "Fenster setzen", "F", "Werkzeug"),
+            CommandInfo::new(Command::SlabOpeningTool, "Deckendurchbruch zeichnen", "D", "Werkzeug"),
             CommandInfo::new(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "", "Auswahl"),
             CommandInfo::new(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "", "Auswahl"),
             CommandInfo::new(Command::DimensionWalls, "Bemaßen: Maßketten an den gewählten Wänden", "M", "Auswahl"),
@@ -615,6 +633,13 @@ impl Editor {
             && let Some(o) = self.placed_opening(project, p.point, self.hover_tolerance)
         {
             overlay.preview = geometry::opening_outline(project, &o);
+        }
+        if self.tool == Tool::SlabOpening {
+            overlay.snap = self.pointer;
+            if let (Some(a), Some(p)) = (self.chain_start, self.pointer) {
+                let b = p.point;
+                overlay.preview = Some(vec![[a.x, a.y], [b.x, a.y], [b.x, b.y], [a.x, b.y]]);
+            }
         }
         if self.tool == Tool::Grid {
             overlay.snap = self.pointer;
@@ -692,6 +717,10 @@ impl Editor {
                 "Tür: auf die Wand klicken, auf der Seite, zu der sie aufschlägt. Esc: zurück zum Auswählen.".into()
             }
             (Tool::Window, _, _) => "Fenster: auf die Wand klicken. Esc: zurück zum Auswählen.".into(),
+            (Tool::SlabOpening, None, _) => {
+                "Deckendurchbruch: erste Ecke in der Decke dieses Geschosses klicken. Esc: zurück.".into()
+            }
+            (Tool::SlabOpening, Some(_), _) => "Deckendurchbruch: gegenüberliegende Ecke klicken.".into(),
             (Tool::Space, _, _) => {
                 "Raum: in den Bereich klicken, dort steht der Raumstempel. Esc: zurück zum Auswählen.".into()
             }
@@ -925,6 +954,27 @@ impl Editor {
             })
             .collect();
         Response::from_result(doc.apply(Operation::Group { label: "Decke aus Wänden".into(), ops }))
+    }
+
+    /// Rechteckiger Durchbruch in der Decke des aktuellen Geschosses, in der die erste Ecke liegt.
+    fn add_slab_opening(&mut self, doc: &mut Document, a: Point2, b: Point2) -> Response {
+        if (a.x - b.x).abs() < 0.05 || (a.y - b.y).abs() < 0.05 {
+            return Response::redraw();
+        }
+        let project = doc.project();
+        let host = project.slabs_on(self.storey).find(|(_, s)| {
+            let ring: Vec<[f64; 2]> = s.outline.iter().map(|p| [p.x, p.y]).collect();
+            lot_geom::Area::from_ring(&ring).contains([a.x, a.y])
+        });
+        let Some((host, _)) = host else {
+            return Response {
+                error: Some("Hier liegt keine Decke dieses Geschosses (Werkzeug, Decke aus Wänden)".into()),
+                ..Response::redraw()
+            };
+        };
+        let outline = vec![a, Point2::new(b.x, a.y), b, Point2::new(a.x, b.y)];
+        let opening = lot_model::SlabOpening { host, outline };
+        Response::from_result(doc.insert(Element::SlabOpening(opening)).map(|_| ()))
     }
 
     fn change_doors(&mut self, doc: &mut Document, label: &str, change: impl Fn(&mut lot_model::Door)) -> Response {

@@ -83,6 +83,14 @@ impl Project {
         })
     }
 
+    /// Durchbrüche in der Decke `slab`.
+    pub fn slab_openings_in(&self, slab: ElementId) -> impl Iterator<Item = (ElementId, &crate::SlabOpening)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::SlabOpening(o) if o.host == slab => Some((*id, o)),
+            _ => None,
+        })
+    }
+
     pub fn slab_type(&self, id: ElementId) -> Option<&crate::SlabType> {
         match self.elements.get(&id) {
             Some(Element::SlabType(t)) => Some(t),

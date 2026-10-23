@@ -99,7 +99,7 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
         })
         .collect();
     let slab_solids: Vec<(ElementId, usize, String, Manifold)> = parallel_map(&slabs, |(id, slab)| {
-        slabs::slab_solids(project, slab)
+        slabs::slab_solids(project, *id, slab)
             .into_iter()
             .map(|(layer, material, solid)| (*id, layer, material, solid))
             .collect::<Vec<_>>()

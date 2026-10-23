@@ -24,7 +24,7 @@ Neu gebaut liegt die App in `~/Applications/Lot.app`. Das EFH öffnest du über 
 | M | Bemaßen: Maßketten außen an den gewählten Wänden |
 | V | Auswählen. Türen und Fenster gleiten beim Ziehen entlang ihrer Wand, Raumstempel und Maßketten lassen sich verschieben. |
 
-Im Menü Werkzeug legt „Decke aus Wänden“ die Decke des aktuellen Geschosses an, im untersten Geschoss die Bodenplatte.
+Im Menü Werkzeug legt „Decke aus Wänden“ die Decke des aktuellen Geschosses an, im untersten Geschoss die Bodenplatte. Taste D zeichnet einen Deckendurchbruch mit zwei Klicks.
 
 Rechts im Inspektor: bei Räumen Nummer, Name, Nutzung nach DIN 277, „zählt zur Wohnfläche“ und die Flächen; bei Türen Anschlag und Aufschlag mit Knopf zum Wechseln; ohne Auswahl die Flächen je Geschoss.
 
@@ -38,14 +38,14 @@ Antwort jeweils Ja oder Nein und ein Satz. Wo ein Vorschlag steht, reicht „Vor
 4. BGF messe ich an den Außenkanten einschließlich Dämmung (WDVS im EG, Perimeterdämmung im KG), wie DIN 277 Bekleidungen mitzählt. Stimmt das mit deiner Praxis überein? Vorschlag: so lassen.
 5. Türen: Türblatt als Linie und Aufschlag als Viertelkreis, in 1:50 das Türblatt mit 4 cm Dicke, ohne Zarge. Vorschlag: in 1:50 die Zarge ergänzen, sonst so lassen.
 6. Fenster: Rahmen 7 cm tief an der Außenkante des Mauerwerks (bei WDVS), in 1:100 nur der Rahmen, in 1:50 mit Glaslinie, Fensterbänke fehlen. Fenster über der Schnittebene (WC) gestrichelt. Vorschlag: in 1:50 Fensterbank innen (2 cm über Putz) und außen (4 cm über WDVS) ergänzen, sonst so lassen.
-7. Decken (`efh-3d.png`): Die Decke liegt auf der Tragschicht der Wände darunter, die Außendämmung läuft vor der Deckenstirn durch, Wände enden unter der Decke. Aufbau Geschossdecke 29,5 cm, Bodenplatte 41 cm. Vorschlag: so lassen.
+7. Decken (`efh-3d.png`): Die Decke liegt auf der Tragschicht der Wände darunter, die Außendämmung läuft vor der Deckenstirn durch, Wände enden unter der Decke. Das Treppenloch im DG hat ein Diagonalkreuz, im EG erscheint es gestrichelt. Es mindert die Fläche des Flurs darüber noch nicht. Vorschlag: Durchbrüche als Luftraum von der NRF abziehen, sonst so lassen.
 8. Maßketten: Schrägstrich als Maßbegrenzung, kurze Maßhilfslinien, Maßzahl 1,8 mm, halbe Zentimeter hochgestellt (1,13⁵), Öffnungshöhe unter der Linie, Ketten 1,00 m und 1,70 m vor der Wand. Vorschlag: so lassen. Oder lieber Maßhilfslinien bis kurz vor das Bauteil?
 9. Rohbaumaße beim Setzen: Tür 1,01 × 2,135 m, Fenster 1,26 × 1,385 m mit Brüstung 0,885 m (DIN 18100). Vorschlag: so lassen, eigene Standardmaße kommen mit dem Bürostandard in M5.
 10. **Abnahme:** In der App im EG eine Tür und ein Fenster setzen und verschieben, „Räume erkennen“, eine Wand bemaßen. Geht das ohne Anleitung?
 
 ## Was ich geprüft habe und was nicht
 
-- Kern: 120 Tests grün, clippy ohne Warnung. Neu getestet: Raumerkennung (Türen verbinden keine Räume, Stützen werden abgezogen, offene Wände ergeben keinen Raum), DIN 277 und WoFlV (kleine Stützen bleiben in der Wohnfläche, Keller zählt nicht), Anschlag DIN links und rechts je Aufschlagseite, Türsymbol, Maßketten an L-Ecken außen und innen, Maßketten wachsen mit der Wand, Deckenumriss an der Außenkante der Tragschicht, Deckenschichten von OKFF nach unten.
+- Kern: 121 Tests grün, clippy ohne Warnung. Neu getestet: Raumerkennung (Türen verbinden keine Räume, Stützen werden abgezogen, offene Wände ergeben keinen Raum), DIN 277 und WoFlV (kleine Stützen bleiben in der Wohnfläche, Keller zählt nicht), Anschlag DIN links und rechts je Aufschlagseite, Türsymbol, Maßketten an L-Ecken außen und innen, Maßketten wachsen mit der Wand, Deckenumriss an der Außenkante der Tragschicht, Deckenschichten von OKFF nach unten, Deckendurchbruch nur mit Decke und mit der richtigen Restfläche.
 - Von Hand nachgerechnet: WC 6,21 m² und Keller 22,76 m² aus den Wandmaßen, Summen der Maßketten (Süden 11,00 m, Westen 9,00 m).
 - App per Bildschirmsteuerung: Räume erkennen, Raumstempel wählen, Name ändern, Wohnfläche abschalten; Tür und Fenster setzen, Tür wählen, Aufschlag wechseln. Dabei einen Fehler gefunden und behoben: Bei Türen blieb der Inspektor leer.
 - Nicht prüfen konnte ich wie in M1 das Ziehen mit der Maus und das Tippen in die Befehlspalette (im Kern getestet).
@@ -59,7 +59,7 @@ Antwort jeweils Ja oder Nein und ein Satz. Wo ein Vorschlag steht, reicht „Vor
 
 ## Bekannte Lücken
 
-- Durchbrüche in Decken (1.11) und Treppenlöcher fehlen noch, und im Grundriss erscheinen Decken noch nicht. Der Brutto-Rauminhalt endet oben bis zum Dach (M3) an der Geschosshöhe.
+- Treppen fehlen (M3), im Grundriss erscheinen Deckenränder noch nicht. Der Brutto-Rauminhalt endet oben bis zum Dach (M3) an der Geschosshöhe.
 - Dachschrägen (M3) fehlen: Die Wohnfläche im DG zählt deshalb noch voll.
 - Raumtrennlinien für offene Grundrisse fehlen; ein Bereich ohne trennende Wand ist ein Raum.
 - Bogenwände lassen sich noch nicht bemaßen, Innenmaße und Höhenkoten fehlen.

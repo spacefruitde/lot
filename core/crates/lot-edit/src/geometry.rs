@@ -146,7 +146,24 @@ fn dimension_extent(project: &Project, d: &lot_model::DimensionChain) -> Option<
 }
 
 fn other_elements(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    dimension_at(project, storey, p, tolerance).or_else(|| walls_columns_grids(project, storey, p, tolerance))
+    dimension_at(project, storey, p, tolerance)
+        .or_else(|| walls_columns_grids(project, storey, p, tolerance))
+        .or_else(|| slab_opening_at(project, storey, p, tolerance))
+}
+
+/// Der Deckendurchbruch des Geschosses, dessen Rand am Punkt liegt.
+fn slab_opening_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    project
+        .slabs_on(storey)
+        .flat_map(|(slab, _)| project.slab_openings_in(slab))
+        .filter_map(|(id, o)| {
+            let n = o.outline.len();
+            let d =
+                (0..n).map(|i| segment_distance(o.outline[i], o.outline[(i + 1) % n], p)).fold(f64::INFINITY, f64::min);
+            (d <= tolerance).then_some((id, d))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
 }
 
 fn walls_columns_grids(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
@@ -185,6 +202,7 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
         Element::Wall(w) => Some(footprint(project, w)),
         Element::Column(c) => Some(column_outline(c)),
         Element::Opening(o) => opening_outline(project, o),
+        Element::SlabOpening(o) => Some(o.outline.iter().map(|p| [p.x, p.y]).collect()),
         Element::DimensionChain(d) => {
             let (a, b) = dimension_extent(project, d)?;
             let len = a.distance(b).max(1e-9);
@@ -256,6 +274,11 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
                 let mut n = r.clone();
                 n.position = shift(r.position);
                 changes.push((*id, Element::Space(n)));
+            }
+            Some(Element::SlabOpening(o)) => {
+                let mut n = o.clone();
+                n.outline = o.outline.iter().map(|p| shift(*p)).collect();
+                changes.push((*id, Element::SlabOpening(n)));
             }
             Some(Element::Slab(s)) => {
                 let mut n = s.clone();

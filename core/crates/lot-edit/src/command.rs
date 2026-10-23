@@ -17,6 +17,7 @@ pub enum Command {
     SpaceTool,
     DoorTool,
     WindowTool,
+    SlabOpeningTool,
     /// Gewählte Türen schlagen zur anderen Wandseite auf.
     FlipDoorSwing,
     /// Gewählte Türen: DIN links und DIN rechts tauschen.

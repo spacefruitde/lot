@@ -8,7 +8,8 @@
 //! 3. Grenzen zwischen Schichten aus verschiedenem Material
 //! 4. Umriss aller geschnittenen Bauteile (Schnittkante)
 //! 5. Türen und Fenster: Türblatt und Aufschlag, Fensterrahmen; Öffnungen
-//!    über der Schnittebene gestrichelt
+//!    über der Schnittebene gestrichelt. Deckendurchbrüche im Boden mit
+//!    Diagonalkreuz, in der Decke darüber gestrichelt
 //! 6. Achsen mit Achskreisen
 //! 7. Maßketten
 //! 8. Raumstempel: Nummer, Name, Netto-Raumfläche
@@ -85,8 +86,9 @@ pub fn floor_plan(
         objects.push(closed(paper(&ring, viewport), style.pens.cut));
     }
 
-    // 5. Türen und Fenster.
+    // 5. Türen und Fenster, Deckendurchbrüche.
     draw_openings(&mut objects, project, view.storey, z_cut, style, viewport);
+    draw_slab_openings(&mut objects, project, view.storey, style, viewport);
 
     // 6. Achsen.
     for (_, grid) in project.grid_lines() {
@@ -256,6 +258,51 @@ fn draw_openings(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// Deckendurchbrüche (1.11), Vorschlag nach DIN 1356-1: in der Decke unter den
+/// Füßen (Oberkante auf OKFF dieses Geschosses) Umriss mit Diagonalkreuz, in
+/// der Decke darüber (OKFF des nächsten Geschosses) Umriss gestrichelt.
+fn draw_slab_openings(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    storey: ElementId,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let storeys = project.storeys();
+    let above = storeys.iter().position(|(id, _)| *id == storey).and_then(|i| storeys.get(i + 1)).map(|(id, _)| *id);
+    let line = |points: Vec<[f64; 2]>, width: f64, dashed: bool, closed: bool| {
+        PlanObject::Line(Line {
+            points: points.iter().map(|p| viewport.to_paper(p[0], p[1])).collect(),
+            closed,
+            pen: Pen::mm(width),
+            style: if dashed { LineStyle::Dashed(HIDDEN_DASH.to_vec()) } else { LineStyle::Solid },
+            color: Gray::BLACK,
+        })
+    };
+    for (slab_id, slab) in project.elements.iter().filter_map(|(id, e)| match e {
+        lot_model::Element::Slab(s) => Some((*id, s)),
+        _ => None,
+    }) {
+        let own = slab.storey == storey;
+        if !own && Some(slab.storey) != above {
+            continue;
+        }
+        for (_, o) in project.slab_openings_in(slab_id) {
+            let ring: Vec<[f64; 2]> = o.outline.iter().map(|p| [p.x, p.y]).collect();
+            if own {
+                objects.push(line(ring.clone(), style.pens.view, false, true));
+                // Diagonalkreuz über die Ecken des umschließenden Rechtecks der ersten vier Punkte.
+                if ring.len() >= 4 {
+                    objects.push(line(vec![ring[0], ring[2]], style.pens.hatch, false, false));
+                    objects.push(line(vec![ring[1], ring[3]], style.pens.hatch, false, false));
+                }
+            } else {
+                objects.push(line(ring, style.pens.hidden, true, true));
             }
         }
     }

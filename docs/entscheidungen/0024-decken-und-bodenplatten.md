@@ -13,6 +13,7 @@ M2 verlangt Decken und Bodenplatten (1.03). Ohne sie fehlen im 3D die Böden, un
 - **Befehl „Decke aus Wänden“**: Die Decke eines Geschosses liegt auf den Wänden des Geschosses darunter; ihr Umriss folgt der Außenkante der Tragschicht dieser Wände, sodass die Außendämmung vor der Deckenstirn durchläuft. Im untersten Geschoss entsteht eine Bodenplatte unter den eigenen Wänden.
 - **3D**: Wände und Stützen enden unter den Decken, die auf ihnen liegen (die Decke wird aus ihnen ausgeschnitten).
 - **Brutto-Rauminhalt**: im untersten Geschoss zusätzlich die Dicke der Bodenplatte.
+- **Durchbrüche** (1.11): Deckendurchbruch als Polygon in einer Decke, Werkzeug mit zwei Klicks (D). Im 3D ausgeschnitten, im Grundriss des eigenen Geschosses mit Diagonalkreuz, im Geschoss darunter gestrichelt (Vorschlag nach DIN 1356-1).
 - Vorlage und EFH bekommen zwei Deckenaufbauten: Geschossdecke StB 20 (29,5 cm) und Bodenplatte StB 25 (41 cm).
 
 ## Alternativen
@@ -22,5 +23,5 @@ M2 verlangt Decken und Bodenplatten (1.03). Ohne sie fehlen im 3D die Böden, un
 
 ## Folgen
 
-- Im Grundriss erscheinen Decken noch nicht (Deckenränder und Aussparungen gestrichelt folgen mit Bens Rückmeldung), im Schnitt ab M3.
-- Durchbrüche in Decken (1.11) und Treppenlöcher fehlen noch.
+- Im Grundriss erscheinen Deckenränder noch nicht, im Schnitt ab M3.
+- Ob ein Durchbruch die Netto-Raumfläche des Raums darüber mindert (Luftraum), ist offen (Prüfpaket M2).

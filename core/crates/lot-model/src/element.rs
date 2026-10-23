@@ -36,6 +36,7 @@ pub enum Element {
     DimensionChain(DimensionChain),
     SlabType(SlabType),
     Slab(Slab),
+    SlabOpening(SlabOpening),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -51,6 +52,7 @@ pub enum ElementKind {
     DimensionChain,
     SlabType,
     Slab,
+    SlabOpening,
 }
 
 impl Element {
@@ -66,6 +68,7 @@ impl Element {
             Element::DimensionChain(_) => ElementKind::DimensionChain,
             Element::SlabType(_) => ElementKind::SlabType,
             Element::Slab(_) => ElementKind::Slab,
+            Element::SlabOpening(_) => ElementKind::SlabOpening,
         }
     }
 
@@ -670,6 +673,15 @@ pub struct Slab {
     pub top_offset: f64,
     #[serde(default)]
     pub kind: SlabKind,
+}
+
+/// Durchbruch in einer Decke (IfcOpeningElement), etwa für eine Treppe oder einen Schacht.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SlabOpening {
+    /// Die Decke, in der der Durchbruch sitzt.
+    pub host: ElementId,
+    /// Umriss in Metern, Richtung egal.
+    pub outline: Vec<Point2>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
