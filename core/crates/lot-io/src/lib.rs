@@ -4,7 +4,9 @@
 //! - Testprojekte als lesbare RON-Textdateien ([`testproject`])
 //! - Planblätter als PDF, SVG und PNG ([`pdf`], [`svg`], [`png`])
 //! - Bilder für Unterlagen ([`raster`])
+//! - DXF und DWG schreiben und lesen ([`cad`])
 
+pub mod cad;
 pub mod pdf;
 pub mod plan_font;
 pub mod png;
@@ -35,6 +37,8 @@ pub enum IoError {
     Pdf(String),
     #[error("PNG-Ausgabe: {0}")]
     Png(String),
+    #[error("DXF/DWG: {0}")]
+    Cad(String),
     #[error("Das Projekt in der Datei ist ungültig: {0}")]
     Model(#[from] lot_model::ModelError),
 }

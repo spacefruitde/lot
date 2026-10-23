@@ -50,6 +50,17 @@ pub fn floor_plan(
     standard: &OfficeStandard,
     viewport: Viewport,
 ) -> Vec<PlanObject> {
+    floor_plan_layers(project, view, standard, viewport).into_iter().flat_map(|(_, objects)| objects).collect()
+}
+
+/// Wie [`floor_plan`], nach Layern getrennt, für den Austausch über DXF und DWG
+/// (6.04). Die Namen sind Vorschläge ohne Umlaute; leere Layer fehlen.
+pub fn floor_plan_layers(
+    project: &Project,
+    view: FloorPlanView,
+    standard: &OfficeStandard,
+    viewport: Viewport,
+) -> Vec<(&'static str, Vec<PlanObject>)> {
     let Some(storey) = project.storey(view.storey) else { return Vec::new() };
     let style = standard.style_for(view.scale);
     let z_cut = storey.elevation + view.cut_height;
@@ -58,60 +69,79 @@ pub fn floor_plan(
     let geo = phased.as_ref().unwrap_or(project);
     let cut = lot_geom::layer_regions(geo, view.storey, z_cut);
     let cut_all = Area::union_all(cut.iter().map(|r| &r.area));
-    let mut objects = Vec::new();
+    let mut layers: Vec<(&'static str, Vec<PlanObject>)> = Vec::new();
+    let mut layer = |name: &'static str, draw: &mut dyn FnMut(&mut Vec<PlanObject>)| {
+        let mut objects = Vec::new();
+        draw(&mut objects);
+        if !objects.is_empty() {
+            layers.push((name, objects));
+        }
+    };
 
     // 1. Sichtbares unterhalb der Schnittebene.
-    let below: Vec<Area> = lot_geom::heights(geo, view.storey)
-        .windows(2)
-        .filter(|w| w[0] < z_cut && w[1] - w[0] > 1e-6)
-        .map(|w| {
-            let z = (w[0] + w[1].min(z_cut)) / 2.0;
-            Area::union_all(lot_geom::layer_regions(geo, view.storey, z).iter().map(|r| &r.area))
-        })
-        .collect();
-    let below = Area::union_all(below.iter()).difference(&cut_all);
-    for ring in below.rings() {
-        objects.push(closed(paper(&ring, viewport), style.pens.view));
-    }
+    layer("A_Sichtkanten", &mut |objects| {
+        let below: Vec<Area> = lot_geom::heights(geo, view.storey)
+            .windows(2)
+            .filter(|w| w[0] < z_cut && w[1] - w[0] > 1e-6)
+            .map(|w| {
+                let z = (w[0] + w[1].min(z_cut)) / 2.0;
+                Area::union_all(lot_geom::layer_regions(geo, view.storey, z).iter().map(|r| &r.area))
+            })
+            .collect();
+        let below = Area::union_all(below.iter()).difference(&cut_all);
+        for ring in below.rings() {
+            objects.push(closed(paper(&ring, viewport), style.pens.view));
+        }
+    });
 
     // 2. bis 4. Geschnittene Bauteile, im Umbauplan farbig.
-    draw_cut_for(&mut objects, project, &cut, Some((view.storey, z_cut)), standard, style, viewport);
+    layer("A_Bauteile_Schnitt", &mut |objects| {
+        draw_cut_for(objects, project, &cut, Some((view.storey, z_cut)), standard, style, viewport)
+    });
 
     // 5. Türen und Fenster, Deckendurchbrüche.
-    draw_openings(&mut objects, project, view.storey, z_cut, style, viewport);
-    draw_slab_openings(&mut objects, project, view.storey, style, viewport);
+    layer("A_Tueren_Fenster", &mut |objects| draw_openings(objects, project, view.storey, z_cut, style, viewport));
+    layer("A_Deckendurchbrueche", &mut |objects| draw_slab_openings(objects, project, view.storey, style, viewport));
 
     // 5a. Treppen und Geländer.
-    crate::stairs::draw_stairs(&mut objects, project, view.storey, view.cut_height, style, viewport);
+    layer("A_Treppen", &mut |objects| {
+        crate::stairs::draw_stairs(objects, project, view.storey, view.cut_height, style, viewport)
+    });
 
     // 6. Dach.
-    draw_roof_lines(&mut objects, project, view.storey, style, viewport);
+    layer("A_Dach", &mut |objects| draw_roof_lines(objects, project, view.storey, style, viewport));
 
     // 6a. Schnittlinien.
-    draw_section_marks(&mut objects, project, style, viewport);
+    layer("A_Schnittlinien", &mut |objects| draw_section_marks(objects, project, style, viewport));
 
     // 7. Achsen.
-    for (_, grid) in project.grid_lines() {
-        draw_grid_line(&mut objects, grid, style, viewport);
-    }
+    layer("A_Achsen", &mut |objects| {
+        for (_, grid) in project.grid_lines() {
+            draw_grid_line(objects, grid, style, viewport);
+        }
+    });
 
     // 8. Maßketten.
-    crate::dimensions::draw_dimensions(&mut objects, project, view.storey, style, viewport);
+    layer("A_Bemassung", &mut |objects| {
+        crate::dimensions::draw_dimensions(objects, project, view.storey, style, viewport)
+    });
 
     // 9. Raumstempel.
-    draw_space_tags(&mut objects, project, view.storey, style, viewport);
+    layer("A_Raumstempel", &mut |objects| draw_space_tags(objects, project, view.storey, style, viewport));
 
     // 10. 2D-Elemente.
-    let annotations = lot_model::AnnotationView::FloorPlan { storey: view.storey };
-    crate::annotations::draw_annotations(
-        &mut objects,
-        project,
-        annotations,
-        standard,
-        style,
-        crate::annotations::model(viewport),
-    );
-    objects
+    layer("A_2D", &mut |objects| {
+        let annotations = lot_model::AnnotationView::FloorPlan { storey: view.storey };
+        crate::annotations::draw_annotations(
+            objects,
+            project,
+            annotations,
+            standard,
+            style,
+            crate::annotations::model(viewport),
+        )
+    });
+    layers
 }
 
 /// Raumstempel (3.06), Vorschlag: Nummer klein über dem Namen, darunter die

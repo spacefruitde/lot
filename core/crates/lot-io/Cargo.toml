@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+acadrust = "=0.6.6"
 krilla = { version = "0.8", default-features = false, features = ["simple-text"] }
 lot-model = { version = "0.1.0", path = "../lot-model" }
 lot-plan = { version = "0.1.0", path = "../lot-plan" }

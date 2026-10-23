@@ -21,14 +21,16 @@ pub const OUTPUTS_FILE: &str = "ausgaben.ron";
 pub enum Output {
     /// Das M0-Prüfblatt mit Kalibrierung und Grundriss.
     M0Sheet { name: String },
-    /// Grundriss eines Geschosses.
-    /// Grundriss eines Geschosses; `phase` wählt Umbauplan (farbig), Bestand oder Neuzustand.
+    /// Grundriss eines Geschosses; `phase` wählt Umbauplan (farbig), Bestand oder
+    /// Neuzustand. Mit `cad` auch als DXF und DWG in Metern (6.04).
     FloorPlan {
         name: String,
         storey: u64,
         scale: f64,
         #[serde(default)]
         phase: PhaseFilter,
+        #[serde(default)]
+        cad: bool,
     },
     /// Katalog von Ausschnitten, etwa der Wandknoten.
     Catalog { name: String, storey: u64, scale: f64, title: String, cells: Vec<CatalogCell> },
@@ -43,16 +45,24 @@ pub enum Output {
         #[serde(default)]
         phase: PhaseFilter,
     },
-    /// Schnitt oder Ansicht (Element `view` im Projekt).
+    /// Schnitt oder Ansicht (Element `view` im Projekt); mit `cad` auch als DXF
+    /// und DWG in Metern, x entlang der Schnittlinie, y als Höhe.
     Section {
         name: String,
         view: u64,
         scale: f64,
         #[serde(default)]
         phase: PhaseFilter,
+        #[serde(default)]
+        cad: bool,
     },
-    /// Alle Planblätter des Projekts, eine Seite je Blatt.
-    PlanSheets { name: String },
+    /// Alle Planblätter des Projekts, eine Seite je Blatt; mit `cad` je Blatt
+    /// auch als DXF und DWG in Millimetern.
+    PlanSheets {
+        name: String,
+        #[serde(default)]
+        cad: bool,
+    },
 }
 
 impl Output {
@@ -65,7 +75,7 @@ impl Output {
             | Output::PlanView { name, .. }
             | Output::AreaTable { name, .. }
             | Output::Section { name, .. }
-            | Output::PlanSheets { name } => name,
+            | Output::PlanSheets { name, .. } => name,
         }
     }
 }
@@ -129,6 +139,52 @@ pub fn phase_project(project: &Project, phase: PhaseFilter) -> Project {
 /// die die Wand nicht durchbrechen (siehe `Project::without_phase_openings`).
 pub fn geometry(project: &Project) -> Result<lot_geom::ModelGeometry, lot_geom::GeomError> {
     if project.has_phases() { lot_geom::build(&project.without_phase_openings()) } else { lot_geom::build(project) }
+}
+
+/// DXF- und DWG-Dateien einer Ausgabe, falls sie welche verlangt: (Dateiname, Inhalt).
+pub fn cad_files(project: &Project, output: &Output) -> Result<Vec<(String, Vec<u8>)>> {
+    use lot_io::cad::{CadUnits, dwg_bytes, dxf_bytes, to_cad};
+    let standard = OfficeStandard::default_standard();
+    let origin = lot_plan::Viewport { scale: 100.0, origin: lot_plan::PaperPoint::new(0.0, 0.0) };
+    let mut docs: Vec<(String, lot_io::cad::CadDocument)> = Vec::new();
+    match output {
+        Output::FloorPlan { name, storey, scale, phase, cad: true } => {
+            let project = phase_project(project, *phase);
+            let view = lot_plan::floor_plan::FloorPlanView {
+                storey: ElementId(*storey),
+                cut_height: lot_plan::floor_plan::DEFAULT_CUT_HEIGHT,
+                scale: *scale,
+            };
+            let viewport = lot_plan::Viewport { scale: *scale, ..origin };
+            let layers = lot_plan::floor_plan::floor_plan_layers(&project, view, standard, viewport);
+            docs.push((name.clone(), to_cad(&layers, scale / 1000.0, CadUnits::Meters)?));
+        }
+        Output::Section { name, view, scale, phase, cad: true } => {
+            let project = phase_project(project, *phase);
+            if let (Ok(geometry), Some(lot_model::Element::SectionView(v))) =
+                (geometry(&project), project.elements.get(&ElementId(*view)))
+            {
+                let viewport = lot_plan::Viewport { scale: *scale, ..origin };
+                let objects = lot_plan::section::section(&project, &geometry, v, standard, viewport);
+                docs.push((name.clone(), to_cad(&[("A_Schnitt", objects)], scale / 1000.0, CadUnits::Meters)?));
+            }
+        }
+        Output::PlanSheets { name, cad: true } => {
+            if let Ok(geometry) = geometry(project) {
+                let sheets = lot_plan::layout::plan_sheets(project, &geometry, standard);
+                for (sheet, page) in sheets.into_iter().zip(page_names(name, project.plan_sheets().len())) {
+                    docs.push((page, to_cad(&[("A_Planblatt", sheet.objects)], 1.0, CadUnits::Millimeters)?));
+                }
+            }
+        }
+        _ => {}
+    }
+    let mut files = Vec::new();
+    for (name, doc) in docs {
+        files.push((format!("{name}.dxf"), dxf_bytes(&doc)?));
+        files.push((format!("{name}.dwg"), dwg_bytes(&doc)?));
+    }
+    Ok(files)
 }
 
 /// Dateinamen der Seiten: `name` bei einer Seite, sonst `name-1`, `name-2`, ...
