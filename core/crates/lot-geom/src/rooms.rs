@@ -20,6 +20,11 @@ pub struct RoomFinder {
     pub footprint: Area,
     /// Jeder umschlossene Bereich, ohne Inseln (freistehende Wände, Stützen).
     pub enclosed: Vec<Area>,
+    /// Derselbe Bereich mit Inseln, je Eintrag in `enclosed`.
+    outlines: Vec<Area>,
+    /// Stützen, die nach WoFlV nicht abgezogen werden: höchstens 1,50 m hoch
+    /// oder höchstens 0,1 m² Grundfläche (§ 3 Abs. 3 Nr. 1).
+    small_columns: Area,
 }
 
 impl RoomFinder {
@@ -29,20 +34,62 @@ impl RoomFinder {
         let footprint = Area::union_all(regions.iter().map(|r| &r.area));
         // Löcher der vereinigten Wandfläche sind die Räume. Clipper liefert sie im
         // Uhrzeigersinn, also mit negativer Fläche.
-        let enclosed = footprint
+        let (enclosed, outlines) = footprint
             .rings()
             .into_iter()
             .filter(|r| crate::signed_area(r) < 0.0)
-            .map(|r| Area::from_ring(&r).difference(&footprint))
-            .filter(|a| !a.is_empty())
+            .map(|r| {
+                let outline = Area::from_ring(&r);
+                (outline.difference(&footprint), outline)
+            })
+            .filter(|(a, _)| !a.is_empty())
+            .unzip();
+        let small: Vec<Area> = project
+            .columns_on(storey)
+            .filter(|(_, c)| {
+                let height = project.vertical_extent(c.storey, c.base_offset, c.top).map_or(0.0, |(lo, hi)| hi - lo);
+                let area = crate::column_area(c).area();
+                height <= 1.5 || area <= 0.1 + 1e-9
+            })
+            .map(|(_, c)| crate::column_area(c))
             .collect();
-        Self { footprint, enclosed }
+        Self { footprint, enclosed, outlines, small_columns: Area::union_all(small.iter()) }
     }
 
-    /// Der umschlossene Bereich um den Punkt, falls es einen gibt.
+    /// Fläche des Bereichs um den Punkt nach WoFlV: wie [`RoomFinder::area_at`],
+    /// aber kleine Stützen bleiben in der Fläche (§ 3 Abs. 3 Nr. 1).
+    pub fn living_area_at(&self, p: [f64; 2]) -> Option<f64> {
+        let i = self.index_at(p)?;
+        Some(self.enclosed[i].area() + self.small_columns.intersection(&self.outlines[i]).area())
+    }
+
+    fn index_at(&self, p: [f64; 2]) -> Option<usize> {
+        (0..self.enclosed.len())
+            .filter(|&i| self.enclosed[i].contains(p) || self.small_columns.intersection(&self.outlines[i]).contains(p))
+            .min_by(|&a, &b| self.enclosed[a].area().total_cmp(&self.enclosed[b].area()))
+    }
+
+    /// Der umschlossene Bereich um den Punkt, falls es einen gibt. Bei
+    /// verschachtelten Bereichen (Hof in einem Raum) gewinnt der kleinste.
     pub fn area_at(&self, p: [f64; 2]) -> Option<&Area> {
-        // Bei verschachtelten Bereichen (Hof in einem Raum) gewinnt der kleinste.
         self.enclosed.iter().filter(|a| a.contains(p)).min_by(|a, b| a.area().total_cmp(&b.area()))
+    }
+
+    /// Index des Bereichs um den Punkt in `enclosed`, für Prüfungen auf doppelte Räume.
+    pub fn position_of(&self, p: [f64; 2]) -> Option<usize> {
+        self.index_at(p)
+    }
+
+    /// Fläche innerhalb der Außenkanten aller Wände: Räume, Wände und Stützen.
+    pub fn gross_area(&self) -> f64 {
+        let outer: Vec<Area> = self
+            .footprint
+            .rings()
+            .into_iter()
+            .filter(|r| crate::signed_area(r) > 0.0)
+            .map(|r| Area::from_ring(&r))
+            .collect();
+        Area::union_all(outer.iter()).area()
     }
 
     /// Bereiche, in denen noch kein Raum steht.

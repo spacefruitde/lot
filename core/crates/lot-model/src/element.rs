@@ -445,6 +445,18 @@ pub struct Room {
     pub name: String,
     #[serde(default)]
     pub usage: RoomUsage,
+    /// Ob der Raum zur Wohnfläche zählt. Zubehörräume wie Keller, Heizungs- und
+    /// Abstellräume außerhalb der Wohnung zählen nicht (WoFlV vom 25.11.2003, § 2 Abs. 3).
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub living_space: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_true(v: &bool) -> bool {
+    *v
 }
 
 /// Nutzungsgruppe nach DIN 277:2021-08. Die Netto-Raumfläche (NRF) teilt sich

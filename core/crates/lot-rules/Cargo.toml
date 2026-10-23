@@ -1,6 +1,6 @@
 [package]
 name = "lot-rules"
-description = "Prüfungen: DIN 277, WoFlV, Abstandsflächen (ab M2)"
+description = "Regeln und Mengen: DIN 277, WoFlV, später Abstandsflächen und Barrierefreiheit"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+lot-geom = { version = "0.1.0", path = "../lot-geom" }
+lot-model = { version = "0.1.0", path = "../lot-model" }
 
 [lints]
 workspace = true

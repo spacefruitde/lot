@@ -5,6 +5,7 @@
 //! (PLAN.md, Abschnitt 4, Grundentscheidung 9). Koordinaten auf dem Blatt sind
 //! Millimeter, Ursprung links unten, y nach oben.
 
+pub mod area_table;
 pub mod clip;
 pub mod floor_plan;
 pub mod m0;
@@ -234,7 +235,10 @@ pub fn hatch_segments(rings: &[Vec<PaperPoint>], angle_deg: f64, spacing_mm: f64
 
 /// Zahl im deutschen Format mit fester Anzahl Nachkommastellen, etwa „5,00“.
 pub fn format_de(value: f64, decimals: usize) -> String {
-    format!("{value:.decimals$}").replace('.', ",")
+    // Kaufmännisch runden: 24,345 wird 24,35, auch wenn die Zahl binär knapp darunter liegt.
+    let f = 10f64.powi(decimals as i32);
+    let rounded = value.signum() * ((value.abs() * f) * (1.0 + 1e-12)).round() / f;
+    format!("{rounded:.decimals$}").replace('.', ",")
 }
 
 #[cfg(test)]

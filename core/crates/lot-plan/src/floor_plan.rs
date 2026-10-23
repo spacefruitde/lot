@@ -134,7 +134,7 @@ fn draw_room_stamps(
 
 /// Fläche im deutschen Format, „24,35 m²“.
 pub fn format_area(m2: f64) -> String {
-    format!("{m2:.2} m²").replace('.', ",")
+    format!("{} m²", crate::format_de(m2, 2))
 }
 
 /// Muster der geschnittenen Schichten.
