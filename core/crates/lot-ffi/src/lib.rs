@@ -253,6 +253,12 @@ impl LotDocument {
             Some(lot_model::Element::Stair(s)) => format!("Treppe · {} Steigungen", s.risers()),
             Some(lot_model::Element::Railing(_)) => "Geländer".into(),
             Some(lot_model::Element::SectionView(v)) => v.name.clone(),
+            Some(lot_model::Element::Annotation(a)) => match &a.shape {
+                lot_model::AnnotationShape::Text { text, .. } => format!("Text · {text}"),
+                lot_model::AnnotationShape::Polyline(_) => "Linie".into(),
+                lot_model::AnnotationShape::Polygon { .. } => "Fläche".into(),
+                lot_model::AnnotationShape::Circle { .. } => "Kreis".into(),
+            },
             Some(lot_model::Element::ProjectInfo(_)) => "Projektangaben".into(),
             Some(lot_model::Element::PlanSheet(s)) => format!("Planblatt {} {}", s.number, s.title),
             Some(lot_model::Element::Space(r)) => format!("Raum {} {}", r.number, r.name).trim_end().to_string(),
@@ -331,6 +337,43 @@ impl LotDocument {
         let new =
             lot_model::Space { number: number.trim().into(), name: name.trim().into(), usage, living_space, ..old };
         doc.replace(id, lot_model::Element::Space(new)).map_err(LotError::from_display)
+    }
+
+    /// Inhalt eines 2D-Texts; `None`, wenn das Element kein Text ist.
+    pub fn annotation_text(&self, element: u64) -> Option<String> {
+        match self.lock().project().elements.get(&ElementId(element)) {
+            Some(lot_model::Element::Annotation(lot_model::Annotation {
+                shape: lot_model::AnnotationShape::Text { text, .. },
+                ..
+            })) => Some(text.clone()),
+            _ => None,
+        }
+    }
+
+    /// Ändert Inhalt und Schrifthöhe (mm auf dem Papier) eines 2D-Texts.
+    pub fn set_annotation_text(&self, element: u64, text: String, height: f64) -> Result<(), LotError> {
+        let mut doc = self.lock();
+        let id = ElementId(element);
+        let Some(lot_model::Element::Annotation(old)) = doc.project().elements.get(&id).cloned() else {
+            return Err(LotError::Failed("Das ist kein Text".into()));
+        };
+        let lot_model::AnnotationShape::Text { position, rotation, .. } = old.shape else {
+            return Err(LotError::Failed("Das ist kein Text".into()));
+        };
+        let shape = lot_model::AnnotationShape::Text { position, text: text.trim().into(), height, rotation };
+        doc.replace(id, lot_model::Element::Annotation(lot_model::Annotation { shape, ..old }))
+            .map_err(LotError::from_display)
+    }
+
+    /// Schrifthöhe eines 2D-Texts in mm; `None`, wenn das Element kein Text ist.
+    pub fn annotation_text_height(&self, element: u64) -> Option<f64> {
+        match self.lock().project().elements.get(&ElementId(element)) {
+            Some(lot_model::Element::Annotation(lot_model::Annotation {
+                shape: lot_model::AnnotationShape::Text { height, .. },
+                ..
+            })) => Some(*height),
+            _ => None,
+        }
     }
 
     /// Flächen je Geschoss (NRF, BGF, Wohnfläche).

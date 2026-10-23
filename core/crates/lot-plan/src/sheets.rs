@@ -183,6 +183,7 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
             | Element::Stair(_)
             | Element::Railing(_)
             | Element::SectionView(_)
+            | Element::Annotation(_)
             | Element::ProjectInfo(_)
             | Element::PlanSheet(_) => false,
             Element::Wall(w) => {

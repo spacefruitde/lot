@@ -5,6 +5,7 @@
 //! (PLAN.md, Abschnitt 4, Grundentscheidung 9). Koordinaten auf dem Blatt sind
 //! Millimeter, Ursprung links unten, y nach oben.
 
+pub mod annotations;
 pub mod area_table;
 pub mod clip;
 pub mod dimensions;

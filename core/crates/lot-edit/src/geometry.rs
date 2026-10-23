@@ -146,7 +146,8 @@ fn dimension_extent(project: &Project, d: &lot_model::DimensionChain) -> Option<
 }
 
 fn other_elements(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    dimension_at(project, storey, p, tolerance)
+    annotation_at(project, storey, p, tolerance)
+        .or_else(|| dimension_at(project, storey, p, tolerance))
         .or_else(|| walls_columns_grids(project, storey, p, tolerance))
         .or_else(|| slab_opening_at(project, storey, p, tolerance))
         .or_else(|| roof_at(project, storey, p, tolerance))
@@ -160,6 +161,57 @@ fn roof_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> O
             let outer = r.outer_outline();
             let n = outer.len();
             let d = (0..n).map(|i| segment_distance(outer[i], outer[(i + 1) % n], p)).fold(f64::INFINITY, f64::min);
+            (d <= tolerance).then_some((id, d))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
+/// Ungefähre Ausdehnung eines Texts in m, für 1:100 (Schrifthöhe in mm auf dem Papier).
+fn text_box(position: Point2, text: &str, height: f64) -> [[f64; 2]; 4] {
+    let (w, h) = (text.chars().count() as f64 * height * 0.06, height * 0.1);
+    let (x, y) = (position.x, position.y);
+    [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
+}
+
+/// Kanten eines 2D-Elements im Grundriss; Texte als Rechteck.
+fn annotation_edges(a: &lot_model::Annotation) -> Vec<(Point2, Point2)> {
+    let pairs = |pts: &[Point2], closed: bool| -> Vec<(Point2, Point2)> {
+        let n = pts.len();
+        let count = if closed { n } else { n.saturating_sub(1) };
+        (0..count).map(|i| (pts[i], pts[(i + 1) % n])).collect()
+    };
+    match &a.shape {
+        lot_model::AnnotationShape::Polyline(p) => pairs(p, false),
+        lot_model::AnnotationShape::Polygon { points, .. } => pairs(points, true),
+        lot_model::AnnotationShape::Circle { center, radius } => {
+            let ring: Vec<Point2> = (0..32)
+                .map(|i| {
+                    let t = i as f64 / 32.0 * std::f64::consts::TAU;
+                    Point2::new(center.x + radius * t.cos(), center.y + radius * t.sin())
+                })
+                .collect();
+            pairs(&ring, true)
+        }
+        lot_model::AnnotationShape::Text { position, text, height, .. } => {
+            let b = text_box(*position, text, *height).map(|q| Point2::new(q[0], q[1]));
+            pairs(&b, true)
+        }
+    }
+}
+
+/// Das 2D-Element des Grundrisses unter dem Punkt; bei Texten zählt die ganze Fläche.
+fn annotation_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+    project
+        .annotations_in(lot_model::AnnotationView::FloorPlan { storey })
+        .filter_map(|(id, a)| {
+            if let lot_model::AnnotationShape::Text { position, text, height, .. } = &a.shape {
+                let b = text_box(*position, text, *height);
+                if p.x >= b[0][0] && p.x <= b[1][0] && p.y >= b[0][1] && p.y <= b[2][1] {
+                    return Some((id, 0.0));
+                }
+            }
+            let d = annotation_edges(a).iter().map(|(a, b)| segment_distance(*a, *b, p)).fold(f64::INFINITY, f64::min);
             (d <= tolerance).then_some((id, d))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
@@ -219,6 +271,21 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
         Element::Opening(o) => opening_outline(project, o),
         Element::SlabOpening(o) => Some(o.outline.iter().map(|p| [p.x, p.y]).collect()),
         Element::Roof(r) => Some(r.outer_outline().iter().map(|p| [p.x, p.y]).collect()),
+        Element::Annotation(a) => match &a.shape {
+            lot_model::AnnotationShape::Polyline(points) if points.len() == 2 => {
+                let (s, e) = (points[0], points[1]);
+                let len = s.distance(e).max(1e-12);
+                let (nx, ny) = (-(e.y - s.y) / len * 0.03, (e.x - s.x) / len * 0.03);
+                Some(vec![[s.x - nx, s.y - ny], [e.x - nx, e.y - ny], [e.x + nx, e.y + ny], [s.x + nx, s.y + ny]])
+            }
+            lot_model::AnnotationShape::Text { position, text, height, .. } => {
+                Some(text_box(*position, text, *height).to_vec())
+            }
+            _ => {
+                let edges = annotation_edges(a);
+                Some(edges.iter().map(|(p, _)| [p.x, p.y]).chain(edges.last().map(|(_, q)| [q.x, q.y])).collect())
+            }
+        },
         Element::DimensionChain(d) => {
             let (a, b) = dimension_extent(project, d)?;
             let len = a.distance(b).max(1e-9);
@@ -320,6 +387,11 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
                 n.offset = ((o.offset + along) / 0.01).round() * 0.01;
                 n.offset = n.offset.clamp(0.0, (wall.length() - o.width).max(0.0));
                 changes.push((*id, Element::Opening(n)));
+            }
+            Some(Element::Annotation(a)) => {
+                let mut n = a.clone();
+                n.shape = a.shape.translated(delta.0, delta.1);
+                changes.push((*id, Element::Annotation(n)));
             }
             Some(Element::GridLine(g)) => {
                 let mut n = g.clone();

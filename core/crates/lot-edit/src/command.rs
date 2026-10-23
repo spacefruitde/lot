@@ -18,6 +18,10 @@ pub enum Command {
     DoorTool,
     WindowTool,
     SlabOpeningTool,
+    /// 2D-Linie im Grundriss
+    LineTool,
+    /// 2D-Text im Grundriss
+    TextTool,
     /// Gewählte Türen schlagen zur anderen Wandseite auf.
     FlipDoorSwing,
     /// Gewählte Türen: DIN links und DIN rechts tauschen.

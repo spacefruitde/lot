@@ -92,7 +92,7 @@ OfficeStandard(
         "stahl": Material(
             name: "Stahl",
             color: (96, 100, 106),
-            cut: Empty,
+            cut: Solid(gray: 0.0),
         ),
         "klinker": Material(
             name: "Klinker (Vormauerschale)",

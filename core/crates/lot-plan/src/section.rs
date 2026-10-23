@@ -153,6 +153,19 @@ pub fn section(
         // 5. Höhenkoten.
         draw_level_marks(&mut objects, project, view.kind, lo[0] - 0.8, style, viewport);
     }
+
+    // 6. 2D-Elemente, x entlang der Schnittlinie und y als Höhe.
+    if let Some(id) = project.section_views().find(|(_, v)| *v == view).map(|(id, _)| id) {
+        let annotations = lot_model::AnnotationView::Section { view: id };
+        crate::annotations::draw_annotations(
+            &mut objects,
+            project,
+            annotations,
+            standard,
+            style,
+            crate::annotations::model(viewport),
+        );
+    }
     objects
 }
 

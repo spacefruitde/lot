@@ -164,6 +164,13 @@ Project(
         129: Dormer(roof: 107, edge: 0, offset: 9.0, width: 3.0, setback: 0.2, eave_height: 3.0, slope: 12.0, wall_type: 128, window: Some(width: 1.76, height: 0.9, sill_height: 1.65)),
         130: RoofWindow(roof: 107, edge: 0, offset: 1.9, width: 0.78, height: 1.4, sill_height: 1.6),
         131: RoofWindow(roof: 107, edge: 2, offset: 8.0, width: 0.78, height: 1.4, sill_height: 1.6),
+        // 2D-Elemente: Terrasse im EG, Nordpfeil auf Blatt 101, Hinweis im Schnitt A-A.
+        132: Annotation(view: FloorPlan(storey: 2), shape: Polygon(points: [(x: 2.5, y: 0.0), (x: 7.5, y: 0.0), (x: 7.5, y: -3.0), (x: 2.5, y: -3.0)]), dashed: true),
+        133: Annotation(view: FloorPlan(storey: 2), shape: Text(position: (x: 2.7, y: -2.75), text: "Terrasse")),
+        134: Annotation(view: Sheet(sheet: 115), shape: Circle(center: (x: 545.0, y: 370.0), radius: 9.0)),
+        135: Annotation(view: Sheet(sheet: 115), shape: Polygon(points: [(x: 545.0, y: 382.0), (x: 549.0, y: 362.0), (x: 545.0, y: 366.0), (x: 541.0, y: 362.0)], hatch: Some("stahl")), pen: 0.35),
+        136: Annotation(view: Sheet(sheet: 115), shape: Text(position: (x: 543.2, y: 384.0), text: "N", height: 3.5)),
+        137: Annotation(view: Section(view: 108), shape: Text(position: (x: 0.3, y: -0.2), text: "Gelände", height: 1.8)),
         114: ProjectInfo(client: "Familie Muster (Testdaten)", site: "Musterweg 1, 12345 Musterstadt", architect: "Lot Testbüro", building: SmallResidential),
         115: PlanSheet(
             number: "101",

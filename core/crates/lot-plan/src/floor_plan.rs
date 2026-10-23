@@ -16,6 +16,7 @@
 //! 7. Achsen mit Achskreisen
 //! 8. Maßketten
 //! 9. Raumstempel: Nummer, Name, Netto-Raumfläche
+//! 10. 2D-Elemente dieses Grundrisses (siehe [`crate::annotations`])
 //!
 //! Gleiches Material benachbarter Schichten und Wände wird zu einer Fläche
 //! vereinigt, damit an Anschlüssen keine Fugen erscheinen.
@@ -96,6 +97,17 @@ pub fn floor_plan(
 
     // 9. Raumstempel.
     draw_space_tags(&mut objects, project, view.storey, style, viewport);
+
+    // 10. 2D-Elemente.
+    let annotations = lot_model::AnnotationView::FloorPlan { storey: view.storey };
+    crate::annotations::draw_annotations(
+        &mut objects,
+        project,
+        annotations,
+        standard,
+        style,
+        crate::annotations::model(viewport),
+    );
     objects
 }
 

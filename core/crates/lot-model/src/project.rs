@@ -185,6 +185,14 @@ impl Project {
         })
     }
 
+    /// 2D-Elemente einer Ansicht.
+    pub fn annotations_in(&self, view: crate::AnnotationView) -> impl Iterator<Item = (ElementId, &crate::Annotation)> {
+        self.elements.iter().filter_map(move |(id, e)| match e {
+            Element::Annotation(a) if a.view == view => Some((*id, a)),
+            _ => None,
+        })
+    }
+
     pub fn stairs_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Stair)> {
         self.elements.iter().filter_map(move |(id, e)| match e {
             Element::Stair(s) if s.storey == storey => Some((*id, s)),

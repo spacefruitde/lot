@@ -106,6 +106,13 @@ pub fn plan_sheet(project: &Project, geometry: &ModelGeometry, sheet: &PlanSheet
         out.line(vec![PaperPoint::new(x - half, y - 1.5), PaperPoint::new(x + half, y - 1.5)], Pen::mm(0.35));
         out.text(x, y - 6.0, format!("M 1:{}", d.scale), 2.5, Anchor::Center);
     }
+    if let Some(id) = project.plan_sheets().into_iter().find(|(_, s)| *s == sheet).map(|(id, _)| id) {
+        let style = standard.style_for(100.0);
+        let annotations = lot_model::AnnotationView::Sheet { sheet: id };
+        crate::annotations::draw_annotations(&mut out.objects, project, annotations, standard, style, |p| {
+            PaperPoint::new(p.x, p.y)
+        });
+    }
     title_block(&mut out, project, sheet);
     out
 }

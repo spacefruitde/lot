@@ -43,6 +43,7 @@ pub enum Element {
     Stair(crate::Stair),
     Railing(crate::Railing),
     SectionView(SectionView),
+    Annotation(crate::Annotation),
     ProjectInfo(ProjectInfo),
     PlanSheet(PlanSheet),
 }
@@ -67,6 +68,7 @@ pub enum ElementKind {
     Stair,
     Railing,
     SectionView,
+    Annotation,
     ProjectInfo,
     PlanSheet,
 }
@@ -91,6 +93,7 @@ impl Element {
             Element::Stair(_) => ElementKind::Stair,
             Element::Railing(_) => ElementKind::Railing,
             Element::SectionView(_) => ElementKind::SectionView,
+            Element::Annotation(_) => ElementKind::Annotation,
             Element::ProjectInfo(_) => ElementKind::ProjectInfo,
             Element::PlanSheet(_) => ElementKind::PlanSheet,
         }

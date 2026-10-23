@@ -328,6 +328,8 @@ impl Viewport {
                         Tool::Door => "door",
                         Tool::Window => "window",
                         Tool::SlabOpening => "slabOpening",
+                        Tool::Line => "line",
+                        Tool::Text => "text",
                     }
                     .to_string(),
                 )

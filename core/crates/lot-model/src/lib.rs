@@ -8,6 +8,7 @@
 //! Einheiten: Längen in Metern als `f64`, Koordinaten rechtshändig mit z nach
 //! oben (siehe ADR 0002).
 
+mod annotation;
 mod document;
 mod element;
 mod operation;
@@ -15,6 +16,7 @@ mod project;
 mod roof;
 mod stair;
 
+pub use annotation::{Annotation, AnnotationShape, AnnotationView};
 pub use document::{Document, ModelError};
 pub use element::{
     BuildingClass, CircularArc, Column, ColumnProfile, DimRef, DimensionChain, Door, Element, ElementId, ElementKind,

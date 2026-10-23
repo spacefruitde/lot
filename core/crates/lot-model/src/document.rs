@@ -321,6 +321,31 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     ));
                 }
             }
+            Element::Annotation(a) => {
+                let view_ok = match a.view {
+                    crate::AnnotationView::FloorPlan { storey } => project.storey(storey).is_some(),
+                    crate::AnnotationView::Section { view } => {
+                        matches!(project.elements.get(&view), Some(Element::SectionView(_)))
+                    }
+                    crate::AnnotationView::Sheet { sheet } => {
+                        matches!(project.elements.get(&sheet), Some(Element::PlanSheet(_)))
+                    }
+                };
+                if !view_ok {
+                    return Err(invalid("2D-Element: Die Ansicht fehlt"));
+                }
+                let enough = match &a.shape {
+                    crate::AnnotationShape::Polyline(p) => p.len() >= 2,
+                    crate::AnnotationShape::Polygon { points, .. } => points.len() >= 3,
+                    crate::AnnotationShape::Circle { radius, .. } => *radius > 0.0,
+                    crate::AnnotationShape::Text { text, height, .. } => !text.trim().is_empty() && *height > 0.0,
+                };
+                if !enough || a.pen <= 0.0 {
+                    return Err(invalid(
+                        "2D-Element: Linie ab zwei, Fläche ab drei Punkten, Kreis mit Radius, Text nicht leer",
+                    ));
+                }
+            }
             Element::Stair(s) => {
                 if project.storey(s.storey).is_none() {
                     return Err(invalid("Treppe: Das Geschoss fehlt"));

@@ -14,8 +14,9 @@ use geometry::{
     End, as_elements, column_outline, element_at, end_point, footprint, moved_elements, moved_endpoint, outline,
 };
 use lot_model::{
-    Column, ColumnProfile, Document, Element, ElementId, GridLine, Handing, ModelError, Opening, OpeningKind,
-    Operation, Point2, Project, Space, Storey, Top, Wall, WallAlignment, WallSide,
+    Annotation, AnnotationShape, AnnotationView, Column, ColumnProfile, Document, Element, ElementId, GridLine,
+    Handing, ModelError, Opening, OpeningKind, Operation, Point2, Project, Space, Storey, Top, Wall, WallAlignment,
+    WallSide,
 };
 pub use snap::{Snap, SnapKind};
 
@@ -82,6 +83,10 @@ pub enum Tool {
     Window,
     /// Deckendurchbruch: zwei Ecken eines Rechtecks in der Decke des Geschosses
     SlabOpening,
+    /// 2D-Linie: Punkte nacheinander, Doppelklick beendet
+    Line,
+    /// 2D-Text: ein Klick
+    Text,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -166,7 +171,7 @@ impl Editor {
                 self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
                 Response::redraw()
             }
-            Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column | Tool::SlabOpening => {
+            Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column | Tool::SlabOpening | Tool::Line => {
                 self.pointer = Some(snap::snap(
                     project,
                     self.storey,
@@ -178,7 +183,7 @@ impl Editor {
                 ));
                 Response::redraw()
             }
-            Tool::Door | Tool::Window => {
+            Tool::Door | Tool::Window | Tool::Text => {
                 self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
                 self.hover_tolerance = input.tolerance;
                 Response::redraw()
@@ -281,6 +286,49 @@ impl Editor {
                     Some(_) => {}
                 }
                 Response::redraw()
+            }
+            Tool::Text => {
+                let p = Point2::new((input.point.x / 0.01).round() * 0.01, (input.point.y / 0.01).round() * 0.01);
+                let text = Annotation {
+                    view: AnnotationView::FloorPlan { storey: self.storey },
+                    shape: AnnotationShape::Text { position: p, text: "Text".into(), height: 2.5, rotation: 0.0 },
+                    pen: 0.25,
+                    dashed: false,
+                };
+                match doc.insert(Element::Annotation(text)) {
+                    Ok(id) => {
+                        // Gleich wählen, damit der Text im Inspektor geändert werden kann.
+                        self.tool = Tool::Select;
+                        self.pointer = None;
+                        self.selection = vec![id];
+                        Response::changed()
+                    }
+                    Err(e) => Response { error: Some(e.to_string()), ..Response::redraw() },
+                }
+            }
+            Tool::Line => {
+                if clicks >= 2 {
+                    self.end_chain();
+                    return Response::redraw();
+                }
+                let p = snap::snap(
+                    doc.project(),
+                    self.storey,
+                    input.point,
+                    input.tolerance,
+                    self.chain_start,
+                    input.shift,
+                    &[],
+                )
+                .point;
+                self.pointer = None;
+                match self.chain_start {
+                    None => {
+                        self.chain_start = Some(p);
+                        Response::redraw()
+                    }
+                    Some(start) => self.add_line(doc, start, p),
+                }
             }
             Tool::Wall => {
                 if clicks >= 2 {
@@ -441,6 +489,9 @@ impl Editor {
                         self.arc_end = Some(end);
                         return Response::redraw();
                     }
+                    if self.tool == Tool::Line {
+                        return self.add_line(doc, start, end);
+                    }
                     return self.add_wall(doc, start, end);
                 }
                 self.end_chain();
@@ -478,6 +529,8 @@ impl Editor {
             Command::DoorTool => self.set_tool(Tool::Door),
             Command::WindowTool => self.set_tool(Tool::Window),
             Command::SlabOpeningTool => self.set_tool(Tool::SlabOpening),
+            Command::LineTool => self.set_tool(Tool::Line),
+            Command::TextTool => self.set_tool(Tool::Text),
             Command::FlipDoorSwing => self.change_doors(doc, "Aufschlag wechseln", |d| {
                 // Die Bänder bleiben, wo sie sind: mit der Seite wechselt auch DIN links und rechts.
                 d.opens_to = d.opens_to.other();
@@ -566,6 +619,8 @@ impl Editor {
             CommandInfo::new(Command::DoorTool, "Tür setzen", "T", "Werkzeug"),
             CommandInfo::new(Command::WindowTool, "Fenster setzen", "F", "Werkzeug"),
             CommandInfo::new(Command::SlabOpeningTool, "Deckendurchbruch zeichnen", "D", "Werkzeug"),
+            CommandInfo::new(Command::LineTool, "Linie zeichnen (2D)", "L", "Werkzeug"),
+            CommandInfo::new(Command::TextTool, "Text setzen (2D)", "X", "Werkzeug"),
             CommandInfo::new(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "", "Auswahl"),
             CommandInfo::new(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "", "Auswahl"),
             CommandInfo::new(Command::DimensionWalls, "Bemaßen: Maßketten an den gewählten Wänden", "M", "Auswahl"),
@@ -641,6 +696,23 @@ impl Editor {
             if let (Some(a), Some(p)) = (self.chain_start, self.pointer) {
                 let b = p.point;
                 overlay.preview = Some(vec![[a.x, a.y], [b.x, a.y], [b.x, b.y], [a.x, b.y]]);
+            }
+        }
+        if self.tool == Tool::Line {
+            overlay.snap = self.pointer;
+            if let (Some(start), Some(p)) = (self.chain_start, self.pointer) {
+                let (dx, dy) = (p.point.x - start.x, p.point.y - start.y);
+                let len = dx.hypot(dy).max(1e-9);
+                let (nx, ny) = (-dy / len * 0.01, dx / len * 0.01);
+                overlay.preview = Some(vec![
+                    [start.x - nx, start.y - ny],
+                    [p.point.x - nx, p.point.y - ny],
+                    [p.point.x + nx, p.point.y + ny],
+                    [start.x + nx, start.y + ny],
+                ]);
+                let mid = Point2::new((start.x + p.point.x) / 2.0, (start.y + p.point.y) / 2.0);
+                let text = if self.typed.is_empty() { format_m(len) } else { format!("{} m", self.typed) };
+                overlay.label = Some((mid, text));
             }
         }
         if self.tool == Tool::Grid {
@@ -723,6 +795,11 @@ impl Editor {
                 "Deckendurchbruch: erste Ecke in der Decke dieses Geschosses klicken. Esc: zurück.".into()
             }
             (Tool::SlabOpening, Some(_), _) => "Deckendurchbruch: gegenüberliegende Ecke klicken.".into(),
+            (Tool::Line, None, _) => "Linie: Anfangspunkt klicken. Esc: zurück zum Auswählen.".into(),
+            (Tool::Line, Some(_), _) => {
+                "Nächsten Punkt klicken oder Länge tippen. ⇧: nur rechte Winkel. Doppelklick oder Esc: fertig.".into()
+            }
+            (Tool::Text, _, _) => "Text: Stelle klicken, den Text im Inspektor ändern. Esc: zurück.".into(),
             (Tool::Space, _, _) => {
                 "Raum: in den Bereich klicken, dort steht der Raumstempel. Esc: zurück zum Auswählen.".into()
             }
@@ -771,6 +848,23 @@ impl Editor {
             return Response { error: Some("Im Projekt gibt es noch keinen Wandaufbau".into()), ..Default::default() };
         };
         let result = doc.insert(Element::Wall(wall)).map(|_| ());
+        if result.is_ok() {
+            self.chain_start = Some(end);
+        }
+        Response::from_result(result)
+    }
+
+    fn add_line(&mut self, doc: &mut Document, start: Point2, end: Point2) -> Response {
+        if start.distance(end) < 0.01 {
+            return Response::redraw();
+        }
+        let line = Annotation {
+            view: AnnotationView::FloorPlan { storey: self.storey },
+            shape: AnnotationShape::Polyline(vec![start, end]),
+            pen: 0.25,
+            dashed: false,
+        };
+        let result = doc.insert(Element::Annotation(line)).map(|_| ());
         if result.is_ok() {
             self.chain_start = Some(end);
         }

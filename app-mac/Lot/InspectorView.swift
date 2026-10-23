@@ -7,7 +7,7 @@ struct InspectorView: View {
 
     var body: some View {
         Form {
-            if model.parameters.isEmpty && model.spaces.isEmpty {
+            if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty {
                 Section {
                     Text("Nichts gewählt. Eine Wand oder einen Raumstempel anklicken zeigt die Eigenschaften.")
                         .foregroundStyle(.secondary)
@@ -28,6 +28,7 @@ struct InspectorView: View {
                 }
             } else {
                 ForEach(model.spaces, id: \.element) { SpaceSection(space: $0) }
+                ForEach(model.texts, id: \.element) { TextSection(info: $0) }
                 ForEach(groups, id: \.0) { element, parameters in
                     Section(model.label(for: element)) {
                         ForEach(parameters, id: \.kind) { ParameterRow(parameter: $0) }
@@ -46,7 +47,7 @@ struct InspectorView: View {
             }
             Section("Bedienung") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("W: Wand, B: Bogenwand, T: Tür, F: Fenster, R: Raum, A: Achse, S: Stütze, M: Bemaßen, D: Deckendurchbruch, V: Auswählen, ⌘K: Befehle")
+                    Text("W: Wand, B: Bogenwand, T: Tür, F: Fenster, R: Raum, A: Achse, S: Stütze, M: Bemaßen, D: Deckendurchbruch, L: Linie, X: Text, V: Auswählen, ⌘K: Befehle")
                     Text("Zeichnen: klicken, Länge tippen und ⏎, ⇧ rechtwinklig")
                     Text("Grundriss: zwei Finger verschieben, spreizen zoomt")
                     Text("3D: zwei Finger drehen, mit ⇧ verschieben")
@@ -120,6 +121,36 @@ private struct SpaceSection: View {
     private func commit() {
         guard number != space.number || name != space.name else { return }
         model.setSpace(space, number: number, name: name)
+    }
+}
+
+/// Inhalt und Schrifthöhe eines 2D-Texts, übernommen mit Return oder beim Verlassen des Feldes.
+private struct TextSection: View {
+    @Environment(AppModel.self) private var model
+    let info: TextInfo
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        Section(model.label(for: info.element)) {
+            TextField("Text", text: $text)
+                .focused($focused)
+                .onSubmit(commit)
+            Picker("Schrifthöhe", selection: Binding(get: { info.height }, set: { model.setText(info, text: text, height: $0) })) {
+                ForEach([1.8, 2.5, 3.5, 5.0, 7.0], id: \.self) { h in
+                    Text(h.formatted(.number.locale(Locale(identifier: "de_DE"))) + " mm").tag(h)
+                }
+            }
+        }
+        .onAppear { text = info.text }
+        .onChange(of: info.element) { text = info.text }
+        .onChange(of: info.text) { text = info.text }
+        .onChange(of: focused) { if !focused { commit() } }
+    }
+
+    private func commit() {
+        guard text != info.text, !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        model.setText(info, text: text)
     }
 }
 
