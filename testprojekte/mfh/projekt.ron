@@ -439,9 +439,9 @@ Project(
             outline: [(x: -6.0, y: -9.0), (x: 30.0, y: -9.0), (x: 30.0, y: 16.0), (x: -6.0, y: 16.0)],
             public_edges: [(edge: 2, width: 10.0, kind: Some(Road), name: "Musterstraße")],
         ),
-        41: Plot(name: "Flurstück 122", outline: [(x: -20.0, y: -9.0), (x: -6.0, y: -9.0), (x: -6.0, y: 16.0), (x: -20.0, y: 16.0)], neighbour: true),
-        42: Plot(name: "Flurstück 124", outline: [(x: 30.0, y: -9.0), (x: 44.0, y: -9.0), (x: 44.0, y: 16.0), (x: 30.0, y: 16.0)], neighbour: true),
-        43: Plot(name: "Flurstück 131", outline: [(x: -20.0, y: -23.0), (x: 44.0, y: -23.0), (x: 44.0, y: -9.0), (x: -20.0, y: -9.0)], neighbour: true),
+        41: Plot(name: "Flurstück 122", outline: [(x: -16.0, y: -9.0), (x: -6.0, y: -9.0), (x: -6.0, y: 16.0), (x: -16.0, y: 16.0)], neighbour: true),
+        42: Plot(name: "Flurstück 124", outline: [(x: 30.0, y: -9.0), (x: 40.0, y: -9.0), (x: 40.0, y: 16.0), (x: 30.0, y: 16.0)], neighbour: true),
+        43: Plot(name: "Flurstück 131", outline: [(x: -16.0, y: -19.0), (x: 40.0, y: -19.0), (x: 40.0, y: -9.0), (x: -16.0, y: -9.0)], neighbour: true),
         // Probe für den Prüfbericht: dasselbe Grundstück mit der Ostgrenze 4,50 m vor dem Haus.
         44: Plot(
             name: "Flurstück 123 (Probe)",
@@ -469,7 +469,7 @@ Project(
         63: SectionView(name: "Ansicht Ost", start: (x: 28.0, y: -3.0), end: (x: 28.0, y: 15.0), look: Left, depth: 40.0, kind: Elevation),
         64: SectionView(name: "Ansicht Nord", start: (x: 27.0, y: 15.0), end: (x: -3.0, y: 15.0), look: Left, depth: 40.0, kind: Elevation),
         65: SectionView(name: "Ansicht West", start: (x: -4.0, y: 15.0), end: (x: -4.0, y: -3.0), look: Left, depth: 40.0, kind: Elevation),
-        70: PlanSheet(number: "BA-01", title: "Lageplan mit Abstandsflächen", format: "A3", date: "24.10.2026", views: [(content: SitePlan, scale: 250.0, center: (x: 170.0, y: 170.0))]),
+        70: PlanSheet(number: "BA-01", title: "Lageplan mit Abstandsflächen", format: "A3", date: "24.10.2026", views: [(content: SitePlan, scale: 250.0, center: (x: 165.0, y: 175.0))]),
         71: PlanSheet(number: "BA-02", title: "Grundriss Erdgeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 1), scale: 100.0, center: (x: 185.0, y: 175.0))]),
         72: PlanSheet(number: "BA-03", title: "Grundriss 1. Obergeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 2), scale: 100.0, center: (x: 185.0, y: 175.0))]),
         73: PlanSheet(number: "BA-04", title: "Grundriss 2. Obergeschoss", format: "A3", date: "24.10.2026", views: [(content: FloorPlan(storey: 3), scale: 100.0, center: (x: 185.0, y: 175.0))]),

@@ -89,6 +89,19 @@ fn building_front(meshes: &[(&lot_geom::ElementGeometry, Vec<[f64; 3]>)], depth:
         .min(depth)
 }
 
+/// Ausdehnung (u, v) aller Körper außer dem Erdreich zwischen Schnittebene und Blicktiefe.
+fn building_extent(meshes: &[(&lot_geom::ElementGeometry, Vec<[f64; 3]>)], depth: f64) -> Option<([f64; 2], [f64; 2])> {
+    let mut lo = [f64::INFINITY; 2];
+    let mut hi = [f64::NEG_INFINITY; 2];
+    for (_, uvw) in meshes.iter().filter(|(e, _)| e.material != lot_geom::terrain::TERRAIN_MATERIAL) {
+        for p in uvw.iter().filter(|p| (-1e-6..=depth).contains(&p[2])) {
+            lo = [lo[0].min(p[0]), lo[1].min(p[1])];
+            hi = [hi[0].max(p[0]), hi[1].max(p[1])];
+        }
+    }
+    lo[0].is_finite().then_some((lo, hi))
+}
+
 /// Platz links neben dem Bild für die Höhenkoten und die Wandhöhe, in Metern.
 const MARK_SPACE: f64 = 4.5;
 /// Abstand der Höhenkoten links vom Bild, in Metern.
@@ -168,7 +181,9 @@ pub fn section(
     }
     // Geländelinie: ohne Geländemodell auf -0,30 m; mit Gelände in Ansichten
     // vor dem Gebäude, im Schnitt keine (das Erdreich ist selbst geschnitten).
-    let ground: Vec<[f64; 2]> = match (buffer.extent(), terrain) {
+    // Ausdehnung des Gebäudes ohne Erdreich, das weit über das Bild hinausreicht.
+    let extent = building_extent(&meshes, view.depth).or_else(|| buffer.extent());
+    let ground: Vec<[f64; 2]> = match (extent, terrain) {
         (None, _) => Vec::new(),
         (Some((lo, hi)), None) => vec![[lo[0] - 1.0, GROUND], [hi[0] + 1.0, GROUND]],
         (Some(_), Some(_)) if view.kind == SectionKind::Section => Vec::new(),
@@ -213,7 +228,7 @@ pub fn section(
     draw_cut_for(&mut objects, project, &cut, None, standard, style, viewport);
 
     // 4. Geländelinie, außerhalb der geschnittenen Bauteile.
-    if let Some((lo, _)) = buffer.extent() {
+    if let Some((lo, _)) = extent {
         for w in ground.windows(2) {
             for [a, b] in outside_segments(w[0], w[1], &cut_all) {
                 objects.push(PlanObject::Line(Line {
@@ -279,7 +294,7 @@ fn feature_edges(meshes: &[(&lot_geom::ElementGeometry, Vec<[f64; 3]>)]) -> Vec<
         }
     }
     let cos_limit = EDGE_ANGLE.to_radians().cos();
-    faces
+    let candidates: Vec<EdgeFaces> = faces
         .into_values()
         .filter(|(_, normals)| {
             if normals.len() < 2 {
@@ -290,8 +305,61 @@ fn feature_edges(meshes: &[(&lot_geom::ElementGeometry, Vec<[f64; 3]>)]) -> Vec<
                 (0..normals.len()).any(|i| (i + 1..normals.len()).any(|j| dot(normals[i], normals[j]) >= cos_limit));
             !smooth
         })
-        .map(|(edge, _)| edge)
-        .collect()
+        .collect();
+    without_t_junctions(candidates, cos_limit)
+}
+
+/// Kanten, die an T-Stößen nicht genau aufeinandertreffen: Liegen zwei Kanten
+/// auf derselben Geraden, überlappen sich und hat jede eine Fläche, die bündig
+/// in die andere übergeht (Fassade über zwei Geschosse, deren obere Wand an
+/// einer Fenstertür unterbrochen ist), entfällt der überlappende Teil.
+fn without_t_junctions(edges: Vec<EdgeFaces>, cos_limit: f64) -> Vec<[[f64; 3]; 2]> {
+    // Gruppen je Gerade: Richtung (Vorzeichen fest) und Fußpunkt vom Ursprung.
+    let mut lines: HashMap<([i64; 3], [i64; 3]), Vec<usize>> = HashMap::new();
+    let mut params: Vec<([f64; 3], f64, f64)> = Vec::with_capacity(edges.len());
+    for (i, ([a, b], _)) in edges.iter().enumerate() {
+        let d = sub(*b, *a);
+        let len = dot(d, d).sqrt().max(1e-12);
+        let mut d = [d[0] / len, d[1] / len, d[2] / len];
+        let first = d.iter().copied().find(|v| v.abs() > 1e-9).unwrap_or(1.0);
+        if first < 0.0 {
+            d = d.map(|v| -v);
+        }
+        let ta = dot(*a, d);
+        let foot = [a[0] - d[0] * ta, a[1] - d[1] * ta, a[2] - d[2] * ta];
+        let key = (d.map(|v| (v * 1e4).round() as i64), foot.map(|v| (v * 1e4).round() as i64));
+        lines.entry(key).or_default().push(i);
+        let tb = dot(*b, d);
+        params.push((d, ta.min(tb), ta.max(tb)));
+    }
+    let mut out = Vec::new();
+    for group in lines.values() {
+        for &i in group {
+            let (d, t0, t1) = params[i];
+            let mut covered: Vec<(f64, f64)> = group
+                .iter()
+                .filter(|&&j| j != i)
+                .filter(|&&j| edges[i].1.iter().any(|n| edges[j].1.iter().any(|m| dot(*n, *m) >= cos_limit)))
+                .map(|&j| (params[j].1.max(t0), params[j].2.min(t1)))
+                .filter(|(a, b)| b - a > 1e-6)
+                .collect();
+            covered.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let [a, _] = edges[i].0;
+            let ta = dot(a, d);
+            let at = |t: f64| [a[0] + d[0] * (t - ta), a[1] + d[1] * (t - ta), a[2] + d[2] * (t - ta)];
+            let mut start = t0;
+            for (c0, c1) in covered {
+                if c0 > start + 1e-6 {
+                    out.push([at(start), at(c0)]);
+                }
+                start = start.max(c1);
+            }
+            if t1 > start + 1e-6 {
+                out.push([at(start), at(t1)]);
+            }
+        }
+    }
+    out
 }
 
 fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
