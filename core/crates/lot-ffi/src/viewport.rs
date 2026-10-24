@@ -94,6 +94,10 @@ struct State {
     vectors: HashMap<String, Arc<lot_io::cad::CadVectors>>,
     /// Bauteile der Referenzmodelle (IFC), nach Datei.
     references: HashMap<String, Arc<Vec<lot_io::ifc::IfcPart>>>,
+    /// Hinweise aus dem Prüfbericht im Plan zeigen; der Bericht wird nach
+    /// Modelländerungen neu gerechnet.
+    show_findings: bool,
+    findings: Option<lot_rules::CheckReport>,
 }
 
 /// Eine Unterlage, deren Bild die App liefern muss (PDF-Seite oder Bild).
@@ -144,8 +148,30 @@ impl Viewport {
                 images: HashMap::new(),
                 vectors: HashMap::new(),
                 references: HashMap::new(),
+                show_findings: false,
+                findings: None,
             }),
         }))
+    }
+
+    /// Hinweise aus dem Prüfbericht im Grundriss ein- oder ausblenden.
+    pub fn set_show_findings(&self, show: bool) {
+        let mut s = self.lock();
+        s.show_findings = show;
+        rebuild(&mut s, false);
+    }
+
+    /// Zeigt einen Ort: wechselt ins Geschoss und schiebt den Plan dorthin.
+    pub fn focus(&self, storey: u64, x: f64, y: f64) {
+        let mut s = self.lock();
+        if let Some(editor) = s.editor.as_mut() {
+            editor.storey = lot_model::ElementId(storey);
+        }
+        rebuild(&mut s, false);
+        let f = 1000.0 / s.plan_scale;
+        let mut camera = s.renderer.plan_camera();
+        camera.center = [x * f, y * f];
+        s.renderer.set_plan_camera(camera);
     }
 
     pub fn resize(&self, width_px: u32, height_px: u32, scale: f32) {
@@ -546,6 +572,7 @@ fn item(id: &str, title: &str, shortcut: &str, group: &str) -> CommandItem {
 fn rebuild(s: &mut State, model: bool) -> f64 {
     let start = Instant::now();
     if model {
+        s.findings = None;
         s.model_stale = true;
         if s.renderer.mode() == ViewMode::Model {
             build_model(s);
@@ -578,6 +605,16 @@ fn rebuild(s: &mut State, model: bool) -> f64 {
         let parts = reference_parts(project, &s.references);
         lot_plan::reference::draw_reference_cut(&mut objects, &parts, z, viewport);
         objects.extend(floor_plan(project, view, standard, viewport));
+        if s.show_findings {
+            if s.findings.is_none()
+                && let Ok(geometry) = lot_geom::build(project)
+            {
+                s.findings = Some(lot_rules::check_project(project, &geometry));
+            }
+            if let Some(report) = &s.findings {
+                lot_plan::findings::draw_findings(&mut objects, report, editor.storey, viewport);
+            }
+        }
         s.renderer.set_plan(objects);
         let quads = underlay_quads(project, editor.storey, &s.images, viewport);
         s.renderer.set_underlays(&quads);

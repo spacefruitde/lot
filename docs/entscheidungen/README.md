@@ -40,3 +40,8 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0034](0034-gelaende.md) | Gelände | umgesetzt, Vorschlag |
 | [0035](0035-varianten.md) | Varianten | umgesetzt |
 | [0036](0036-ifc-referenz.md) | IFC als Referenz | umgesetzt |
+| [0037](0037-landesrecht-und-abstandsflaechen.md) | Landesrecht als Daten, Abstandsflächen | umgesetzt, Vorschlag |
+| [0038](0038-pruefbericht.md) | Prüfbericht und Hinweise im Modell | umgesetzt, Vorschlag |
+| [0039](0039-bauantragsplaene.md) | Bauantragspläne, Lageplan, Tür- und Fensterliste | umgesetzt, Vorschlag |
+| [0040](0040-buerostandard.md) | Bürostandard je Büro | umgesetzt |
+| [0041](0041-praesentationsplaene.md) | Präsentationspläne | umgesetzt, Vorschlag |

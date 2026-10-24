@@ -28,6 +28,7 @@ fn efh_plan_sheets_are_complete() {
                     Some(Element::SectionView(_)) => elevations += 1,
                     _ => panic!("Ansicht {view:?} fehlt"),
                 },
+                ViewContent::SitePlan | ViewContent::Presentation { .. } => {}
             }
         }
     }

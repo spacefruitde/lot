@@ -87,7 +87,7 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Variantengruppe | `VariantSet` | | eine Frage mit mehreren Varianten (ADR 0035) |
 | Referenzmodell | `ReferenceModel` | | IFC eines Fachplaners, sichtbar, nicht bearbeitbar (ADR 0036) |
 | Layer (DXF, DWG) | `floor_plan_layers` | | Gruppen im CAD-Austausch, etwa `A_Bauteile_Schnitt` |
-| Abstandsfläche | `SetbackArea` | | nach Landesbauordnung |
+| Abstandsfläche | `SetbackArea` | | nach Landesbauordnung, Tiefe T vor jeder Außenwand (ADR 0037) |
 | Variante | `Variant` | | eine Antwort in einer Variantengruppe |
 | Bürostandard | `OfficeStandard` | | Materialien, Schraffuren, Stiftsets je Maßstab |
 | Detailgrad | `Detail` | | grob (1:200), mittel (1:100), fein (1:50) |
@@ -109,3 +109,34 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Maßhilfslinie | | | kurze Linie vom Bauteil zur Maßlinie |
 | Maßbegrenzung | | | Schrägstrich unter 45° |
 | Rohbaumaß | | | Maß der Öffnung im Rohbau, nach DIN 18100 |
+| Wandhöhe H | `SetbackSample::height` | | Gelände bis Oberkante der Wand oder Dachhaut, je Messpunkt |
+| Tiefe T | `SetbackSample::depth` | | Tiefe der Abstandsfläche, etwa 0,4 H, mindestens 3 m |
+| Landesrecht | `StateRules` | | Werte je Bundesland als Daten in `lot-rules/landesrecht/` |
+| Gebäudeklasse | `BuildingClassResult` | | nach MBO § 2 Abs. 3; nicht zu verwechseln mit der Gebäudeart nach DIN 18065 (`BuildingClass`) |
+| oberirdisches Geschoss | `BuildingClassResult::above_ground` | | Deckenoberkante im Mittel mehr als 1,40 m über Gelände |
+| Vollgeschoss | `land_use` | | für die Geschossfläche, Definition nach Landesrecht |
+| GRZ, GFZ | `land_use` | | Grundflächenzahl und Geschossflächenzahl nach §§ 19, 20 BauNVO |
+| Grundstück, Flurstück | `Plot` | | Grenzen; Bezeichnung nach Kataster in `ProjectInfo::parcel` |
+| Nachbargrundstück | `Plot::neighbour` | | nur zur Darstellung im Lageplan |
+| öffentliche Fläche | `PublicEdge` | | Straße, Grün oder Wasser vor einer Grenze, mit Breite |
+| Höhe über NHN | `ProjectInfo::datum` | | Höhe von ±0,00 in m über Normalhöhennull |
+| Bauvorhaben | `ProjectInfo::description` | | etwa „Neubau eines Mehrfamilienhauses“ |
+| Lageplan | `site_plan` | | mit Grundstück, Gebäude und Abstandsflächen (ADR 0039) |
+| Aufzug | `Elevator` | IfcTransportElement | Fahrkorb mit Tür, hält in den genannten Geschossen |
+| Fahrkorb | `Elevator::cabin` | | nutzbare Grundfläche steht im Bauantrag |
+| Nutzungseinheit, Wohnung | `Space::unit` | | etwa „W 01“, leer bei gemeinsamen Räumen |
+| Treppenraum | `StoreyRooms::stair_rooms` | | Raum, in dem eine notwendige Treppe beginnt oder ankommt |
+| Rettungsweg | `escape` | | erster über den Treppenraum, zweiter über Fenster und Feuerwehr |
+| Anleiterhöhe | | | Oberkante Brüstung über Gelände, über 8 m nur mit Hubrettungsfahrzeug |
+| Bewegungsfläche | `square_fits` | | freies Quadrat, etwa 1,20 x 1,20 m nach DIN 18040-2 |
+| lichte Durchgangsbreite | `AccessibleNorm::clear_door` | | Rohbaumaß minus Zarge und Türblatt |
+| Prüfbericht | `CheckReport` | | alle Prüfungen mit Quelle (ADR 0038) |
+| Befund | `Finding` | | erfüllt, Hinweis oder nicht erfüllt, mit Quelle und Ort |
+| Hinweis im Modell | `draw_findings` | | Befund mit Ort als Kreis im Grundriss |
+| Tür- und Fensterliste | `opening_schedule` | | Positionen und Typen mit Rohbaumaßen |
+| Position (Liste) | `OpeningRow::mark` | | etwa „T 0.03“ |
+| Typ (Liste) | `OpeningType` | | gleiche Art und Rohbaumaße |
+| Bürostandard eines Büros | `OfficeOverrides` | | `buerostandard.ron` mit den Abweichungen (ADR 0040) |
+| Präsentationsplan | `presentation_plan` | | Wände dunkel, Räume farbig, ohne Maße (ADR 0041) |
+| Maßstabsleiste | `scale_bar` | | |
+| Nordpfeil | `north_arrow` | | Richtung aus `ProjectInfo::north` |

@@ -41,16 +41,25 @@ pub fn roof_solids(project: &Project, id: ElementId, roof: &Roof) -> Vec<(usize,
     let base = storey.elevation + roof.eave_height;
     let area = Area::from_ring(&ring(&roof.outer_outline()));
     let cuts = crate::dormers::roof_cuts(project, id);
+    let flat = roof.eave_planes().is_empty();
     let mut depth = 0.0;
     roof_type
         .layers
         .iter()
         .enumerate()
         .map(|(k, layer)| {
-            let top = below(roof, base, depth, &area);
-            depth += layer.thickness;
-            let bottom = below(roof, base, depth, &area);
-            let solid = top.difference(&bottom);
+            let solid = if flat {
+                // Flachdach: Schicht direkt hochziehen. Die Differenz zweier Körper mit
+                // gemeinsamen Seiten- und Bodenflächen lässt in Manifold Reste stehen.
+                let s = crate::extrude(&area, base - depth - layer.thickness, base - depth);
+                depth += layer.thickness;
+                s
+            } else {
+                let top = below(roof, base, depth, &area);
+                depth += layer.thickness;
+                let bottom = below(roof, base, depth, &area);
+                top.difference(&bottom)
+            };
             let solid = match &cuts {
                 Some(c) => solid.difference(c),
                 None => solid,

@@ -1,6 +1,6 @@
 [package]
 name = "lot-rules"
-description = "Regeln und Mengen: DIN 277, WoFlV, später Abstandsflächen und Barrierefreiheit"
+description = "Regeln und Mengen: DIN 277, WoFlV, Abstandsflächen, Barrierefreiheit, Rettungswege"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,8 @@ publish.workspace = true
 [dependencies]
 lot-geom = { version = "0.1.0", path = "../lot-geom" }
 lot-model = { version = "0.1.0", path = "../lot-model" }
+ron = "0.12.2"
+serde = { version = "1.0.229", features = ["derive"] }
 
 [lints]
 workspace = true

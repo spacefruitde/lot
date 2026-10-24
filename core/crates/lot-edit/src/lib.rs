@@ -1066,6 +1066,7 @@ impl Editor {
             name: "Raum".into(),
             usage: lot_model::SpaceUsage::default(),
             living_space: !below_ground,
+            unit: String::new(),
         }
     }
 

@@ -74,7 +74,8 @@ pub fn section_extent(geometry: &ModelGeometry, view: &SectionView) -> Option<([
         return None;
     }
     lo[1] = lo[1].min(GROUND);
-    Some(([lo[0] - MARK_SPACE, lo[1]], [hi[0], hi[1]]))
+    let right = if view.kind == SectionKind::Section { WALL_HEIGHT_OFFSET + 1.0 } else { 0.0 };
+    Some(([lo[0] - MARK_SPACE, lo[1]], [hi[0] + right, hi[1]]))
 }
 
 /// Tiefe der vordersten Fläche des Gebäudes (ohne Erdreich), für die Geländelinie in Ansichten.
@@ -88,8 +89,25 @@ fn building_front(meshes: &[(&lot_geom::ElementGeometry, Vec<[f64; 3]>)], depth:
         .min(depth)
 }
 
-/// Platz links neben dem Bild für die Höhenkoten, in Metern.
-const MARK_SPACE: f64 = 3.5;
+/// Ausdehnung (u, v) aller Körper außer dem Erdreich zwischen Schnittebene und Blicktiefe.
+fn building_extent(meshes: &[(&lot_geom::ElementGeometry, Vec<[f64; 3]>)], depth: f64) -> Option<([f64; 2], [f64; 2])> {
+    let mut lo = [f64::INFINITY; 2];
+    let mut hi = [f64::NEG_INFINITY; 2];
+    for (_, uvw) in meshes.iter().filter(|(e, _)| e.material != lot_geom::terrain::TERRAIN_MATERIAL) {
+        for p in uvw.iter().filter(|p| (-1e-6..=depth).contains(&p[2])) {
+            lo = [lo[0].min(p[0]), lo[1].min(p[1])];
+            hi = [hi[0].max(p[0]), hi[1].max(p[1])];
+        }
+    }
+    lo[0].is_finite().then_some((lo, hi))
+}
+
+/// Platz links neben dem Bild für die Höhenkoten und die Wandhöhe, in Metern.
+const MARK_SPACE: f64 = 4.5;
+/// Abstand der Höhenkoten links vom Bild, in Metern.
+const MARK_OFFSET: f64 = 1.6;
+/// Abstand der Maßlinie für die Wandhöhe von der Außenfläche, in Metern.
+const WALL_HEIGHT_OFFSET: f64 = 0.6;
 
 /// Zeichnet einen Schnitt oder eine Ansicht. `viewport` bildet (u, v) in Metern
 /// auf das Blatt ab.
@@ -130,6 +148,20 @@ pub fn section(
     } else {
         Vec::new()
     };
+    // Erdreich nur so weit, wie die Schnittlinie reicht.
+    let end_u = frame.uvw([view.end.x, view.end.y, 0.0])[0];
+    let (u0, u1) = (end_u.min(0.0), end_u.max(0.0));
+    let cut: Vec<LayerRegion> = {
+        let window = Area::from_ring(&[[u0, -1e4], [u1, -1e4], [u1, 1e4], [u0, 1e4]]);
+        cut.into_iter()
+            .filter_map(|mut r| {
+                if r.material == lot_geom::terrain::TERRAIN_MATERIAL {
+                    r.area = r.area.intersection(&window);
+                }
+                (!r.area.is_empty()).then_some(r)
+            })
+            .collect()
+    };
     let cut_all = Area::union_all(cut.iter().map(|r| &r.area));
 
     // 2. Sichtbare Kanten dahinter.
@@ -149,12 +181,15 @@ pub fn section(
     }
     // Geländelinie: ohne Geländemodell auf -0,30 m; mit Gelände in Ansichten
     // vor dem Gebäude, im Schnitt keine (das Erdreich ist selbst geschnitten).
-    let ground: Vec<[f64; 2]> = match (buffer.extent(), terrain) {
+    // Ausdehnung des Gebäudes ohne Erdreich, das weit über das Bild hinausreicht.
+    let extent = building_extent(&meshes, view.depth).or_else(|| buffer.extent());
+    let ground: Vec<[f64; 2]> = match (extent, terrain) {
         (None, _) => Vec::new(),
         (Some((lo, hi)), None) => vec![[lo[0] - 1.0, GROUND], [hi[0] + 1.0, GROUND]],
         (Some(_), Some(_)) if view.kind == SectionKind::Section => Vec::new(),
         (Some((lo, hi)), Some(t)) => {
-            let (from, to) = (lo[0] - 1.0, hi[0] + 1.0);
+            // Nicht über die Schnittlinie hinaus: das Gelände reicht oft weit.
+            let (from, to) = ((lo[0] - 1.0).max(u0), (hi[0] + 1.0).min(u1));
             let front = building_front(&meshes, view.depth);
             let tris = t.triangles();
             let steps = ((to - from) / 0.1).ceil().max(1.0) as usize;
@@ -193,7 +228,7 @@ pub fn section(
     draw_cut_for(&mut objects, project, &cut, None, standard, style, viewport);
 
     // 4. Geländelinie, außerhalb der geschnittenen Bauteile.
-    if let Some((lo, _)) = buffer.extent() {
+    if let Some((lo, _)) = extent {
         for w in ground.windows(2) {
             for [a, b] in outside_segments(w[0], w[1], &cut_all) {
                 objects.push(PlanObject::Line(Line {
@@ -206,7 +241,13 @@ pub fn section(
             }
         }
         // 5. Höhenkoten.
-        draw_level_marks(&mut objects, project, view.kind, lo[0] - 0.8, style, viewport);
+        draw_level_marks(&mut objects, project, view.kind, lo[0] - MARK_OFFSET, style, viewport);
+    }
+
+    // 7. Angaben für den Bauantrag (MBauVorlV § 8 Abs. 2 Nr. 3): Wandhöhe an den
+    //    geschnittenen Außenwänden, lichte Raumhöhen, Steigungsverhältnis der Treppen.
+    if view.kind == SectionKind::Section {
+        draw_submission_info(&mut objects, project, view, &cut, style, viewport);
     }
 
     // 6. 2D-Elemente, x entlang der Schnittlinie und y als Höhe.
@@ -253,7 +294,7 @@ fn feature_edges(meshes: &[(&lot_geom::ElementGeometry, Vec<[f64; 3]>)]) -> Vec<
         }
     }
     let cos_limit = EDGE_ANGLE.to_radians().cos();
-    faces
+    let candidates: Vec<EdgeFaces> = faces
         .into_values()
         .filter(|(_, normals)| {
             if normals.len() < 2 {
@@ -264,8 +305,61 @@ fn feature_edges(meshes: &[(&lot_geom::ElementGeometry, Vec<[f64; 3]>)]) -> Vec<
                 (0..normals.len()).any(|i| (i + 1..normals.len()).any(|j| dot(normals[i], normals[j]) >= cos_limit));
             !smooth
         })
-        .map(|(edge, _)| edge)
-        .collect()
+        .collect();
+    without_t_junctions(candidates, cos_limit)
+}
+
+/// Kanten, die an T-Stößen nicht genau aufeinandertreffen: Liegen zwei Kanten
+/// auf derselben Geraden, überlappen sich und hat jede eine Fläche, die bündig
+/// in die andere übergeht (Fassade über zwei Geschosse, deren obere Wand an
+/// einer Fenstertür unterbrochen ist), entfällt der überlappende Teil.
+fn without_t_junctions(edges: Vec<EdgeFaces>, cos_limit: f64) -> Vec<[[f64; 3]; 2]> {
+    // Gruppen je Gerade: Richtung (Vorzeichen fest) und Fußpunkt vom Ursprung.
+    let mut lines: HashMap<([i64; 3], [i64; 3]), Vec<usize>> = HashMap::new();
+    let mut params: Vec<([f64; 3], f64, f64)> = Vec::with_capacity(edges.len());
+    for (i, ([a, b], _)) in edges.iter().enumerate() {
+        let d = sub(*b, *a);
+        let len = dot(d, d).sqrt().max(1e-12);
+        let mut d = [d[0] / len, d[1] / len, d[2] / len];
+        let first = d.iter().copied().find(|v| v.abs() > 1e-9).unwrap_or(1.0);
+        if first < 0.0 {
+            d = d.map(|v| -v);
+        }
+        let ta = dot(*a, d);
+        let foot = [a[0] - d[0] * ta, a[1] - d[1] * ta, a[2] - d[2] * ta];
+        let key = (d.map(|v| (v * 1e4).round() as i64), foot.map(|v| (v * 1e4).round() as i64));
+        lines.entry(key).or_default().push(i);
+        let tb = dot(*b, d);
+        params.push((d, ta.min(tb), ta.max(tb)));
+    }
+    let mut out = Vec::new();
+    for group in lines.values() {
+        for &i in group {
+            let (d, t0, t1) = params[i];
+            let mut covered: Vec<(f64, f64)> = group
+                .iter()
+                .filter(|&&j| j != i)
+                .filter(|&&j| edges[i].1.iter().any(|n| edges[j].1.iter().any(|m| dot(*n, *m) >= cos_limit)))
+                .map(|&j| (params[j].1.max(t0), params[j].2.min(t1)))
+                .filter(|(a, b)| b - a > 1e-6)
+                .collect();
+            covered.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let [a, _] = edges[i].0;
+            let ta = dot(a, d);
+            let at = |t: f64| [a[0] + d[0] * (t - ta), a[1] + d[1] * (t - ta), a[2] + d[2] * (t - ta)];
+            let mut start = t0;
+            for (c0, c1) in covered {
+                if c0 > start + 1e-6 {
+                    out.push([at(start), at(c0)]);
+                }
+                start = start.max(c1);
+            }
+            if t1 > start + 1e-6 {
+                out.push([at(start), at(t1)]);
+            }
+        }
+    }
+    out
 }
 
 fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -622,6 +716,143 @@ fn outside_segments(a: [f64; 2], b: [f64; 2], area: &Area) -> Vec<[[f64; 2]; 2]>
         parts.push([s0, b]);
     }
     parts
+}
+
+/// Bereiche einer Fläche auf der senkrechten Linie bei `u`, als (unten, oben), aufsteigend.
+fn vertical_runs(area: &Area, u: f64) -> Vec<(f64, f64)> {
+    let mut hits: Vec<f64> = Vec::new();
+    for ring in area.rings() {
+        for i in 0..ring.len() {
+            let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+            if (a[0] <= u && u < b[0]) || (b[0] <= u && u < a[0]) {
+                hits.push(a[1] + (u - a[0]) / (b[0] - a[0]) * (b[1] - a[1]));
+            }
+        }
+    }
+    hits.sort_by(f64::total_cmp);
+    hits.as_chunks::<2>().0.iter().map(|p| (p[0], p[1])).collect()
+}
+
+/// Wandhöhe H an beiden Außenseiten, lichte Raumhöhe je Geschoss und das
+/// Steigungsverhältnis jeder geschnittenen Treppe.
+fn draw_submission_info(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    view: &SectionView,
+    cut: &[LayerRegion],
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let frame = Frame::new(view);
+    let pen = Pen::mm(style.pens.annotation);
+    let size = style.space_text;
+    let building: Vec<&Area> = cut
+        .iter()
+        // Ohne Erdreich und ohne Referenzmodelle (Material „referenz“, lot-io).
+        .filter(|r| r.material != lot_geom::terrain::TERRAIN_MATERIAL && r.material != "referenz")
+        .map(|r| &r.area)
+        .collect();
+    let building = Area::union_all(building);
+    let Some((lo, hi)) = building.bounds() else { return };
+    let text = |objects: &mut Vec<PlanObject>, at: PaperPoint, t: String, rotation: f64, anchor: Anchor| {
+        objects.push(PlanObject::Text(Text { position: at, text: t, height_mm: size, anchor, rotation }));
+    };
+    let segment = |objects: &mut Vec<PlanObject>, a: PaperPoint, b: PaperPoint, width: f64| {
+        objects.push(PlanObject::Line(Line {
+            points: vec![a, b],
+            closed: false,
+            pen: Pen::mm(width),
+            style: LineStyle::Solid,
+            color: Color::BLACK,
+        }));
+    };
+
+    // Wandhöhe vom Gelände bis zur Oberkante der Außenwand (MBO § 6 Abs. 4 Satz 2).
+    for (edge, inward, side) in [(lo[0], 1.0, -1.0), (hi[0], -1.0, 1.0)] {
+        let probe = edge + inward * 0.02;
+        let Some(top) = vertical_runs(&building, probe).last().map(|r| r.1) else { continue };
+        let p = frame.point(edge - inward * 0.001, 0.0);
+        let ground = project.terrain().and_then(|t| t.height_at(lot_model::Point2::new(p[0], p[1]))).unwrap_or(GROUND);
+        if top - ground < 1.0 {
+            continue;
+        }
+        let u = edge + side * WALL_HEIGHT_OFFSET;
+        let (a, b) = (viewport.to_paper(u, ground), viewport.to_paper(u, top));
+        segment(objects, a, b, pen.width_mm);
+        for q in [a, b] {
+            segment(
+                objects,
+                PaperPoint::new(q.x - 0.7, q.y - 0.7),
+                PaperPoint::new(q.x + 0.7, q.y + 0.7),
+                pen.width_mm * 2.0,
+            );
+            let e = viewport.to_paper(edge, if q == a { ground } else { top });
+            segment(
+                objects,
+                PaperPoint::new(e.x + side * 1.0, q.y),
+                PaperPoint::new(q.x + side * 1.5, q.y),
+                pen.width_mm,
+            );
+        }
+        let mid = PaperPoint::new(a.x - 0.8, (a.y + b.y) / 2.0);
+        text(objects, mid, format!("H = {} m", crate::format_de(top - ground, 2)), 90.0, Anchor::Center);
+    }
+
+    // Lichte Raumhöhe je Geschoss: Fertigfußboden bis Unterseite Decke oder Dach.
+    for (_, storey) in project.storeys() {
+        let z = storey.elevation;
+        let found = (1..20).find_map(|k| {
+            let u = lo[0] + (hi[0] - lo[0]) * k as f64 / 20.0;
+            let runs = vertical_runs(&building, u);
+            let floor = runs.iter().any(|r| r.0 < z - 0.01 && r.1 > z - 0.03);
+            let above = runs.iter().filter(|r| r.0 > z + 0.01).map(|r| r.0).reduce(f64::min)?;
+            let inside = runs.iter().any(|r| r.0 < z + 0.5 && r.1 > z + 0.05);
+            (floor && !inside && (1.8..6.0).contains(&(above - z))).then_some((u, above - z))
+        });
+        if let Some((u, clear)) = found {
+            let at = viewport.to_paper(u, z + 0.25);
+            text(
+                objects,
+                PaperPoint::new(at.x + 1.5, at.y),
+                format!("LRH {}", crate::format_de(clear, 2)),
+                0.0,
+                Anchor::Left,
+            );
+            let (a, b) = (viewport.to_paper(u, z), viewport.to_paper(u, z + clear));
+            segment(objects, a, b, pen.width_mm);
+            for q in [a, b] {
+                segment(
+                    objects,
+                    PaperPoint::new(q.x - 0.7, q.y - 0.7),
+                    PaperPoint::new(q.x + 0.7, q.y + 0.7),
+                    pen.width_mm * 2.0,
+                );
+            }
+        }
+    }
+
+    // Steigungsverhältnis über jeder geschnittenen Treppe.
+    let mut stairs: Vec<ElementId> = cut
+        .iter()
+        .filter(|r| matches!(project.elements.get(&r.element), Some(Element::Stair(_))))
+        .map(|r| r.element)
+        .collect();
+    stairs.sort();
+    stairs.dedup();
+    for id in stairs {
+        let Some(Element::Stair(stair)) = project.elements.get(&id) else { continue };
+        let Some(layout) = project.stair_layout(stair) else { continue };
+        let regions: Vec<&Area> = cut.iter().filter(|r| r.element == id).map(|r| &r.area).collect();
+        let Some((slo, shi)) = Area::union_all(regions).bounds() else { continue };
+        let at = viewport.to_paper((slo[0] + shi[0]) / 2.0, shi[1] + 0.15);
+        let label = format!(
+            "{} Stg. {}/{}",
+            stair.risers(),
+            crate::format_de(layout.rise * 100.0, 1),
+            crate::format_de(layout.tread * 100.0, 1)
+        );
+        text(objects, at, label, 0.0, Anchor::Center);
+    }
 }
 
 /// Höhe im üblichen Format: „±0,00“, „+2,75“, „-2,50“.

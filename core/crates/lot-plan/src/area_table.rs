@@ -81,6 +81,12 @@ fn rows(report: &AreaReport) -> Vec<Row> {
     });
     rows.push(Row::Gap);
     rows.push(Row::Value { label: "Wohnfläche nach WoFlV".into(), value: format!("{} m²", m2(report.living())) });
+    let units = report.living_by_unit();
+    if !units.is_empty() {
+        for (unit, living) in &units {
+            rows.push(Row::Value { label: format!("  Wohnung {unit}"), value: format!("{} m²", m2(*living)) });
+        }
+    }
     rows.push(Row::Note(
         "Unter Dachschrägen nach § 4: ab 2 m lichter Höhe ganz, 1 bis 2 m zur Hälfte, unter 1 m nicht.".into(),
     ));
@@ -196,6 +202,11 @@ pub fn area_csv(report: &AreaReport) -> String {
     out
 }
 
+/// Feld für CSV: in Anführungszeichen, wenn es Trenner oder Anführungszeichen enthält.
+pub(crate) fn csv_field(text: &str) -> String {
+    csv_text(text)
+}
+
 fn csv_text(text: &str) -> String {
     if text.contains([';', '"', '\n']) { format!("\"{}\"", text.replace('"', "\"\"")) } else { text.to_string() }
 }
@@ -215,6 +226,7 @@ mod tests {
                     number: "0.01".into(),
                     name: "Wohnen; Essen".into(),
                     usage: lot_model::SpaceUsage::Living,
+                    unit: String::new(),
                     net: Some(24.345),
                     living: Some(24.5),
                 }],

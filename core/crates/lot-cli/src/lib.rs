@@ -16,6 +16,19 @@ use serde::Deserialize;
 
 /// Dateiname der Ausgabenbeschreibung in einem Testprojektordner.
 pub const OUTPUTS_FILE: &str = "ausgaben.ron";
+/// Dateiname eines eigenen Bürostandards im Projektordner (2.08).
+pub const STANDARD_FILE: &str = "buerostandard.ron";
+
+/// Der Bürostandard eines Projektordners: der eingebaute mit den
+/// Abweichungen aus `buerostandard.ron`, falls die Datei da ist.
+pub fn office_standard(project_dir: &Path) -> Result<OfficeStandard> {
+    let file = project_dir.join(STANDARD_FILE);
+    if !file.is_file() {
+        return Ok(OfficeStandard::builtin().clone());
+    }
+    let text = std::fs::read_to_string(&file).with_context(|| format!("{} nicht lesbar", file.display()))?;
+    OfficeStandard::with_overrides(&text).map_err(|e| anyhow::anyhow!("{}: {e}", file.display()))
+}
 
 /// Eine Ausgabe. `name` ist der Dateiname ohne Endung.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -38,13 +51,32 @@ pub enum Output {
         /// Referenzmodelle (IFC) hellgrau unter dem Grundriss.
         #[serde(default)]
         references: bool,
+        /// Hinweise aus dem Prüfbericht im Grundriss (nicht für den Bauantrag).
+        #[serde(default)]
+        findings: bool,
     },
     /// Katalog von Ausschnitten, etwa der Wandknoten.
     Catalog { name: String, storey: u64, scale: f64, title: String, cells: Vec<CatalogCell> },
     /// 3D-Ansicht als Bild, ohne Fenster gerechnet.
     View3d { name: String },
-    /// Planansicht der App als Bild, ohne Fenster gerechnet.
-    PlanView { name: String, storey: u64, scale: f64 },
+    /// Planansicht der App als Bild, ohne Fenster gerechnet; mit `findings`
+    /// die Hinweise aus dem Prüfbericht.
+    PlanView {
+        name: String,
+        storey: u64,
+        scale: f64,
+        #[serde(default)]
+        findings: bool,
+    },
+    /// Tür- und Fensterliste (4.05) als Blatt und als CSV.
+    OpeningSchedule { name: String },
+    /// Prüfbericht (5.01 bis 5.05); `only` beschränkt auf Abschnitte, etwa
+    /// „Abstandsflächen“ für die Berechnung im Bauantrag.
+    CheckReport {
+        name: String,
+        #[serde(default)]
+        only: Vec<String>,
+    },
     /// Flächenaufstellung nach DIN 277 und WoFlV, als Blatt und als CSV; bei
     /// Umbauten im gewählten Bauzustand (sonst alles).
     AreaTable {
@@ -62,6 +94,14 @@ pub enum Output {
         phase: PhaseFilter,
         #[serde(default)]
         cad: bool,
+    },
+    /// Lageplan mit Abstandsflächen (5.01); `variant` zeigt eine andere
+    /// Variante einer Gruppe, etwa ein anderes Grundstück.
+    SitePlan {
+        name: String,
+        scale: f64,
+        #[serde(default)]
+        variant: Option<(u64, usize)>,
     },
     /// Alle Planblätter des Projekts, eine Seite je Blatt; mit `cad` je Blatt
     /// auch als DXF und DWG in Millimetern.
@@ -82,6 +122,9 @@ impl Output {
             | Output::PlanView { name, .. }
             | Output::AreaTable { name, .. }
             | Output::Section { name, .. }
+            | Output::SitePlan { name, .. }
+            | Output::OpeningSchedule { name }
+            | Output::CheckReport { name, .. }
             | Output::PlanSheets { name, .. } => name,
         }
     }
@@ -98,11 +141,16 @@ pub fn outputs(project_dir: &Path) -> Result<Vec<Output>> {
 }
 
 /// Die Blätter einer Ausgabe. Leer für Ausgaben ohne Blätter (3D-Bild).
-pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &Attachments) -> Vec<Sheet> {
-    let standard = OfficeStandard::default_standard();
+pub fn sheets(
+    project: &Project,
+    output: &Output,
+    source: &str,
+    attachments: &Attachments,
+    standard: &OfficeStandard,
+) -> Vec<Sheet> {
     match output {
         Output::M0Sheet { .. } => vec![lot_plan::m0::sheet(project, source)],
-        Output::FloorPlan { storey, scale, phase, variant, references, .. } => {
+        Output::FloorPlan { storey, scale, phase, variant, references, findings, .. } => {
             let base = match variant {
                 Some((set, index)) => {
                     let mut p = project.with_variant(ElementId(*set), *index);
@@ -116,15 +164,21 @@ pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &At
                 None => project.clone(),
             };
             let project = phase_project(&base, *phase);
-            let references =
-                if *references { lot_io::ifc::references(&project, attachments) } else { Vec::new() };
+            let references = if *references { lot_io::ifc::references(&project, attachments) } else { Vec::new() };
             let z = project.storey(ElementId(*storey)).map_or(0.0, |s| s.elevation)
                 + lot_plan::floor_plan::DEFAULT_CUT_HEIGHT;
-            vec![lot_plan::sheets::floor_plan_sheet_with(&project, ElementId(*storey), *scale, standard, |viewport| {
-                let mut below = Vec::new();
-                lot_plan::reference::draw_reference_cut(&mut below, &references, z, viewport);
-                below
-            })]
+            let mut sheet =
+                lot_plan::sheets::floor_plan_sheet_with(&project, ElementId(*storey), *scale, standard, |viewport| {
+                    let mut below = Vec::new();
+                    lot_plan::reference::draw_reference_cut(&mut below, &references, z, viewport);
+                    below
+                });
+            if *findings && let Ok(g) = geometry(&project, attachments) {
+                let report = lot_rules::check_project(&project, &g);
+                let viewport = lot_plan::sheets::floor_plan_viewport(&project, *scale, standard, &sheet);
+                lot_plan::findings::draw_findings(&mut sheet.objects, &report, ElementId(*storey), viewport);
+            }
+            vec![sheet]
         }
         Output::Catalog { storey, scale, title, cells, .. } => {
             catalog_sheets(project, ElementId(*storey), cells, *scale, standard, title)
@@ -142,10 +196,38 @@ pub fn sheets(project: &Project, output: &Output, source: &str, attachments: &At
                 Err(_) => Vec::new(),
             }
         }
+        Output::SitePlan { scale, variant, .. } => {
+            let base = match variant {
+                Some((set, index)) => project.with_variant(ElementId(*set), *index),
+                None => project.clone(),
+            };
+            let project = base.variant_view();
+            match geometry(&project, attachments) {
+                Ok(geometry) => vec![lot_plan::sheets::site_plan_sheet(&project, &geometry, *scale, standard)],
+                Err(_) => Vec::new(),
+            }
+        }
         Output::PlanSheets { .. } => match geometry(project, attachments) {
             Ok(geometry) => lot_plan::layout::plan_sheets(project, &geometry, standard),
             Err(_) => Vec::new(),
         },
+        Output::OpeningSchedule { .. } => {
+            let (rows, types) = lot_rules::opening_schedule(&project.variant_view());
+            lot_plan::table::schedule_sheets(&project.name, &rows, &types)
+        }
+        Output::CheckReport { only, .. } => {
+            let project = project.variant_view();
+            match geometry(&project, attachments) {
+                Ok(g) => {
+                    let mut report = lot_rules::check_project(&project, &g);
+                    if !only.is_empty() {
+                        report.sections.retain(|s| only.contains(&s.title));
+                    }
+                    lot_plan::table::report_sheets(&project.name, &report)
+                }
+                Err(_) => Vec::new(),
+            }
+        }
         Output::View3d { .. } | Output::PlanView { .. } => Vec::new(),
     }
 }
@@ -179,9 +261,19 @@ pub fn geometry(project: &Project, attachments: &Attachments) -> Result<lot_geom
 }
 
 /// DXF- und DWG-Dateien einer Ausgabe, falls sie welche verlangt: (Dateiname, Inhalt).
-pub fn cad_files(project: &Project, output: &Output, attachments: &Attachments) -> Result<Vec<(String, Vec<u8>)>> {
-    use lot_io::cad::{CadUnits, dwg_bytes, dxf_bytes, to_cad};
-    let standard = OfficeStandard::default_standard();
+pub fn cad_files(
+    project: &Project,
+    output: &Output,
+    attachments: &Attachments,
+    standard: &OfficeStandard,
+) -> Result<Vec<(String, Vec<u8>)>> {
+    use lot_io::cad::{CadUnits, dwg_bytes, dxf_bytes};
+    // Layer mit den Namen des Büros (Bürostandard).
+    let to_cad = |layers: &[(&str, Vec<lot_plan::PlanObject>)], factor: f64, units: CadUnits| {
+        let named: Vec<(&str, Vec<lot_plan::PlanObject>)> =
+            layers.iter().map(|(name, objects)| (standard.layer_name(name), objects.clone())).collect();
+        lot_io::cad::to_cad(&named, factor, units)
+    };
     let origin = lot_plan::Viewport { scale: 100.0, origin: lot_plan::PaperPoint::new(0.0, 0.0) };
     let mut docs: Vec<(String, lot_io::cad::CadDocument)> = Vec::new();
     match output {

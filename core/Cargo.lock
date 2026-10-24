@@ -1307,6 +1307,8 @@ version = "0.1.0"
 dependencies = [
  "lot-geom",
  "lot-model",
+ "ron",
+ "serde",
 ]
 
 [[package]]

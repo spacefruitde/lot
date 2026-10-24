@@ -34,6 +34,11 @@ final class AppModel {
     var stats = ViewportStatsDisplay()
     var errorMessage: String?
     var showPalette = false
+    /// Prüfbericht (5.01 bis 5.05), auf Wunsch gerechnet.
+    var findings: [FindingInfo] = []
+    var showReport = false
+    /// Hinweise aus dem Prüfbericht im Grundriss.
+    var showFindings = false
 
     /// Die Ansicht, sobald ihr NSView steht.
     private(set) weak var viewport: Viewport?
@@ -226,6 +231,7 @@ final class AppModel {
 
     private func replace(with document: LotDocument, url: URL?) {
         self.document = document
+        findings = []
         fileURL = url
         documentGeneration += 1
         if let viewport {

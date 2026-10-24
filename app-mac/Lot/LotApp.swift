@@ -9,7 +9,13 @@ struct LotApp: App {
         if let font = Bundle.main.path(forResource: "osifont-lgpl3fe", ofType: "ttf") {
             setenv("LOT_PLAN_FONT", font, 1)
         }
-        _model = State(initialValue: AppModel())
+        // Bürostandard des Büros, bevor der erste Plan gezeichnet wird (2.08).
+        let standardError = OfficeStandardFile.install()
+        let model = AppModel()
+        if let standardError {
+            model.errorMessage = "Bürostandard: \(standardError)"
+        }
+        _model = State(initialValue: model)
     }
 
     var body: some Scene {
@@ -52,6 +58,14 @@ struct LotApp: App {
                 Button("Alles zeigen") { model.zoomToFit() }
                     .keyboardShortcut("0")
                 Divider()
+            }
+            CommandMenu("Prüfen") {
+                Button("Prüfbericht …") { model.runChecks() }
+                    .keyboardShortcut("p", modifiers: [.command, .shift])
+                Toggle("Hinweise im Grundriss", isOn: Binding(get: { model.showFindings }, set: { _ in model.toggleFindings() }))
+                    .keyboardShortcut("h", modifiers: [.command, .shift])
+                Divider()
+                Button("Bürostandard bearbeiten …") { OfficeStandardFile.edit() }
             }
             CommandMenu("Werkzeug") {
                 Button("Befehle …") { model.showPalette.toggle() }

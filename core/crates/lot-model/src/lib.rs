@@ -11,7 +11,9 @@
 mod annotation;
 mod document;
 mod element;
+mod elevator;
 mod operation;
+mod plot;
 mod project;
 mod roof;
 mod stair;
@@ -27,7 +29,9 @@ pub use element::{
     Point2, ProjectInfo, SectionKind, SectionView, Slab, SlabKind, SlabOpening, SlabType, Space, SpaceUsage, Storey,
     Top, ViewContent, Wall, WallAlignment, WallEnd, WallSide, WallType,
 };
+pub use elevator::Elevator;
 pub use operation::Operation;
+pub use plot::{Plot, PublicEdge, PublicKind};
 pub use project::Project;
 pub use roof::{Dormer, DormerWindow, EavePlane, Roof, RoofEdge, RoofFace, RoofWindow};
 pub use stair::{FlightLayout, Landing, Railing, RailingPath, Stair, StairFlight, StairLayout, Tread};

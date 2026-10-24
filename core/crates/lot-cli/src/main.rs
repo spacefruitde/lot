@@ -51,6 +51,7 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
     // Unterlagen liegen als Dateien im Projektordner.
     let attachments = lot_io::testproject::attachments(&project, project_dir);
 
+    let standard = lot_cli::office_standard(project_dir)?;
     for output in outputs(project_dir)? {
         if let Output::View3d { name } = &output {
             if with_3d {
@@ -61,24 +62,28 @@ fn render(project_dir: &Path, out: &Path, dpi: f64, with_3d: bool) -> Result<()>
             }
             continue;
         }
-        if let Output::PlanView { name, storey, scale } = &output {
+        if let Output::PlanView { name, storey, scale, findings } = &output {
             if with_3d {
-                match render_plan_view(&project, &attachments, lot_model::ElementId(*storey), *scale) {
+                match render_plan_view(&project, &attachments, lot_model::ElementId(*storey), *scale, *findings) {
                     Ok(png) => write(&out.join(format!("{name}.png")), &png)?,
                     Err(e) => eprintln!("Hinweis: keine Planansicht ({e})"),
                 }
             }
             continue;
         }
+        if let Output::OpeningSchedule { name } = &output {
+            let (rows, _) = lot_rules::opening_schedule(&project.variant_view());
+            write(&out.join(format!("{name}.csv")), lot_plan::table::schedule_csv(&rows).as_bytes())?;
+        }
         if let Output::AreaTable { name, phase } = &output {
             let csv =
                 lot_plan::area_table::area_csv(&lot_rules::area_report(&lot_cli::phase_project(&project, *phase)));
             write(&out.join(format!("{name}.csv")), csv.as_bytes())?;
         }
-        for (file, bytes) in lot_cli::cad_files(&project, &output, &attachments)? {
+        for (file, bytes) in lot_cli::cad_files(&project, &output, &attachments, &standard)? {
             write(&out.join(file), &bytes)?;
         }
-        let pages = sheets(&project, &output, &source, &attachments);
+        let pages = sheets(&project, &output, &source, &attachments, &standard);
         write(&out.join(format!("{}.pdf", output.name())), &lot_io::pdf::to_pdf_pages(&pages)?)?;
         for (sheet, page) in pages.iter().zip(page_names(output.name(), pages.len())) {
             write(&out.join(format!("{page}.svg")), lot_io::svg::to_svg(sheet).as_bytes())?;
@@ -128,6 +133,7 @@ fn render_plan_view(
     attachments: &lot_io::project_file::Attachments,
     storey: lot_model::ElementId,
     scale: f64,
+    findings: bool,
 ) -> Result<Vec<u8>> {
     let (width, height) = (1600, 1000);
     let mut renderer = lot_render::Renderer::headless(width, height)?;
@@ -146,6 +152,12 @@ fn render_plan_view(
     let z = project.storey(storey).map_or(0.0, |s| s.elevation) + lot_plan::floor_plan::DEFAULT_CUT_HEIGHT;
     lot_plan::reference::draw_reference_cut(&mut objects, &lot_io::ifc::references(project, attachments), z, viewport);
     objects.extend(lot_plan::floor_plan::floor_plan(&project.variant_view(), view, standard, viewport));
+    if findings {
+        let shown = project.variant_view();
+        let geometry = lot_cli::geometry(&shown, attachments)?;
+        let report = lot_rules::check_project(&shown, &geometry);
+        lot_plan::findings::draw_findings(&mut objects, &report, storey, viewport);
+    }
     renderer.set_plan(objects);
     let quads: Vec<lot_render::UnderlayQuad> = project
         .underlays_on(storey)

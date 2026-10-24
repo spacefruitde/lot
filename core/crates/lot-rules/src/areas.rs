@@ -34,6 +34,8 @@ pub struct SpaceArea {
     pub number: String,
     pub name: String,
     pub usage: SpaceUsage,
+    /// Nutzungseinheit, etwa die Wohnung; leer bei gemeinsamen Räumen.
+    pub unit: String,
     /// Netto-Raumfläche in m²; `None`, wenn der Raum nicht von Wänden umschlossen ist.
     pub net: Option<f64>,
     /// Wohnfläche nach WoFlV in m²; `None` bei Zubehörräumen und offenen Räumen.
@@ -115,6 +117,19 @@ impl AreaReport {
     pub fn living(&self) -> f64 {
         self.spaces().filter_map(|r| r.living).sum()
     }
+
+    /// Wohnfläche je Nutzungseinheit (Wohnung), in der Reihenfolge des ersten Raums.
+    pub fn living_by_unit(&self) -> Vec<(String, f64)> {
+        let mut units: Vec<(String, f64)> = Vec::new();
+        for space in self.spaces().filter(|s| !s.unit.is_empty()) {
+            let living = space.living.unwrap_or(0.0);
+            match units.iter_mut().find(|(u, _)| *u == space.unit) {
+                Some((_, a)) => *a += living,
+                None => units.push((space.unit.clone(), living)),
+            }
+        }
+        units
+    }
 }
 
 /// Wohnfläche eines Bereichs nach WoFlV § 4 Nr. 1 und 2, nach lichter Höhe unter den Dächern.
@@ -172,6 +187,7 @@ pub fn area_report(project: &Project) -> AreaReport {
                 number: space.number.clone(),
                 name: space.name.clone(),
                 usage: space.usage,
+                unit: space.unit.clone(),
                 net,
                 living,
             });
@@ -241,6 +257,7 @@ mod tests {
                 name: "Wohnen".into(),
                 usage: SpaceUsage::Living,
                 living_space: true,
+                unit: String::new(),
             }),
         );
         (p, id)
@@ -314,6 +331,7 @@ mod tests {
                     name: name.into(),
                     usage: SpaceUsage::Other,
                     living_space: true,
+                    unit: String::new(),
                 }),
             );
         }
@@ -392,6 +410,7 @@ mod roof_tests {
                 name: "Studio".into(),
                 usage: SpaceUsage::Living,
                 living_space: true,
+                unit: String::new(),
             }),
         );
         let space = &area_report(&p).storeys[0].spaces[0];

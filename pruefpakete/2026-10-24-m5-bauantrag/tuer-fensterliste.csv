@@ -1,0 +1,130 @@
+Pos.;Typ;Geschoss;Art;Raum;angrenzend;Einheit;Breite m;Höhe m;Brüstung m;lichte Breite m;Anschlag;Wand
+F 0.01;F4;EG;Fenster;0.01 Wohnen, Essen, Kochen;außen;W 01;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.02;F1;EG;Fenstertür;0.01 Wohnen, Essen, Kochen;außen;W 01;2,010;2,260;0,000;;;Außenwand KS 17,5 mit WDVS 16
+F 0.03;F4;EG;Fenster;0.01 Wohnen, Essen, Kochen;außen;W 01;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.04;F4;EG;Fenster;0.02 Kind;außen;W 01;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.05;F4;EG;Fenster;0.03 Kind;außen;W 01;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.06;F4;EG;Fenster;0.04 Schlafen;außen;W 01;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.07;F4;EG;Fenster;0.04 Schlafen;außen;W 01;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.08;F2;EG;Fenster;0.05 Bad;außen;W 01;1,010;1,010;1,135;;;Außenwand KS 17,5 mit WDVS 16
+F 0.09;F4;EG;Fenster;0.11 Kind;außen;W 02;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.10;F4;EG;Fenster;0.12 Kind;außen;W 02;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.11;F1;EG;Fenstertür;0.13 Wohnen, Essen, Kochen;außen;W 02;2,010;2,260;0,000;;;Außenwand KS 17,5 mit WDVS 16
+F 0.12;F4;EG;Fenster;0.13 Wohnen, Essen, Kochen;außen;W 02;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.13;F4;EG;Fenster;0.13 Wohnen, Essen, Kochen;außen;W 02;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.14;F2;EG;Fenster;0.15 Bad;außen;W 02;1,010;1,010;1,135;;;Außenwand KS 17,5 mit WDVS 16
+F 0.15;F4;EG;Fenster;0.16 Schlafen;außen;W 02;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.16;F4;EG;Fenster;0.16 Schlafen;außen;W 02;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 0.17;F3;EG;Fenster;0.20 Treppenhaus;außen;;1,010;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+T 0.01;T2;EG;Tür;0.01 Wohnen, Essen, Kochen;0.06 Flur;W 01;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 0.02;T2;EG;Tür;0.02 Kind;0.06 Flur;W 01;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 0.03;T2;EG;Tür;0.03 Kind;0.06 Flur;W 01;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 0.04;T2;EG;Tür;0.04 Schlafen;0.06 Flur;W 01;1,010;2,135;0,000;0,900;DIN rechts;Innenwand tragend KS 17,5
+T 0.05;T2;EG;Tür;0.06 Flur;0.20 Treppenhaus;W 01;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 0.06;T2;EG;Tür;0.06 Flur;0.05 Bad;W 01;1,010;2,135;0,000;0,900;DIN links;Innenwand tragend KS 17,5
+T 0.07;T1;EG;Tür;0.06 Flur;0.07 Abst.;W 01;0,885;2,135;0,000;0,775;DIN links;Innenwand nichttragend KS 11,5
+T 0.08;T2;EG;Tür;0.11 Kind;0.14 Flur;W 02;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 0.09;T2;EG;Tür;0.12 Kind;0.14 Flur;W 02;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 0.10;T2;EG;Tür;0.13 Wohnen, Essen, Kochen;0.14 Flur;W 02;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 0.11;T2;EG;Tür;0.14 Flur;0.20 Treppenhaus;W 02;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 0.12;T2;EG;Tür;0.14 Flur;0.15 Bad;W 02;1,010;2,135;0,000;0,900;DIN rechts;Innenwand tragend KS 17,5
+T 0.13;T1;EG;Tür;0.14 Flur;0.17 Abst.;W 02;0,885;2,135;0,000;0,775;DIN rechts;Innenwand nichttragend KS 11,5
+T 0.14;T2;EG;Tür;0.16 Schlafen;0.14 Flur;W 02;1,010;2,135;0,000;0,900;DIN links;Innenwand tragend KS 17,5
+T 0.15;T3;EG;Tür;0.20 Treppenhaus;außen;;1,260;2,260;0,000;1,150;DIN links;Außenwand KS 17,5 mit WDVS 16
+T 0.16;T4;EG;Durchgang;0.20 Treppenhaus;0.21 Aufzug;;1,000;2,100;0,000;0,890;;Treppenraum- und Mittelwand Stahlbeton 20
+F 1.01;F4;1.OG;Fenster;1.01 Wohnen, Essen, Kochen;außen;W 03;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.02;F1;1.OG;Fenstertür;1.01 Wohnen, Essen, Kochen;außen;W 03;2,010;2,260;0,000;;;Außenwand KS 17,5 mit WDVS 16
+F 1.03;F4;1.OG;Fenster;1.01 Wohnen, Essen, Kochen;außen;W 03;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.04;F4;1.OG;Fenster;1.02 Kind;außen;W 03;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.05;F4;1.OG;Fenster;1.03 Kind;außen;W 03;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.06;F4;1.OG;Fenster;1.04 Schlafen;außen;W 03;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.07;F4;1.OG;Fenster;1.04 Schlafen;außen;W 03;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.08;F2;1.OG;Fenster;1.05 Bad;außen;W 03;1,010;1,010;1,135;;;Außenwand KS 17,5 mit WDVS 16
+F 1.09;F4;1.OG;Fenster;1.11 Kind;außen;W 04;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.10;F4;1.OG;Fenster;1.12 Kind;außen;W 04;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.11;F1;1.OG;Fenstertür;1.13 Wohnen, Essen, Kochen;außen;W 04;2,010;2,260;0,000;;;Außenwand KS 17,5 mit WDVS 16
+F 1.12;F4;1.OG;Fenster;1.13 Wohnen, Essen, Kochen;außen;W 04;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.13;F4;1.OG;Fenster;1.13 Wohnen, Essen, Kochen;außen;W 04;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.14;F2;1.OG;Fenster;1.15 Bad;außen;W 04;1,010;1,010;1,135;;;Außenwand KS 17,5 mit WDVS 16
+F 1.15;F4;1.OG;Fenster;1.16 Schlafen;außen;W 04;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.16;F4;1.OG;Fenster;1.16 Schlafen;außen;W 04;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 1.17;F4;1.OG;Fenster;1.20 Treppenhaus;außen;;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+T 1.01;T2;1.OG;Tür;1.01 Wohnen, Essen, Kochen;1.06 Flur;W 03;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 1.02;T2;1.OG;Tür;1.02 Kind;1.06 Flur;W 03;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 1.03;T2;1.OG;Tür;1.03 Kind;1.06 Flur;W 03;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 1.04;T2;1.OG;Tür;1.04 Schlafen;1.06 Flur;W 03;1,010;2,135;0,000;0,900;DIN rechts;Innenwand tragend KS 17,5
+T 1.05;T2;1.OG;Tür;1.06 Flur;1.20 Treppenhaus;W 03;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 1.06;T2;1.OG;Tür;1.06 Flur;1.05 Bad;W 03;1,010;2,135;0,000;0,900;DIN links;Innenwand tragend KS 17,5
+T 1.07;T1;1.OG;Tür;1.06 Flur;1.07 Abst.;W 03;0,885;2,135;0,000;0,775;DIN links;Innenwand nichttragend KS 11,5
+T 1.08;T2;1.OG;Tür;1.11 Kind;1.14 Flur;W 04;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 1.09;T2;1.OG;Tür;1.12 Kind;1.14 Flur;W 04;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 1.10;T2;1.OG;Tür;1.13 Wohnen, Essen, Kochen;1.14 Flur;W 04;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 1.11;T2;1.OG;Tür;1.14 Flur;1.20 Treppenhaus;W 04;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 1.12;T2;1.OG;Tür;1.14 Flur;1.15 Bad;W 04;1,010;2,135;0,000;0,900;DIN rechts;Innenwand tragend KS 17,5
+T 1.13;T1;1.OG;Tür;1.14 Flur;1.17 Abst.;W 04;0,885;2,135;0,000;0,775;DIN rechts;Innenwand nichttragend KS 11,5
+T 1.14;T2;1.OG;Tür;1.16 Schlafen;1.14 Flur;W 04;1,010;2,135;0,000;0,900;DIN links;Innenwand tragend KS 17,5
+T 1.15;T4;1.OG;Durchgang;1.20 Treppenhaus;1.21 Aufzug;;1,000;2,100;0,000;0,890;;Treppenraum- und Mittelwand Stahlbeton 20
+F 2.01;F4;2.OG;Fenster;2.01 Wohnen, Essen, Kochen;außen;W 05;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.02;F1;2.OG;Fenstertür;2.01 Wohnen, Essen, Kochen;außen;W 05;2,010;2,260;0,000;;;Außenwand KS 17,5 mit WDVS 16
+F 2.03;F4;2.OG;Fenster;2.01 Wohnen, Essen, Kochen;außen;W 05;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.04;F4;2.OG;Fenster;2.02 Kind;außen;W 05;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.05;F4;2.OG;Fenster;2.03 Kind;außen;W 05;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.06;F4;2.OG;Fenster;2.04 Schlafen;außen;W 05;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.07;F4;2.OG;Fenster;2.04 Schlafen;außen;W 05;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.08;F2;2.OG;Fenster;2.05 Bad;außen;W 05;1,010;1,010;1,135;;;Außenwand KS 17,5 mit WDVS 16
+F 2.09;F4;2.OG;Fenster;2.11 Kind;außen;W 06;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.10;F4;2.OG;Fenster;2.12 Kind;außen;W 06;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.11;F1;2.OG;Fenstertür;2.13 Wohnen, Essen, Kochen;außen;W 06;2,010;2,260;0,000;;;Außenwand KS 17,5 mit WDVS 16
+F 2.12;F4;2.OG;Fenster;2.13 Wohnen, Essen, Kochen;außen;W 06;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.13;F4;2.OG;Fenster;2.13 Wohnen, Essen, Kochen;außen;W 06;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.14;F2;2.OG;Fenster;2.15 Bad;außen;W 06;1,010;1,010;1,135;;;Außenwand KS 17,5 mit WDVS 16
+F 2.15;F4;2.OG;Fenster;2.16 Schlafen;außen;W 06;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.16;F4;2.OG;Fenster;2.16 Schlafen;außen;W 06;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 2.17;F4;2.OG;Fenster;2.20 Treppenhaus;außen;;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+T 2.01;T2;2.OG;Tür;2.01 Wohnen, Essen, Kochen;2.06 Flur;W 05;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 2.02;T2;2.OG;Tür;2.02 Kind;2.06 Flur;W 05;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 2.03;T2;2.OG;Tür;2.03 Kind;2.06 Flur;W 05;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 2.04;T2;2.OG;Tür;2.04 Schlafen;2.06 Flur;W 05;1,010;2,135;0,000;0,900;DIN rechts;Innenwand tragend KS 17,5
+T 2.05;T2;2.OG;Tür;2.06 Flur;2.20 Treppenhaus;W 05;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 2.06;T2;2.OG;Tür;2.06 Flur;2.05 Bad;W 05;1,010;2,135;0,000;0,900;DIN links;Innenwand tragend KS 17,5
+T 2.07;T1;2.OG;Tür;2.06 Flur;2.07 Abst.;W 05;0,885;2,135;0,000;0,775;DIN links;Innenwand nichttragend KS 11,5
+T 2.08;T2;2.OG;Tür;2.11 Kind;2.14 Flur;W 06;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 2.09;T2;2.OG;Tür;2.12 Kind;2.14 Flur;W 06;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 2.10;T2;2.OG;Tür;2.13 Wohnen, Essen, Kochen;2.14 Flur;W 06;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 2.11;T2;2.OG;Tür;2.14 Flur;2.20 Treppenhaus;W 06;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 2.12;T2;2.OG;Tür;2.14 Flur;2.15 Bad;W 06;1,010;2,135;0,000;0,900;DIN rechts;Innenwand tragend KS 17,5
+T 2.13;T1;2.OG;Tür;2.14 Flur;2.17 Abst.;W 06;0,885;2,135;0,000;0,775;DIN rechts;Innenwand nichttragend KS 11,5
+T 2.14;T2;2.OG;Tür;2.16 Schlafen;2.14 Flur;W 06;1,010;2,135;0,000;0,900;DIN links;Innenwand tragend KS 17,5
+T 2.15;T4;2.OG;Durchgang;2.20 Treppenhaus;2.21 Aufzug;;1,000;2,100;0,000;0,890;;Treppenraum- und Mittelwand Stahlbeton 20
+F 3.01;F4;3.OG;Fenster;3.01 Wohnen, Essen, Kochen;außen;W 07;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.02;F1;3.OG;Fenstertür;3.01 Wohnen, Essen, Kochen;außen;W 07;2,010;2,260;0,000;;;Außenwand KS 17,5 mit WDVS 16
+F 3.03;F4;3.OG;Fenster;3.01 Wohnen, Essen, Kochen;außen;W 07;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.04;F4;3.OG;Fenster;3.02 Kind;außen;W 07;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.05;F4;3.OG;Fenster;3.03 Kind;außen;W 07;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.06;F4;3.OG;Fenster;3.04 Schlafen;außen;W 07;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.07;F4;3.OG;Fenster;3.04 Schlafen;außen;W 07;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.08;F2;3.OG;Fenster;3.05 Bad;außen;W 07;1,010;1,010;1,135;;;Außenwand KS 17,5 mit WDVS 16
+F 3.09;F4;3.OG;Fenster;3.11 Kind;außen;W 08;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.10;F4;3.OG;Fenster;3.12 Kind;außen;W 08;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.11;F1;3.OG;Fenstertür;3.13 Wohnen, Essen, Kochen;außen;W 08;2,010;2,260;0,000;;;Außenwand KS 17,5 mit WDVS 16
+F 3.12;F4;3.OG;Fenster;3.13 Wohnen, Essen, Kochen;außen;W 08;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.13;F4;3.OG;Fenster;3.13 Wohnen, Essen, Kochen;außen;W 08;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.14;F2;3.OG;Fenster;3.15 Bad;außen;W 08;1,010;1,010;1,135;;;Außenwand KS 17,5 mit WDVS 16
+F 3.15;F4;3.OG;Fenster;3.16 Schlafen;außen;W 08;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.16;F4;3.OG;Fenster;3.16 Schlafen;außen;W 08;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+F 3.17;F4;3.OG;Fenster;3.20 Treppenhaus;außen;;1,260;1,385;0,885;;;Außenwand KS 17,5 mit WDVS 16
+T 3.01;T2;3.OG;Tür;3.01 Wohnen, Essen, Kochen;3.06 Flur;W 07;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 3.02;T2;3.OG;Tür;3.02 Kind;3.06 Flur;W 07;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 3.03;T2;3.OG;Tür;3.03 Kind;3.06 Flur;W 07;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 3.04;T2;3.OG;Tür;3.04 Schlafen;3.06 Flur;W 07;1,010;2,135;0,000;0,900;DIN rechts;Innenwand tragend KS 17,5
+T 3.05;T2;3.OG;Tür;3.06 Flur;3.20 Treppenhaus;W 07;1,010;2,135;0,000;0,900;DIN links;Treppenraum- und Mittelwand Stahlbeton 20
+T 3.06;T2;3.OG;Tür;3.06 Flur;3.05 Bad;W 07;1,010;2,135;0,000;0,900;DIN links;Innenwand tragend KS 17,5
+T 3.07;T1;3.OG;Tür;3.06 Flur;3.07 Abst.;W 07;0,885;2,135;0,000;0,775;DIN links;Innenwand nichttragend KS 11,5
+T 3.08;T2;3.OG;Tür;3.11 Kind;3.14 Flur;W 08;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 3.09;T2;3.OG;Tür;3.12 Kind;3.14 Flur;W 08;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 3.10;T2;3.OG;Tür;3.13 Wohnen, Essen, Kochen;3.14 Flur;W 08;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 3.11;T2;3.OG;Tür;3.14 Flur;3.20 Treppenhaus;W 08;1,010;2,135;0,000;0,900;DIN rechts;Treppenraum- und Mittelwand Stahlbeton 20
+T 3.12;T2;3.OG;Tür;3.14 Flur;3.15 Bad;W 08;1,010;2,135;0,000;0,900;DIN rechts;Innenwand tragend KS 17,5
+T 3.13;T1;3.OG;Tür;3.14 Flur;3.17 Abst.;W 08;0,885;2,135;0,000;0,775;DIN rechts;Innenwand nichttragend KS 11,5
+T 3.14;T2;3.OG;Tür;3.16 Schlafen;3.14 Flur;W 08;1,010;2,135;0,000;0,900;DIN links;Innenwand tragend KS 17,5
+T 3.15;T4;3.OG;Durchgang;3.20 Treppenhaus;3.21 Aufzug;;1,000;2,100;0,000;0,890;;Treppenraum- und Mittelwand Stahlbeton 20

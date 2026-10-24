@@ -43,13 +43,16 @@ Angelegt in M0, immer aktuell halten. Rust über rustup, die Version steht in `c
 - CI: `.github/workflows/pruefen.yml` prüft bei jedem Push Formatierung, clippy und Tests unter Linux und macOS und baut die Mac-App
 - Kern unter Linux lokal prüfen, ohne Ordnerfreigabe für Docker: `tar --exclude core/target -cf - core testprojekte | docker run -i --rm rust:1.99 bash -c 'mkdir /lot && tar -C /lot -xf - && cd /lot/core && cargo test --workspace'`
 - Testprojekt rechnen und Pläne ausgeben: `cd core && cargo run -p lot-cli -- render ../testprojekte/<name> --out ../out/<name>`
-  - schreibt, was `testprojekte/<name>/ausgaben.ron` beschreibt (Grundrisse, Schnitte und Ansichten, Planblätter mit Plankopf, Katalog, 3D-Bild, Planansicht, Flächenaufstellung als PDF und CSV), dazu `projekt.lot`
+  - schreibt, was `testprojekte/<name>/ausgaben.ron` beschreibt (Grundrisse, Schnitte und Ansichten, Lageplan mit Abstandsflächen, Planblätter mit Plankopf, Katalog, 3D-Bild, Planansicht, Flächenaufstellung, Tür- und Fensterliste als PDF und CSV, Prüfbericht), dazu `projekt.lot`
   - gibt die Prüfung aller Treppen nach DIN 18065 aus (Steigungsverhältnis, Durchgangshöhe)
   - schreibt mit `cad: true` auch DXF und DWG (acadrust); Unterlagen und IFC-Referenzen liest es aus dem Projektordner
   - DXF fremd prüfen (ohne Lot): `python -m venv venv && venv/bin/pip install ezdxf`, dann `venv/bin/ezdxf audit datei.dxf`
   - `--no-3d` auf Rechnern ohne Grafikkarte (etwa Cloud-Sessions)
   - die Planschrift liegt in `core/assets/fonts/`, ein anderer Ort geht über `LOT_PLAN_FONT`
-- Abnahmetests: EFH (Planblätter vollständig, Treppen nach DIN 18065) `cd core && cargo test -p lot-cli --test efh`, Umbau (Bauzustände, Unterlage, IFC-Referenz) `cargo test -p lot-cli --test umbau`
+- Abnahmetests: EFH (Planblätter vollständig, Treppen nach DIN 18065) `cd core && cargo test -p lot-cli --test efh`, Umbau (Bauzustände, Unterlage, IFC-Referenz) `cargo test -p lot-cli --test umbau`, MFH (Abstandsflächen gegen die Handrechnung, Prüfbericht ohne Fehler, Bauantragsblätter vollständig) `cargo test -p lot-cli --test mfh`
+- Prüfbericht eines Testprojekts ansehen: `cargo test -p lot-cli --test mfh check_report -- --nocapture`
+- Landesrecht liegt als Daten in `core/crates/lot-rules/landesrecht/` (bisher nur MBO), DIN 18040-2 in `core/crates/lot-rules/normen/`
+- Bürostandard eines Büros: `buerostandard.ron` im Testprojektordner (nur Abweichungen vom eingebauten `core/crates/lot-plan/src/buerostandard.ron`); die App liest `~/Library/Application Support/Lot/buerostandard.ron`
 - Swift-Anbindung neu erzeugen: `app-mac/scripts/build-core.sh` (läuft auch automatisch als erste Build-Phase in Xcode)
 - Mac-App bauen: `cd app-mac && xcodebuild -project Lot.xcodeproj -scheme Lot -configuration Debug -derivedDataPath build/DerivedData build`
 - Mac-App für Apple Silicon und Intel (ab macOS 14): dasselbe mit `-configuration Release -destination 'generic/platform=macOS'`

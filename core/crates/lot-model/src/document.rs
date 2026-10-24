@@ -417,6 +417,27 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                     },
                 }
             }
+            Element::Plot(p) => {
+                if p.outline.len() < 3 || p.area() < MIN_LENGTH {
+                    return Err(invalid("Grundstück: mindestens drei Grenzpunkte und eine Fläche"));
+                }
+                if p.public_edges.iter().any(|e| e.edge >= p.outline.len() || e.width < 0.0) {
+                    return Err(invalid(
+                        "Grundstück: Die Kante zur öffentlichen Fläche fehlt oder ihre Breite ist negativ",
+                    ));
+                }
+            }
+            Element::Elevator(e) => {
+                if e.storeys.is_empty() || e.storeys.iter().any(|s| project.storey(*s).is_none()) {
+                    return Err(invalid("Aufzug: Die Geschosse mit Haltestelle fehlen"));
+                }
+                if e.cabin_width < 0.5 || e.cabin_depth < 0.5 || e.door_width < 0.5 || e.door_width > e.cabin_width {
+                    return Err(invalid("Aufzug: Fahrkorb ab 50 cm, Tür ab 50 cm und nicht breiter als der Fahrkorb"));
+                }
+                if e.door_direction.x.hypot(e.door_direction.y) < 1e-9 {
+                    return Err(invalid("Aufzug: Die Richtung zur Tür fehlt"));
+                }
+            }
             Element::SectionView(v) => {
                 if v.start.distance(v.end) < MIN_LENGTH || v.depth <= 0.0 {
                     return Err(invalid("Schnitt: Linie und Blicktiefe müssen größer als null sein"));

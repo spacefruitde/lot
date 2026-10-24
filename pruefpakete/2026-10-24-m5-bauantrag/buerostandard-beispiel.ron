@@ -1,0 +1,18 @@
+// Bürostandard des Testbüros (2.08): nur, was vom eingebauten Standard
+// abweicht. Ein echtes Büro legt diese Datei mit seinen Angaben an; die App
+// liest sie aus ~/Library/Application Support/Lot/buerostandard.ron.
+(
+    office: Some((
+        name: "Lot Testbüro (Testdaten)",
+        address: "Beispielweg 5, 12345 Musterstadt",
+        contact: "Architektenkammer Nr. 00000",
+    )),
+    // Layernamen im DWG, wie Fachplaner sie vom Büro kennen (Beispiel).
+    layers: {
+        "A_Bauteile_Schnitt": "A-WAND-SCHNITT",
+        "A_Tueren_Fenster": "A-OEFFNUNG",
+        "A_Bemassung": "A-BEMASSUNG",
+        "A_Raumstempel": "A-RAUM",
+        "A_Planblatt": "A-PLAN",
+    },
+)

@@ -48,6 +48,8 @@ pub enum Element {
     Terrain(crate::Terrain),
     VariantSet(crate::VariantSet),
     ReferenceModel(crate::ReferenceModel),
+    Plot(crate::Plot),
+    Elevator(crate::Elevator),
     ProjectInfo(ProjectInfo),
     PlanSheet(PlanSheet),
 }
@@ -77,6 +79,8 @@ pub enum ElementKind {
     Terrain,
     VariantSet,
     ReferenceModel,
+    Plot,
+    Elevator,
     ProjectInfo,
     PlanSheet,
 }
@@ -106,6 +110,8 @@ impl Element {
             Element::Terrain(_) => ElementKind::Terrain,
             Element::VariantSet(_) => ElementKind::VariantSet,
             Element::ReferenceModel(_) => ElementKind::ReferenceModel,
+            Element::Plot(_) => ElementKind::Plot,
+            Element::Elevator(_) => ElementKind::Elevator,
             Element::ProjectInfo(_) => ElementKind::ProjectInfo,
             Element::PlanSheet(_) => ElementKind::PlanSheet,
         }
@@ -123,6 +129,7 @@ impl Element {
             Element::Railing(r) => r.phase,
             Element::Roof(r) => r.phase,
             Element::Space(r) => r.phase,
+            Element::Elevator(e) => e.phase,
             _ => return None,
         })
     }
@@ -139,6 +146,7 @@ impl Element {
             Element::Railing(r) => r.phase = phase,
             Element::Roof(r) => r.phase = phase,
             Element::Space(r) => r.phase = phase,
+            Element::Elevator(e) => e.phase = phase,
             _ => return false,
         }
         true
@@ -626,6 +634,11 @@ pub struct Space {
     /// Abstellräume außerhalb der Wohnung zählen nicht (WoFlV vom 25.11.2003, § 2 Abs. 3).
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub living_space: bool,
+    /// Nutzungseinheit, etwa die Wohnung „W 01“; leer bei gemeinsamen Räumen
+    /// wie dem Treppenhaus. Bestimmt die Wohnfläche je Wohnung (WoFlV) und die
+    /// Rettungswege je Nutzungseinheit (MBO § 33).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub unit: String,
     /// Bestand, Abbruch oder Neubau (2.05); abgebrochene Räume fehlen im Umbauplan.
     #[serde(default, skip_serializing_if = "Phase::is_new")]
     pub phase: Phase,
@@ -890,6 +903,22 @@ pub struct ProjectInfo {
     /// Gebäudeart, bestimmt etwa die Grenzwerte für Treppen.
     #[serde(default)]
     pub building: BuildingClass,
+    /// Bauvorhaben, etwa „Neubau eines Mehrfamilienhauses mit 8 Wohnungen“.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    /// Grundstück nach Liegenschaftskataster: Gemarkung, Flur, Flurstück.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub parcel: String,
+    /// Bundesland nach ISO 3166-2, etwa „NW“; leer gilt die Musterbauordnung.
+    /// Wählt das Landesrecht für Abstandsflächen und Bauvorlagen.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub state: String,
+    /// Höhe von ±0,00 in m über Normalhöhennull (NHN, DHHN2016).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub datum: Option<f64>,
+    /// Richtung nach Norden in Grad gegen den Uhrzeigersinn von +y; 0 heißt +y ist Norden.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub north: f64,
 }
 
 /// Gebäudeart nach DIN 18065:2020-08, Tabelle 1.
@@ -932,6 +961,10 @@ pub enum ViewContent {
     FloorPlan { storey: ElementId },
     /// Schnitt oder Ansicht (Element `SectionView`).
     Section { view: ElementId },
+    /// Lageplan mit Grundstück, Gebäude und Abstandsflächen (5.01).
+    SitePlan,
+    /// Präsentationsgrundriss eines Geschosses (3.11).
+    Presentation { storey: ElementId },
 }
 
 /// Querschnitt einer Stütze.

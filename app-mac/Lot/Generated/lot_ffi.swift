@@ -644,6 +644,12 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func canUndo()  -> Bool
     
     /**
+     * Prüfbericht (5.01 bis 5.05): Gebäudeklasse, Abstandsflächen, Maß der
+     * baulichen Nutzung, Barrierefreiheit, Rettungswege, Treppen.
+     */
+    func checkReport()  -> [FindingInfo]
+    
+    /**
      * Die Türen unter den Elementen `ids`.
      */
     func doors(ids: [UInt64])  -> [DoorInfo]
@@ -855,6 +861,19 @@ open func canUndo() -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_lotdocument_can_undo(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Prüfbericht (5.01 bis 5.05): Gebäudeklasse, Abstandsflächen, Maß der
+     * baulichen Nutzung, Barrierefreiheit, Rettungswege, Treppen.
+     */
+open func checkReport() -> [FindingInfo]  {
+    return try!  FfiConverterSequenceTypeFindingInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_check_report(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1092,6 +1111,11 @@ public protocol ViewportProtocol: AnyObject, Sendable {
      */
     func commands()  -> [CommandItem]
     
+    /**
+     * Zeigt einen Ort: wechselt ins Geschoss und schiebt den Plan dorthin.
+     */
+    func focus(storey: UInt64, x: Double, y: Double) 
+    
     func key(key: KeyInput)  -> EventResult
     
     /**
@@ -1141,6 +1165,11 @@ public protocol ViewportProtocol: AnyObject, Sendable {
      * Maßstab der Planansicht (100 für 1:100). Der Zoom bleibt gleich groß auf dem Bildschirm.
      */
     func setPlanScale(scale: Double) 
+    
+    /**
+     * Hinweise aus dem Prüfbericht im Grundriss ein- oder ausblenden.
+     */
+    func setShowFindings(show: Bool) 
     
     /**
      * Bild einer Unterlage, von der App gerendert (PDF-Seite mit PDFKit oder ein Bild).
@@ -1294,6 +1323,20 @@ open func commands() -> [CommandItem]  {
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
+}
+    
+    /**
+     * Zeigt einen Ort: wechselt ins Geschoss und schiebt den Plan dorthin.
+     */
+open func focus(storey: UInt64, x: Double, y: Double)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_focus(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(storey),
+        FfiConverterDouble.lower(x),
+        FfiConverterDouble.lower(y),uniffiCallStatus
+    )
+}
 }
     
 open func key(key: KeyInput) -> EventResult  {
@@ -1457,6 +1500,18 @@ open func setPlanScale(scale: Double)  {try! rustCall() {
     uniffi_lot_ffi_fn_method_viewport_set_plan_scale(
             self.uniffiCloneHandle(),
         FfiConverterDouble.lower(scale),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Hinweise aus dem Prüfbericht im Grundriss ein- oder ausblenden.
+     */
+open func setShowFindings(show: Bool)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_set_show_findings(
+            self.uniffiCloneHandle(),
+        FfiConverterBool.lower(show),uniffiCallStatus
     )
 }
 }
@@ -1787,6 +1842,101 @@ public func FfiConverterTypeEventResult_lift(_ buf: RustBuffer) throws -> EventR
 #endif
 public func FfiConverterTypeEventResult_lower(_ value: EventResult) -> RustBuffer {
     return FfiConverterTypeEventResult.lower(value)
+}
+
+
+/**
+ * Ein Befund des Prüfberichts für die App.
+ */
+public struct FindingInfo: Equatable, Hashable {
+    /**
+     * Abschnitt, etwa „Abstandsflächen“.
+     */
+    public var section: String
+    /**
+     * 0 erfüllt, 1 Hinweis, 2 nicht erfüllt.
+     */
+    public var status: UInt32
+    public var text: String
+    public var source: String
+    /**
+     * Geschoss und Ort im Grundriss, falls der Befund einen hat.
+     */
+    public var storey: UInt64?
+    public var x: Double
+    public var y: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Abschnitt, etwa „Abstandsflächen“.
+         */section: String, 
+        /**
+         * 0 erfüllt, 1 Hinweis, 2 nicht erfüllt.
+         */status: UInt32, text: String, source: String, 
+        /**
+         * Geschoss und Ort im Grundriss, falls der Befund einen hat.
+         */storey: UInt64?, x: Double, y: Double) {
+        self.section = section
+        self.status = status
+        self.text = text
+        self.source = source
+        self.storey = storey
+        self.x = x
+        self.y = y
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FindingInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFindingInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FindingInfo {
+        return
+            try FindingInfo(
+                section: FfiConverterString.read(from: &buf), 
+                status: FfiConverterUInt32.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf), 
+                source: FfiConverterString.read(from: &buf), 
+                storey: FfiConverterOptionUInt64.read(from: &buf), 
+                x: FfiConverterDouble.read(from: &buf), 
+                y: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FindingInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.section, into: &buf)
+        FfiConverterUInt32.write(value.status, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterString.write(value.source, into: &buf)
+        FfiConverterOptionUInt64.write(value.storey, into: &buf)
+        FfiConverterDouble.write(value.x, into: &buf)
+        FfiConverterDouble.write(value.y, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFindingInfo_lift(_ buf: RustBuffer) throws -> FindingInfo {
+    return try FfiConverterTypeFindingInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFindingInfo_lower(_ value: FindingInfo) -> RustBuffer {
+    return FfiConverterTypeFindingInfo.lower(value)
 }
 
 
@@ -2627,6 +2777,30 @@ fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
+    typealias SwiftType = UInt64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionDouble: FfiConverterRustBuffer {
     typealias SwiftType = Double?
 
@@ -2774,6 +2948,31 @@ fileprivate struct FfiConverterSequenceTypeDoorInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeFindingInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [FindingInfo]
+
+    public static func write(_ value: [FindingInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeFindingInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [FindingInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [FindingInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeFindingInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeParamValue: FfiConverterRustBuffer {
     typealias SwiftType = [ParamValue]
 
@@ -2896,6 +3095,18 @@ fileprivate struct FfiConverterSequenceTypeUnderlayRef: FfiConverterRustBuffer {
     }
 }
 /**
+ * Setzt den Bürostandard für die Sitzung: der eingebaute mit den
+ * Abweichungen aus `text` (Inhalt von `buerostandard.ron`). Einmal beim Start,
+ * bevor ein Plan gezeichnet wird.
+ */
+public func installOfficeStandard(text: String)throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_install_office_standard(
+        FfiConverterString.lower(text),uniffiCallStatus
+    )
+}
+}
+/**
  * Die Nutzungsgruppen nach DIN 277:2021-08, in der Reihenfolge der Norm.
  */
 public func spaceUsages() -> [SpaceUsageItem]  {
@@ -2921,6 +3132,9 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_lot_ffi_checksum_func_install_office_standard() != 65201) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_func_space_usages() != 26934) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2940,6 +3154,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_can_undo() != 5022) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_check_report() != 18676) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_doors() != 14145) {
@@ -2993,6 +3210,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_viewport_commands() != 3015) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_viewport_focus() != 45613) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_viewport_key() != 43844) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3033,6 +3253,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_set_plan_scale() != 46506) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_set_show_findings() != 8198) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_set_underlay_image() != 43434) {
