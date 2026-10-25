@@ -325,6 +325,12 @@ Jeder Meilenstein liefert etwas, das Ben in der App benutzen oder als Plan prüf
   - Tür- und Fensterlisten (4.05), Bürostandard (2.08), Präsentationspläne (3.11)
 - **Abnahme durch Ben:** Für das MFH-Testprojekt entstehen vollständige Bauantragsunterlagen. Die Abstandsflächen sind gegen eine Handberechnung geprüft.
 
+### Zwischenschritt nach M5: Bedienung und Grundfunktionen
+
+- **Entschieden am 25.10.2026** (ADR 0042): Die Meilensteine ruhen. Erst vergleiche ich je Thema, wie etablierte BIM-Programme es lösen; Ben entscheidet, dann baue ich es.
+- **Reihenfolge:** Auswählen, Bearbeiten, Wandlogik; danach Zeichnen mit Zahleneingabe und Fangen, Öffnungen, Typen und Eigenschaften, Navigation, Sichtbarkeit, Decken, Dächer und Treppen in der App.
+- **Maßstab:** mindestens so gut wie Revit, Archicad, Vectorworks und Allplan, oder besser, weil sinnvoller, schneller, klarer oder schöner.
+
 ### M6: Bauteile, Ausstattung und Fassade
 
 - **Inhalt:**

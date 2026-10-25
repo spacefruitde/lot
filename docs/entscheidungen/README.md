@@ -45,3 +45,4 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0039](0039-bauantragsplaene.md) | Bauantragspläne, Lageplan, Tür- und Fensterliste | umgesetzt, Vorschlag |
 | [0040](0040-buerostandard.md) | Bürostandard je Büro | umgesetzt |
 | [0041](0041-praesentationsplaene.md) | Präsentationspläne | umgesetzt, Vorschlag |
+| [0042](0042-meilensteine-anhalten-bedienung-vergleichen.md) | Meilensteine anhalten, erst die Bedienung vergleichen | entschieden |
