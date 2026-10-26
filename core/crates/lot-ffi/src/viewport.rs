@@ -63,7 +63,16 @@ pub enum KeyInput {
     Escape,
     Enter,
     Delete,
-    Character { text: String },
+    Tab,
+    /// Pfeiltaste, `large` mit ⇧.
+    Arrow {
+        dx: i8,
+        dy: i8,
+        large: bool,
+    },
+    Character {
+        text: String,
+    },
 }
 
 /// Zustand für Werkzeugleiste und Statuszeile.
@@ -394,20 +403,20 @@ impl Viewport {
         }
     }
 
-    pub fn pointer_moved(&self, x: f32, y: f32, shift: bool) -> EventResult {
-        self.edit(x, y, shift, |editor, doc, input| editor.pointer_moved(doc.project(), input))
+    pub fn pointer_moved(&self, x: f32, y: f32, shift: bool, alt: bool) -> EventResult {
+        self.edit(x, y, shift, alt, |editor, doc, input| editor.pointer_moved(doc.project(), input))
     }
 
-    pub fn pointer_down(&self, x: f32, y: f32, clicks: u32, shift: bool) -> EventResult {
-        self.edit(x, y, shift, |editor, doc, input| editor.pointer_down(doc, input, clicks))
+    pub fn pointer_down(&self, x: f32, y: f32, clicks: u32, shift: bool, alt: bool) -> EventResult {
+        self.edit(x, y, shift, alt, |editor, doc, input| editor.pointer_down(doc, input, clicks))
     }
 
-    pub fn pointer_dragged(&self, x: f32, y: f32, shift: bool) -> EventResult {
-        self.edit(x, y, shift, |editor, doc, input| editor.pointer_dragged(doc.project(), input))
+    pub fn pointer_dragged(&self, x: f32, y: f32, shift: bool, alt: bool) -> EventResult {
+        self.edit(x, y, shift, alt, |editor, doc, input| editor.pointer_dragged(doc.project(), input))
     }
 
     pub fn pointer_up(&self) -> EventResult {
-        self.edit(0.0, 0.0, false, |editor, doc, _| editor.pointer_up(doc))
+        self.edit(0.0, 0.0, false, false, |editor, doc, _| editor.pointer_up(doc))
     }
 
     pub fn key(&self, key: KeyInput) -> EventResult {
@@ -415,12 +424,14 @@ impl Viewport {
             KeyInput::Escape => Key::Escape,
             KeyInput::Enter => Key::Enter,
             KeyInput::Delete => Key::Delete,
+            KeyInput::Tab => Key::Tab,
+            KeyInput::Arrow { dx, dy, large } => Key::Arrow { dx, dy, large },
             KeyInput::Character { text } => match text.chars().next() {
                 Some(c) => Key::Char(c),
                 None => return EventResult::redraw(),
             },
         };
-        self.edit(0.0, 0.0, false, |editor, doc, _| editor.key(doc, key))
+        self.edit(0.0, 0.0, false, false, |editor, doc, _| editor.key(doc, key))
     }
 
     /// Befehle für die Befehlspalette: Editor und Ansicht.
@@ -532,6 +543,7 @@ impl Viewport {
         x: f32,
         y: f32,
         shift: bool,
+        alt: bool,
         action: impl FnOnce(&mut Editor, &mut lot_model::Document, Input) -> Response,
     ) -> EventResult {
         let mut s = self.lock();
@@ -547,6 +559,7 @@ impl Viewport {
             point: Point2::new(paper[0] * m_per_mm, paper[1] * m_per_mm),
             tolerance: SNAP_POINTS * s.renderer.plan_mm_per_point() * m_per_mm,
             shift,
+            alt,
         };
         let dragging_before = editor.preview(doc.lock().project()).is_some();
         let response = action(&mut editor, &mut doc.lock(), input);
@@ -749,6 +762,33 @@ fn update_overlay(s: &mut State) {
     let paper = |p: [f64; 2]| [p[0] * mm, p[1] * mm];
     let blue = linear([0.10, 0.45, 0.95], 1.0);
     let mut items = Vec::new();
+    // Vorhervorhebung unter der Auswahl, dünn und heller.
+    for outline in overlay.hovered {
+        items.push(OverlayItem::Polygon {
+            points: outline.into_iter().map(paper).collect(),
+            fill: linear([0.10, 0.45, 0.95], 0.06),
+            stroke: linear([0.35, 0.62, 1.0], 1.0),
+            width_px: 1.5,
+        });
+    }
+    if let Some((points, crossing)) = overlay.frame {
+        let points: Vec<[f64; 2]> = points.into_iter().map(|p| paper([p.x, p.y])).collect();
+        // Wie in Revit: durchgezogen wählt ganz innen, gestrichelt auch Angeschnittenes.
+        let tint = if crossing { [0.15, 0.65, 0.3] } else { [0.10, 0.45, 0.95] };
+        items.push(OverlayItem::Polygon {
+            points: points.clone(),
+            fill: linear(tint, 0.08),
+            stroke: [0.0; 4],
+            width_px: 0.0,
+        });
+        items.push(OverlayItem::Path {
+            points,
+            closed: true,
+            color: linear(tint, 1.0),
+            width_px: 1.2,
+            dash_px: crossing.then_some((6.0, 4.0)),
+        });
+    }
     for outline in overlay.selected {
         items.push(OverlayItem::Polygon {
             points: outline.into_iter().map(paper).collect(),
@@ -774,6 +814,16 @@ fn update_overlay(s: &mut State) {
             text,
             height_px: 12.0,
             color: linear([0.05, 0.25, 0.6], 1.0),
+        });
+    }
+    if let Some((at, text)) = overlay.tip {
+        items.push(OverlayItem::Label {
+            at: paper([at.x, at.y]),
+            offset_px: [14.0, -26.0],
+            text,
+            height_px: 9.0,
+            color: linear([0.12, 0.12, 0.14], 1.0),
+            background: linear([1.0, 1.0, 1.0], 0.92),
         });
     }
     if let Some(snap) = overlay.snap {

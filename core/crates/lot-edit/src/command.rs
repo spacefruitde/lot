@@ -55,6 +55,14 @@ pub enum Command {
     /// Zeichenrichtung der gewählten Wände umkehren: innen und außen tauschen.
     FlipWalls,
     SelectAll,
+    /// Gleiche Bauteile wie die Auswahl: erst im Geschoss, dann im Projekt (SA).
+    SelectSimilar,
+    /// Die vorige Auswahl zurückholen (⌘←).
+    PreviousSelection,
+    /// Unterlagen sind nicht anklickbar (ADR 0043); dieser Befehl wählt sie nacheinander.
+    SelectUnderlay,
+    /// Genau diese Elemente wählen, etwa eine Gruppe aus dem Inspektor.
+    SetSelection(Vec<u64>),
     Undo,
     Redo,
 }

@@ -465,6 +465,22 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt8: FfiConverterPrimitive {
+    typealias FfiType = Int8
+    typealias SwiftType = Int8
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int8 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int8, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -655,7 +671,7 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func doors(ids: [UInt64])  -> [DoorInfo]
     
     /**
-     * Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36“.
+     * Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36 · 4,20 m“.
      */
     func elementLabel(element: UInt64)  -> String
     
@@ -676,11 +692,22 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func save(path: String) throws 
     
     /**
+     * Die Elemente nach Art und Typ gruppiert, für den Inspektor (ADR 0043).
+     */
+    func selectionGroups(ids: [UInt64])  -> [SelectionGroup]
+    
+    /**
      * Ändert Inhalt und Schrifthöhe (mm auf dem Papier) eines 2D-Texts.
      */
     func setAnnotationText(element: UInt64, text: String, height: Double) throws 
     
     func setParam(element: UInt64, kind: ParamKind, value: Double) throws 
+    
+    /**
+     * Einen Parameter an mehreren Elementen setzen, als ein Undo-Schritt;
+     * `values` gehört der Reihe nach zu `elements`.
+     */
+    func setParams(elements: [UInt64], kind: ParamKind, values: [Double]) throws 
     
     /**
      * Ändert Nummer, Name, Nutzung und Wohnflächen-Merkmal eines Raums, als eine Operation.
@@ -893,7 +920,7 @@ open func doors(ids: [UInt64]) -> [DoorInfo]  {
 }
     
     /**
-     * Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36“.
+     * Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36 · 4,20 m“.
      */
 open func elementLabel(element: UInt64) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
@@ -959,6 +986,19 @@ open func save(path: String)throws   {try rustCallWithError(FfiConverterTypeLotE
 }
     
     /**
+     * Die Elemente nach Art und Typ gruppiert, für den Inspektor (ADR 0043).
+     */
+open func selectionGroups(ids: [UInt64]) -> [SelectionGroup]  {
+    return try!  FfiConverterSequenceTypeSelectionGroup.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_selection_groups(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
+}
+    
+    /**
      * Ändert Inhalt und Schrifthöhe (mm auf dem Papier) eines 2D-Texts.
      */
 open func setAnnotationText(element: UInt64, text: String, height: Double)throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
@@ -979,6 +1019,21 @@ open func setParam(element: UInt64, kind: ParamKind, value: Double)throws   {try
         FfiConverterUInt64.lower(element),
         FfiConverterTypeParamKind_lower(kind),
         FfiConverterDouble.lower(value),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Einen Parameter an mehreren Elementen setzen, als ein Undo-Schritt;
+     * `values` gehört der Reihe nach zu `elements`.
+     */
+open func setParams(elements: [UInt64], kind: ParamKind, values: [Double])throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_set_params(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(elements),
+        FfiConverterTypeParamKind_lower(kind),
+        FfiConverterSequenceDouble.lower(values),uniffiCallStatus
     )
 }
 }
@@ -1130,11 +1185,11 @@ public protocol ViewportProtocol: AnyObject, Sendable {
     
     func pan(dx: Float, dy: Float) 
     
-    func pointerDown(x: Float, y: Float, clicks: UInt32, shift: Bool)  -> EventResult
+    func pointerDown(x: Float, y: Float, clicks: UInt32, shift: Bool, alt: Bool)  -> EventResult
     
-    func pointerDragged(x: Float, y: Float, shift: Bool)  -> EventResult
+    func pointerDragged(x: Float, y: Float, shift: Bool, alt: Bool)  -> EventResult
     
-    func pointerMoved(x: Float, y: Float, shift: Bool)  -> EventResult
+    func pointerMoved(x: Float, y: Float, shift: Bool, alt: Bool)  -> EventResult
     
     func pointerUp()  -> EventResult
     
@@ -1384,7 +1439,7 @@ open func pan(dx: Float, dy: Float)  {try! rustCall() {
 }
 }
     
-open func pointerDown(x: Float, y: Float, clicks: UInt32, shift: Bool) -> EventResult  {
+open func pointerDown(x: Float, y: Float, clicks: UInt32, shift: Bool, alt: Bool) -> EventResult  {
     return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_viewport_pointer_down(
@@ -1392,31 +1447,34 @@ open func pointerDown(x: Float, y: Float, clicks: UInt32, shift: Bool) -> EventR
         FfiConverterFloat.lower(x),
         FfiConverterFloat.lower(y),
         FfiConverterUInt32.lower(clicks),
-        FfiConverterBool.lower(shift),uniffiCallStatus
+        FfiConverterBool.lower(shift),
+        FfiConverterBool.lower(alt),uniffiCallStatus
     )
 })
 }
     
-open func pointerDragged(x: Float, y: Float, shift: Bool) -> EventResult  {
+open func pointerDragged(x: Float, y: Float, shift: Bool, alt: Bool) -> EventResult  {
     return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_viewport_pointer_dragged(
             self.uniffiCloneHandle(),
         FfiConverterFloat.lower(x),
         FfiConverterFloat.lower(y),
-        FfiConverterBool.lower(shift),uniffiCallStatus
+        FfiConverterBool.lower(shift),
+        FfiConverterBool.lower(alt),uniffiCallStatus
     )
 })
 }
     
-open func pointerMoved(x: Float, y: Float, shift: Bool) -> EventResult  {
+open func pointerMoved(x: Float, y: Float, shift: Bool, alt: Bool) -> EventResult  {
     return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_viewport_pointer_moved(
             self.uniffiCloneHandle(),
         FfiConverterFloat.lower(x),
         FfiConverterFloat.lower(y),
-        FfiConverterBool.lower(shift),uniffiCallStatus
+        FfiConverterBool.lower(shift),
+        FfiConverterBool.lower(alt),uniffiCallStatus
     )
 })
 }
@@ -2002,6 +2060,64 @@ public func FfiConverterTypeParamValue_lower(_ value: ParamValue) -> RustBuffer 
 
 
 /**
+ * Nutzungsgruppe nach DIN 277 zur Auswahl.
+ * Teil einer Auswahl gleicher Art und gleichen Typs, etwa 12 Wände KS 17,5.
+ */
+public struct SelectionGroup: Equatable, Hashable {
+    public var label: String
+    public var ids: [UInt64]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(label: String, ids: [UInt64]) {
+        self.label = label
+        self.ids = ids
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension SelectionGroup: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSelectionGroup: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SelectionGroup {
+        return
+            try SelectionGroup(
+                label: FfiConverterString.read(from: &buf), 
+                ids: FfiConverterSequenceUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SelectionGroup, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterSequenceUInt64.write(value.ids, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSelectionGroup_lift(_ buf: RustBuffer) throws -> SelectionGroup {
+    return try FfiConverterTypeSelectionGroup.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSelectionGroup_lower(_ value: SelectionGroup) -> RustBuffer {
+    return FfiConverterTypeSelectionGroup.lower(value)
+}
+
+
+/**
  * Raum mit Stempeltext und Flächen, für den Inspektor.
  */
 public struct SpaceInfo: Equatable, Hashable {
@@ -2102,9 +2218,6 @@ public func FfiConverterTypeSpaceInfo_lower(_ value: SpaceInfo) -> RustBuffer {
 }
 
 
-/**
- * Nutzungsgruppe nach DIN 277 zur Auswahl.
- */
 public struct SpaceUsageItem: Equatable, Hashable {
     public var code: String
     public var title: String
@@ -2373,6 +2486,12 @@ public enum KeyInput: Equatable, Hashable {
     case escape
     case enter
     case delete
+    case tab
+    /**
+     * Pfeiltaste, `large` mit ⇧.
+     */
+    case arrow(dx: Int8, dy: Int8, large: Bool
+    )
     case character(text: String
     )
 
@@ -2402,7 +2521,12 @@ public struct FfiConverterTypeKeyInput: FfiConverterRustBuffer {
         
         case 3: return .delete
         
-        case 4: return .character(text: try FfiConverterString.read(from: &buf)
+        case 4: return .tab
+        
+        case 5: return .arrow(dx: try FfiConverterInt8.read(from: &buf), dy: try FfiConverterInt8.read(from: &buf), large: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 6: return .character(text: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -2425,8 +2549,19 @@ public struct FfiConverterTypeKeyInput: FfiConverterRustBuffer {
             writeInt(&buf, Int32(3))
         
         
-        case let .character(text):
+        case .tab:
             writeInt(&buf, Int32(4))
+        
+        
+        case let .arrow(dx,dy,large):
+            writeInt(&buf, Int32(5))
+            FfiConverterInt8.write(dx, into: &buf)
+            FfiConverterInt8.write(dy, into: &buf)
+            FfiConverterBool.write(large, into: &buf)
+            
+        
+        case let .character(text):
+            writeInt(&buf, Int32(6))
             FfiConverterString.write(text, into: &buf)
             
         }
@@ -2898,6 +3033,31 @@ fileprivate struct FfiConverterSequenceUInt64: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceDouble: FfiConverterRustBuffer {
+    typealias SwiftType = [Double]
+
+    public static func write(_ value: [Double], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterDouble.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Double] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Double]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterDouble.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeCommandItem: FfiConverterRustBuffer {
     typealias SwiftType = [CommandItem]
 
@@ -2990,6 +3150,31 @@ fileprivate struct FfiConverterSequenceTypeParamValue: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeParamValue.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSelectionGroup: FfiConverterRustBuffer {
+    typealias SwiftType = [SelectionGroup]
+
+    public static func write(_ value: [SelectionGroup], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSelectionGroup.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SelectionGroup] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SelectionGroup]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSelectionGroup.read(from: &buf))
         }
         return seq
     }
@@ -3162,7 +3347,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_doors() != 14145) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_lotdocument_element_label() != 44890) {
+    if (uniffi_lot_ffi_checksum_method_lotdocument_element_label() != 32169) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_element_phase() != 5178) {
@@ -3180,10 +3365,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_save() != 29734) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_selection_groups() != 18628) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_lotdocument_set_annotation_text() != 12617) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_set_param() != 46565) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_set_params() != 48911) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_set_space() != 41848) {
@@ -3225,13 +3416,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_viewport_pan() != 46301) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_pointer_down() != 59198) {
+    if (uniffi_lot_ffi_checksum_method_viewport_pointer_down() != 31603) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_pointer_dragged() != 56413) {
+    if (uniffi_lot_ffi_checksum_method_viewport_pointer_dragged() != 39392) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_pointer_moved() != 25751) {
+    if (uniffi_lot_ffi_checksum_method_viewport_pointer_moved() != 36396) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_pointer_up() != 41216) {

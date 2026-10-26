@@ -117,6 +117,13 @@ pub struct DoorInfo {
 }
 
 /// Nutzungsgruppe nach DIN 277 zur Auswahl.
+/// Teil einer Auswahl gleicher Art und gleichen Typs, etwa 12 Wände KS 17,5.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct SelectionGroup {
+    pub label: String,
+    pub ids: Vec<u64>,
+}
+
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct SpaceUsageItem {
     pub code: String,
@@ -294,6 +301,14 @@ impl LotDocument {
         self.lock().set_param(ElementId(element), kind.into(), value).map_err(LotError::from_display)
     }
 
+    /// Einen Parameter an mehreren Elementen setzen, als ein Undo-Schritt;
+    /// `values` gehört der Reihe nach zu `elements`.
+    pub fn set_params(&self, elements: Vec<u64>, kind: ParamKind, values: Vec<f64>) -> Result<(), LotError> {
+        let changes: Vec<(ElementId, lot_model::Param, f64)> =
+            elements.into_iter().zip(values).map(|(e, v)| (ElementId(e), kind.into(), v)).collect();
+        self.lock().set_params("Eigenschaft ändern", &changes).map_err(LotError::from_display)
+    }
+
     pub fn undo(&self) -> Result<bool, LotError> {
         self.lock().undo().map_err(LotError::from_display)
     }
@@ -302,61 +317,18 @@ impl LotDocument {
         self.lock().redo().map_err(LotError::from_display)
     }
 
-    /// Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36“.
+    /// Bezeichnung eines Elements für die Anzeige, etwa „Wand · Außenwand WDVS 36 · 4,20 m“.
     pub fn element_label(&self, element: u64) -> String {
-        let doc = self.lock();
-        let p = doc.project();
-        match p.elements.get(&ElementId(element)) {
-            Some(lot_model::Element::Wall(w)) => {
-                format!("Wand · {}", p.wall_type(w.wall_type).map_or("?", |t| t.name.as_str()))
-            }
-            Some(lot_model::Element::Opening(o)) => match o.kind {
-                lot_model::OpeningKind::Plain => "Öffnung".into(),
-                lot_model::OpeningKind::Door(_) => "Tür".into(),
-                lot_model::OpeningKind::Window => "Fenster".into(),
-            },
-            Some(lot_model::Element::Storey(s)) => format!("Geschoss {}", s.name),
-            Some(lot_model::Element::Column(_)) => "Stütze".into(),
-            Some(lot_model::Element::DimensionChain(_)) => "Maßkette".into(),
-            Some(lot_model::Element::Slab(s)) => match s.kind {
-                lot_model::SlabKind::Floor => "Decke".into(),
-                lot_model::SlabKind::Base => "Bodenplatte".into(),
-            },
-            Some(lot_model::Element::SlabType(t)) => format!("Deckenaufbau {}", t.name),
-            Some(lot_model::Element::SlabOpening(_)) => "Deckendurchbruch".into(),
-            Some(lot_model::Element::Roof(_)) => "Dach".into(),
-            Some(lot_model::Element::RoofWindow(_)) => "Dachfenster".into(),
-            Some(lot_model::Element::Dormer(_)) => "Gaube".into(),
-            Some(lot_model::Element::Stair(s)) => format!("Treppe · {} Steigungen", s.risers()),
-            Some(lot_model::Element::Railing(_)) => "Geländer".into(),
-            Some(lot_model::Element::SectionView(v)) => v.name.clone(),
-            Some(lot_model::Element::Underlay(u)) => format!("Unterlage · {}", u.source),
-            Some(lot_model::Element::Terrain(t)) => format!("Gelände · {} Höhenpunkte", t.points.len()),
-            Some(lot_model::Element::ReferenceModel(r)) => format!("Referenzmodell · {}", r.source),
-            Some(lot_model::Element::VariantSet(v)) => format!("Varianten {} · {}", v.name, v.active_name()),
-            Some(lot_model::Element::Annotation(a)) => match &a.shape {
-                lot_model::AnnotationShape::Text { text, .. } => format!("Text · {text}"),
-                lot_model::AnnotationShape::Polyline(_) => "Linie".into(),
-                lot_model::AnnotationShape::Polygon { .. } => "Fläche".into(),
-                lot_model::AnnotationShape::Circle { .. } => "Kreis".into(),
-            },
-            Some(lot_model::Element::ProjectInfo(_)) => "Projektangaben".into(),
-            Some(lot_model::Element::Plot(p)) => {
-                if p.neighbour {
-                    format!("Nachbargrundstück {}", p.name)
-                } else {
-                    format!("Grundstück {}", p.name)
-                }
-            }
-            Some(lot_model::Element::Elevator(e)) => {
-                format!("Aufzug · Fahrkorb {:.2} x {:.2} m", e.cabin_width, e.cabin_depth).replace('.', ",")
-            }
-            Some(lot_model::Element::PlanSheet(s)) => format!("Planblatt {} {}", s.number, s.title),
-            Some(lot_model::Element::Space(r)) => format!("Raum {} {}", r.number, r.name).trim_end().to_string(),
-            Some(lot_model::Element::GridLine(g)) => format!("Achse {}", g.label),
-            Some(lot_model::Element::WallType(t)) => format!("Wandaufbau {}", t.name),
-            None => String::new(),
-        }
+        lot_edit::select::label(self.lock().project(), ElementId(element))
+    }
+
+    /// Die Elemente nach Art und Typ gruppiert, für den Inspektor (ADR 0043).
+    pub fn selection_groups(&self, ids: Vec<u64>) -> Vec<SelectionGroup> {
+        let ids: Vec<ElementId> = ids.into_iter().map(ElementId).collect();
+        lot_edit::select::groups(self.lock().project(), &ids)
+            .into_iter()
+            .map(|(label, ids)| SelectionGroup { label, ids: ids.into_iter().map(|i| i.0).collect() })
+            .collect()
     }
 
     /// Raumdaten der gewählten Elemente, die Räume sind.

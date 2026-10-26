@@ -7,18 +7,20 @@
 
 mod command;
 pub mod geometry;
+pub mod select;
 pub mod snap;
+pub mod transform;
 
 pub use command::{Command, CommandInfo};
-use geometry::{
-    End, as_elements, column_outline, element_at, end_point, footprint, moved_elements, moved_endpoint, outline,
-};
+use geometry::{End, as_elements, column_outline, end_point, footprint, moved_elements, moved_endpoint, outline};
 use lot_model::{
     Annotation, AnnotationShape, AnnotationView, Column, ColumnProfile, Document, Element, ElementId, GridLine,
     Handing, ModelError, Opening, OpeningKind, Operation, Point2, Project, Space, Storey, Top, Wall, WallAlignment,
     WallSide,
 };
+pub use select::Candidate;
 pub use snap::{Snap, SnapKind};
+pub use transform::Transform;
 
 /// Zeigerereignis in Modellkoordinaten.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -28,6 +30,8 @@ pub struct Input {
     pub tolerance: f64,
     /// Umschalttaste: beim Zeichnen nur rechte Winkel, bei der Auswahl hinzufügen.
     pub shift: bool,
+    /// Wahltaste: Rahmen wird Lasso, Ziehen der Auswahl kopiert.
+    pub alt: bool,
 }
 
 /// Tasten, die der Editor versteht.
@@ -36,6 +40,14 @@ pub enum Key {
     Escape,
     Enter,
     Delete,
+    /// Nächster Kandidat unter dem Zeiger (ADR 0043).
+    Tab,
+    /// Pfeiltaste: Auswahl um 1 cm schieben, mit `large` um 10 cm.
+    Arrow {
+        dx: i8,
+        dy: i8,
+        large: bool,
+    },
     Char(char),
 }
 
@@ -95,10 +107,32 @@ pub enum Tool {
 
 #[derive(Debug, Clone, PartialEq)]
 enum Drag {
-    /// Die ganze Auswahl verschieben.
+    /// Gedrückt, aber noch kaum bewegt: Loslassen ist ein Klick auf `hit`;
+    /// Ziehen verschiebt die Auswahl, wenn der Zeiger auf ihr liegt, sonst
+    /// entsteht ein Rahmen, mit ⌥ ein Lasso (ADR 0043).
+    Pending {
+        start: Point2,
+        hit: Option<Vec<ElementId>>,
+        on_selection: bool,
+        shift: bool,
+        alt: bool,
+        tolerance: f64,
+    },
+    /// Die ganze Auswahl verschieben, mit `copy` kopieren.
     Selection {
         start: Point2,
         current: Point2,
+        copy: bool,
+    },
+    /// Rahmen: von links nach rechts ganz innen, von rechts nach links auch angeschnitten.
+    Frame {
+        start: Point2,
+        current: Point2,
+        shift: bool,
+    },
+    Lasso {
+        points: Vec<Point2>,
+        shift: bool,
     },
     Endpoint {
         wall: ElementId,
@@ -119,6 +153,12 @@ pub struct Overlay {
     pub snap: Option<Snap>,
     /// Länge der gezeichneten Wand und wo sie steht.
     pub label: Option<(Point2, String)>,
+    /// Umrisse des Kandidaten unter dem Zeiger (Vorhervorhebung).
+    pub hovered: Vec<Vec<[f64; 2]>>,
+    /// Rahmen oder Lasso; `true`, wenn er auch Angeschnittenes wählt.
+    pub frame: Option<(Vec<Point2>, bool)>,
+    /// Kurzer Text am Zeiger, etwa „2 von 4: Wandkette (3 Wände)“.
+    pub tip: Option<(Point2, String)>,
 }
 
 pub struct Editor {
@@ -138,6 +178,16 @@ pub struct Editor {
     drag: Option<Drag>,
     pointer: Option<Snap>,
     typed: String,
+    /// Kandidaten unter dem Zeiger im Auswahlwerkzeug, der gezeigte und wo der Zeiger stand.
+    hover: Vec<Candidate>,
+    hover_index: usize,
+    hover_at: Option<Point2>,
+    /// Frühere Auswahlen, die letzte zuletzt (⌘←).
+    history: Vec<Vec<ElementId>>,
+    /// Getippte Buchstaben eines Kürzels, etwa „W“ vor „WA“.
+    shortcut: String,
+    /// Letzter Befehl über ein Kürzel, für ⏎ ohne laufende Aktion.
+    last_command: Option<Command>,
 }
 
 impl Editor {
@@ -157,6 +207,12 @@ impl Editor {
             drag: None,
             pointer: None,
             typed: String::new(),
+            hover: Vec::new(),
+            hover_index: 0,
+            hover_at: None,
+            history: Vec::new(),
+            shortcut: String::new(),
+            last_command: None,
         }
     }
 
@@ -164,6 +220,8 @@ impl Editor {
     /// Elemente fallen aus der Auswahl, ein fehlendes Geschoss wird ersetzt.
     pub fn sync(&mut self, project: &Project) {
         self.selection.retain(|id| project.elements.contains_key(id));
+        self.hover.retain(|c| c.ids.iter().all(|id| project.elements.contains_key(id)));
+        self.hover_index = self.hover_index.min(self.hover.len().saturating_sub(1));
         if project.storey(self.storey).is_none() {
             *self = Self { tool: self.tool, ..Self::new(project) };
         }
@@ -196,7 +254,19 @@ impl Editor {
                 self.hover_tolerance = input.tolerance;
                 Response::redraw()
             }
-            Tool::Space | Tool::Select => Response::default(),
+            Tool::Select => {
+                let shown = project.variant_view();
+                let found = select::candidates_at(&shown, self.storey, input.point, input.tolerance);
+                let same =
+                    found.len() == self.hover.len() && found.iter().zip(&self.hover).all(|(a, b)| a.ids == b.ids);
+                if !same {
+                    self.hover = found;
+                    self.hover_index = 0;
+                }
+                self.hover_at = Some(input.point);
+                Response::redraw()
+            }
+            Tool::Space => Response::default(),
         }
     }
 
@@ -373,28 +443,25 @@ impl Editor {
                 }
                 // Bauteile anderer Varianten sind nicht zu sehen und nicht zu treffen.
                 let shown = project.variant_view();
-                match element_at(&shown, self.storey, input.point, input.tolerance) {
-                    Some(id) => {
-                        if input.shift {
-                            if let Some(pos) = self.selection.iter().position(|s| *s == id) {
-                                self.selection.remove(pos);
-                            } else {
-                                self.selection.push(id);
-                            }
-                        } else if !self.selection.contains(&id) {
-                            self.selection = vec![id];
-                        }
-                        let start = self
-                            .snap(project, self.storey, input.point, input.tolerance, None, false, &self.selection)
-                            .point;
-                        self.drag = Some(Drag::Selection { start, current: start });
+                let under = geometry::elements_at(&shown, self.storey, input.point, input.tolerance);
+                let on_selection = under.iter().any(|id| self.selection.contains(id));
+                let hit = match self.hover_at {
+                    Some(at) if at.distance(input.point) <= input.tolerance && !self.hover.is_empty() => {
+                        self.hover.get(self.hover_index).map(|c| c.ids.clone())
                     }
-                    None => {
-                        if !input.shift {
-                            self.selection.clear();
-                        }
-                    }
-                }
+                    _ => select::candidates_at(&shown, self.storey, input.point, input.tolerance)
+                        .into_iter()
+                        .next()
+                        .map(|c| c.ids),
+                };
+                self.drag = Some(Drag::Pending {
+                    start: input.point,
+                    hit,
+                    on_selection,
+                    shift: input.shift,
+                    alt: input.alt,
+                    tolerance: input.tolerance,
+                });
                 Response::redraw()
             }
         }
@@ -402,6 +469,35 @@ impl Editor {
 
     pub fn pointer_dragged(&mut self, project: &Project, input: Input) -> Response {
         match self.drag.clone() {
+            Some(Drag::Pending { start, on_selection, shift, alt, tolerance, .. }) => {
+                // Erst ab einigen Pixeln ist es ein Ziehen, kein Klick (Trackpad).
+                if start.distance(input.point) < tolerance * 0.4 {
+                    return Response::default();
+                }
+                self.drag = Some(if on_selection && !shift {
+                    let s = self.snap(project, self.storey, start, tolerance, None, false, &self.selection).point;
+                    Drag::Selection { start: s, current: s, copy: alt }
+                } else if alt {
+                    Drag::Lasso { points: vec![start], shift }
+                } else {
+                    Drag::Frame { start, current: start, shift }
+                });
+                self.pointer_dragged(project, input)
+            }
+            Some(Drag::Frame { .. }) => {
+                if let Some(Drag::Frame { current, .. }) = &mut self.drag {
+                    *current = input.point;
+                }
+                Response::redraw()
+            }
+            Some(Drag::Lasso { .. }) => {
+                if let Some(Drag::Lasso { points, .. }) = &mut self.drag
+                    && points.last().is_none_or(|q| q.distance(input.point) >= input.tolerance * 0.3)
+                {
+                    points.push(input.point);
+                }
+                Response::redraw()
+            }
             Some(Drag::Selection { .. }) => {
                 let p =
                     self.snap(project, self.storey, input.point, input.tolerance, None, false, &self.selection).point;
@@ -427,10 +523,39 @@ impl Editor {
     pub fn pointer_up(&mut self, doc: &mut Document) -> Response {
         let Some(drag) = self.drag.take() else { return Response::default() };
         let (label, changes) = match drag {
-            Drag::Selection { start, current } => {
+            Drag::Pending { hit, shift, .. } => {
+                let new = match (hit, shift) {
+                    (Some(ids), true) => toggled(&self.selection, &ids),
+                    (Some(ids), false) => ids,
+                    (None, true) => self.selection.clone(),
+                    (None, false) => Vec::new(),
+                };
+                self.set_selection(new);
+                return Response::redraw();
+            }
+            Drag::Frame { start, current, shift } => {
+                let region = select::Region::Rect(start, current);
+                let crossing = current.x < start.x;
+                let found = select::in_region(&doc.project().variant_view(), self.storey, &region, crossing);
+                self.select_found(found, shift);
+                return Response::redraw();
+            }
+            Drag::Lasso { points, shift } => {
+                let found = if points.len() >= 3 {
+                    select::in_region(&doc.project().variant_view(), self.storey, &select::Region::Lasso(points), false)
+                } else {
+                    Vec::new()
+                };
+                self.select_found(found, shift);
+                return Response::redraw();
+            }
+            Drag::Selection { start, current, copy } => {
                 let delta = (current.x - start.x, current.y - start.y);
                 if delta.0.hypot(delta.1) < 1e-9 {
                     return Response::redraw();
+                }
+                if copy {
+                    return self.copy_selection(doc, Transform::translation(delta.0, delta.1));
                 }
                 ("Verschieben", moved_elements(doc.project(), &self.selection, delta))
             }
@@ -447,10 +572,21 @@ impl Editor {
     /// Stand des Modells während einer Ziehbewegung, für die Vorschau.
     pub fn preview(&self, project: &Project) -> Option<Project> {
         let changes = match self.drag.as_ref()? {
-            Drag::Selection { start, current } => {
+            Drag::Selection { start, current, copy: true } => {
+                let t = Transform::translation(current.x - start.x, current.y - start.y);
+                let mut p = project.clone();
+                for op in transform::copy_ops(project, &self.selection, &t, None) {
+                    if let Operation::Insert { id, element } = op {
+                        p.elements.insert(id, element);
+                    }
+                }
+                return Some(p);
+            }
+            Drag::Selection { start, current, .. } => {
                 moved_elements(project, &self.selection, (current.x - start.x, current.y - start.y))
             }
             Drag::Endpoint { wall, end, current } => as_elements(moved_endpoint(project, *wall, *end, *current)),
+            Drag::Pending { .. } | Drag::Frame { .. } | Drag::Lasso { .. } => return None,
         };
         let mut p = project.clone();
         for (id, e) in changes {
@@ -462,7 +598,9 @@ impl Editor {
     pub fn key(&mut self, doc: &mut Document, key: Key) -> Response {
         match key {
             Key::Escape => {
-                if self.drag.take().is_some() {
+                if !self.shortcut.is_empty() {
+                    self.shortcut.clear();
+                } else if self.drag.take().is_some() {
                 } else if self.arc_end.is_some() {
                     self.arc_end = None;
                 } else if self.chain_start.is_some() {
@@ -470,10 +608,33 @@ impl Editor {
                 } else if self.tool != Tool::Select {
                     self.tool = Tool::Select;
                 } else {
-                    self.selection.clear();
+                    self.set_selection(Vec::new());
                 }
                 self.typed.clear();
                 Response::redraw()
+            }
+            Key::Tab => {
+                if self.tool == Tool::Select && self.hover.len() > 1 {
+                    self.hover_index = (self.hover_index + 1) % self.hover.len();
+                    return Response::redraw();
+                }
+                Response::default()
+            }
+            Key::Arrow { dx, dy, large } => {
+                if self.selection.is_empty() || self.drag.is_some() {
+                    return Response::default();
+                }
+                let step = if large { 0.1 } else { 0.01 };
+                let delta = (dx as f64 * step, dy as f64 * step);
+                let changes = moved_elements(doc.project(), &self.selection, delta);
+                Response::from_result(replace_all(doc, "Verschieben", changes))
+            }
+            Key::Enter if self.typed.is_empty() && self.chain_start.is_none() && self.tool == Tool::Select => {
+                // ⏎ ohne laufende Aktion wiederholt den letzten Befehl (wie Revit).
+                match self.last_command.clone() {
+                    Some(command) => self.run(doc, &command),
+                    None => Response::default(),
+                }
             }
             Key::Enter => {
                 if self.tool == Tool::CalibrateUnderlay
@@ -513,7 +674,7 @@ impl Editor {
                 Response::redraw()
             }
             Key::Delete => {
-                if self.typed.pop().is_some() {
+                if self.typed.pop().is_some() || self.shortcut.pop().is_some() {
                     return Response::redraw();
                 }
                 self.delete_selection(doc)
@@ -522,6 +683,12 @@ impl Editor {
                 if self.chain_start.is_some() && (c.is_ascii_digit() || c == ',' || c == '.') {
                     self.typed.push(c);
                     return Response::redraw();
+                }
+                if c == ' ' && self.tool == Tool::Select && self.chain_start.is_none() {
+                    return self.flip_with_space(doc);
+                }
+                if c.is_alphabetic() {
+                    return self.shortcut_key(doc, c);
                 }
                 Response::default()
             }
@@ -651,16 +818,50 @@ impl Editor {
                 Response::from_result(replace_all(doc, "Variante wechseln", vec![(id, Element::VariantSet(new))]))
             }
             Command::FlipWalls => self.flip_selection(doc),
+            Command::SelectSimilar => {
+                if self.selection.is_empty() {
+                    return Response { error: Some("Erst ein Bauteil wählen, dann SA".into()), ..Response::redraw() };
+                }
+                let found = select::similar(&doc.project().variant_view(), self.storey, &self.selection);
+                self.tool = Tool::Select;
+                self.set_selection(found);
+                Response::redraw()
+            }
+            Command::PreviousSelection => {
+                if let Some(previous) = self.history.pop() {
+                    self.selection = previous;
+                    self.sync(doc.project());
+                }
+                Response::redraw()
+            }
+            Command::SelectUnderlay => {
+                let ids: Vec<ElementId> = doc.project().underlays_on(self.storey).map(|(id, _)| id).collect();
+                let next = match self.selection[..] {
+                    [one] => ids.iter().position(|u| *u == one).map_or(0, |i| (i + 1) % ids.len().max(1)),
+                    _ => 0,
+                };
+                match ids.get(next) {
+                    Some(id) => {
+                        self.tool = Tool::Select;
+                        self.set_selection(vec![*id]);
+                        Response::redraw()
+                    }
+                    None => Response {
+                        error: Some("Auf diesem Geschoss liegt keine Unterlage".into()),
+                        ..Response::redraw()
+                    },
+                }
+            }
+            Command::SetSelection(ids) => {
+                let project = doc.project();
+                let ids = ids.iter().map(|i| ElementId(*i)).filter(|id| project.elements.contains_key(id)).collect();
+                self.set_selection(ids);
+                Response::redraw()
+            }
             Command::SelectAll => {
                 self.tool = Tool::Select;
-                let p = doc.project();
-                self.selection = p
-                    .walls_on(self.storey)
-                    .map(|(id, _)| id)
-                    .chain(p.columns_on(self.storey).map(|(id, _)| id))
-                    .chain(p.spaces_on(self.storey).map(|(id, _)| id))
-                    .chain(p.slabs_on(self.storey).map(|(id, _)| id))
-                    .collect();
+                let all = select::pickable(&doc.project().variant_view(), self.storey);
+                self.set_selection(all);
                 Response::redraw()
             }
             Command::Undo => match doc.undo() {
@@ -682,37 +883,39 @@ impl Editor {
 
     /// Befehle für die Befehlspalette, passend zum Projekt.
     pub fn commands(&self, project: &Project) -> Vec<CommandInfo> {
+        let info = |c: Command, title: &str, group: &str| {
+            let k = shortcut_of(&c);
+            CommandInfo::new(c, title, k, group)
+        };
         let mut list = vec![
-            CommandInfo::new(Command::SelectTool, "Auswählen", "V", "Werkzeug"),
-            CommandInfo::new(Command::WallTool, "Wand zeichnen", "W", "Werkzeug"),
-            CommandInfo::new(Command::ArcWallTool, "Bogenwand zeichnen", "B", "Werkzeug"),
-            CommandInfo::new(Command::GridTool, "Achse zeichnen", "A", "Werkzeug"),
-            CommandInfo::new(Command::ColumnTool, "Stütze setzen", "S", "Werkzeug"),
-            CommandInfo::new(Command::SpaceTool, "Raum setzen", "R", "Werkzeug"),
-            CommandInfo::new(Command::DoorTool, "Tür setzen", "T", "Werkzeug"),
-            CommandInfo::new(Command::WindowTool, "Fenster setzen", "F", "Werkzeug"),
-            CommandInfo::new(Command::SlabOpeningTool, "Deckendurchbruch zeichnen", "D", "Werkzeug"),
-            CommandInfo::new(Command::LineTool, "Linie zeichnen (2D)", "L", "Werkzeug"),
-            CommandInfo::new(Command::TextTool, "Text setzen (2D)", "X", "Werkzeug"),
-            CommandInfo::new(Command::CalibrateUnderlayTool, "Unterlage kalibrieren", "K", "Unterlage"),
-            CommandInfo::new(Command::AlignUnderlayTool, "Unterlage ausrichten (waagerecht)", "", "Unterlage"),
-            CommandInfo::new(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "", "Auswahl"),
-            CommandInfo::new(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "", "Auswahl"),
-            CommandInfo::new(Command::DimensionWalls, "Bemaßen: Maßketten an den gewählten Wänden", "M", "Auswahl"),
-            CommandInfo::new(
-                Command::SlabFromWalls,
-                "Decke aus Wänden (im untersten Geschoss Bodenplatte)",
-                "",
-                "Geschoss",
-            ),
-            CommandInfo::new(Command::GableRoofFromWalls, "Satteldach über dem Geschoss", "", "Geschoss"),
-            CommandInfo::new(Command::DetectSpaces, "Räume erkennen (jeder umschlossene Bereich)", "", "Werkzeug"),
+            info(Command::SelectTool, "Auswählen", "Werkzeug"),
+            info(Command::WallTool, "Wand zeichnen", "Werkzeug"),
+            info(Command::ArcWallTool, "Bogenwand zeichnen", "Werkzeug"),
+            info(Command::GridTool, "Achse zeichnen", "Werkzeug"),
+            info(Command::ColumnTool, "Stütze setzen", "Werkzeug"),
+            info(Command::SpaceTool, "Raum setzen", "Werkzeug"),
+            info(Command::DoorTool, "Tür setzen", "Werkzeug"),
+            info(Command::WindowTool, "Fenster setzen", "Werkzeug"),
+            info(Command::SlabOpeningTool, "Deckendurchbruch zeichnen", "Werkzeug"),
+            info(Command::LineTool, "Linie zeichnen (2D)", "Werkzeug"),
+            info(Command::TextTool, "Text setzen (2D)", "Werkzeug"),
+            info(Command::CalibrateUnderlayTool, "Unterlage kalibrieren", "Unterlage"),
+            info(Command::AlignUnderlayTool, "Unterlage ausrichten (waagerecht)", "Unterlage"),
+            info(Command::SelectUnderlay, "Unterlage wählen (zum Verschieben oder Löschen)", "Unterlage"),
+            info(Command::FlipDoorSwing, "Tür: Aufschlag zur anderen Seite", "Auswahl"),
+            info(Command::FlipDoorHinge, "Tür: Anschlag wechseln (DIN links, DIN rechts)", "Auswahl"),
+            info(Command::DimensionWalls, "Bemaßen: Maßketten an den gewählten Wänden", "Auswahl"),
+            info(Command::SlabFromWalls, "Decke aus Wänden (im untersten Geschoss Bodenplatte)", "Geschoss"),
+            info(Command::GableRoofFromWalls, "Satteldach über dem Geschoss", "Geschoss"),
+            info(Command::DetectSpaces, "Räume erkennen (jeder umschlossene Bereich)", "Werkzeug"),
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
+            info(Command::SelectSimilar, "Gleiche wählen (im Geschoss, zweimal: im Projekt)", "Auswahl"),
+            CommandInfo::new(Command::PreviousSelection, "Vorige Auswahl", "⌘←", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
-            CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "⇧F", "Auswahl"),
-            CommandInfo::new(Command::SetPhase(lot_model::Phase::Existing), "Bauzustand: Bestand", "", "Auswahl"),
-            CommandInfo::new(Command::SetPhase(lot_model::Phase::Demolished), "Bauzustand: Abbruch", "", "Auswahl"),
-            CommandInfo::new(Command::SetPhase(lot_model::Phase::New), "Bauzustand: Neubau", "", "Auswahl"),
+            CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "␣", "Auswahl"),
+            info(Command::SetPhase(lot_model::Phase::Existing), "Bauzustand: Bestand", "Auswahl"),
+            info(Command::SetPhase(lot_model::Phase::Demolished), "Bauzustand: Abbruch", "Auswahl"),
+            info(Command::SetPhase(lot_model::Phase::New), "Bauzustand: Neubau", "Auswahl"),
             CommandInfo::new(Command::Undo, "Widerrufen", "⌘Z", "Bearbeiten"),
             CommandInfo::new(Command::Redo, "Wiederholen", "⇧⌘Z", "Bearbeiten"),
         ];
@@ -763,6 +966,34 @@ impl Editor {
             }
             if let Some(w) = project_now.wall(*id) {
                 overlay.handles.extend([w.start, w.end]);
+            }
+        }
+        if self.tool == Tool::Select {
+            match &self.drag {
+                None => {
+                    if let Some(c) = self.hover.get(self.hover_index) {
+                        for id in c.ids.iter().filter(|id| !self.selection.contains(id)) {
+                            overlay.hovered.extend(outline(project, *id));
+                        }
+                        if let Some(at) = self.hover_at {
+                            let text = if self.hover.len() > 1 {
+                                format!("{} von {}: {}  ⇥", self.hover_index + 1, self.hover.len(), c.label)
+                            } else {
+                                c.label.clone()
+                            };
+                            overlay.tip = Some((at, text));
+                        }
+                    }
+                }
+                Some(Drag::Frame { start, current, .. }) => {
+                    overlay.frame = Some((select::Region::Rect(*start, *current).ring(), current.x < start.x));
+                }
+                Some(Drag::Lasso { points, .. }) => overlay.frame = Some((points.clone(), false)),
+                Some(Drag::Selection { start, current, copy }) => {
+                    let d = format_m(start.distance(*current));
+                    overlay.tip = Some((*current, if *copy { format!("Kopie · {d}") } else { d }));
+                }
+                _ => {}
             }
         }
         if self.tool == Tool::Column
@@ -880,6 +1111,14 @@ impl Editor {
 
     /// Hinweis für die Statuszeile.
     pub fn hint(&self) -> String {
+        if !self.shortcut.is_empty() {
+            let options: Vec<String> = shortcuts()
+                .iter()
+                .filter(|(k, _)| k.starts_with(self.shortcut.as_str()))
+                .map(|(k, c)| format!("{k} {}", command_title(c)))
+                .collect();
+            return format!("Kürzel {}…: {}. Esc bricht ab.", self.shortcut, options.join(", "));
+        }
         match (self.tool, self.chain_start, &self.drag) {
             (Tool::Wall, None, _) => "Wand: Anfangspunkt klicken. Esc: zurück zum Auswählen.".into(),
             (Tool::Wall, Some(_), _) if !self.typed.is_empty() => {
@@ -925,15 +1164,126 @@ impl Editor {
             (Tool::Space, _, _) => {
                 "Raum: in den Bereich klicken, dort steht der Raumstempel. Esc: zurück zum Auswählen.".into()
             }
+            (Tool::Select, _, Some(Drag::Frame { start, current, .. })) if current.x < start.x => {
+                "Rahmen nach links: wählt auch Angeschnittenes. ⇧: hinzufügen oder herausnehmen.".into()
+            }
+            (Tool::Select, _, Some(Drag::Frame { .. })) => {
+                "Rahmen nach rechts: wählt, was ganz innen liegt. ⇧: hinzufügen oder herausnehmen.".into()
+            }
+            (Tool::Select, _, Some(Drag::Lasso { .. })) => "Lasso: wählt, was ganz innen liegt.".into(),
+            (Tool::Select, _, Some(Drag::Selection { copy: true, .. })) => "Loslassen setzt die Kopie ab.".into(),
             (Tool::Select, _, Some(_)) => "Loslassen setzt ab. Esc bricht ab.".into(),
             (Tool::Select, _, None) if self.selection.is_empty() => {
-                "Anklicken wählt. W: Wand, B: Bogenwand, T: Tür, F: Fenster, R: Raum, A: Achse, S: Stütze. ⌘K: Befehle."
+                "Klick wählt, Ziehen zieht einen Rahmen, ⌥ ein Lasso, ⇥ blättert. WA Wand, DR Tür, WN Fenster, RM Raum. ⌘K: Befehle."
                     .into()
             }
             (Tool::Select, _, None) => {
-                "Ziehen verschiebt, Enden ziehen ändert die Länge. ⌫ löscht. ⇧F dreht um. ⌘K: Befehle.".into()
+                "Ziehen verschiebt, mit ⌥ als Kopie; Pfeile schieben 1 cm. SA: Gleiche. ␣ dreht um. ⌫ löscht.".into()
             }
         }
+    }
+
+    /// Neue Auswahl; die alte kommt in den Verlauf (⌘←).
+    fn set_selection(&mut self, new: Vec<ElementId>) {
+        if new == self.selection {
+            return;
+        }
+        if !self.selection.is_empty() {
+            self.history.push(std::mem::take(&mut self.selection));
+            if self.history.len() > 20 {
+                self.history.remove(0);
+            }
+        }
+        self.selection = new;
+    }
+
+    /// Ergebnis eines Rahmens oder Lassos: ersetzt die Auswahl, mit ⇧ kommt
+    /// jedes gefundene Bauteil hinzu oder fällt heraus.
+    fn select_found(&mut self, found: Vec<ElementId>, shift: bool) {
+        if !shift {
+            self.set_selection(found);
+            return;
+        }
+        let mut new = self.selection.clone();
+        for id in found {
+            match new.iter().position(|s| *s == id) {
+                Some(i) => {
+                    new.remove(i);
+                }
+                None => new.push(id),
+            }
+        }
+        self.set_selection(new);
+    }
+
+    /// Ein Buchstabe eines Zwei-Buchstaben-Kürzels (ADR 0044).
+    fn shortcut_key(&mut self, doc: &mut Document, c: char) -> Response {
+        self.shortcut.push(c.to_ascii_uppercase());
+        let table = shortcuts();
+        if let Some((_, command)) = table.iter().find(|(k, _)| *k == self.shortcut) {
+            let command = command.clone();
+            self.shortcut.clear();
+            self.last_command = Some(command.clone());
+            return self.run(doc, &command);
+        }
+        if !table.iter().any(|(k, _)| k.starts_with(self.shortcut.as_str())) {
+            // Kein Kürzel: der letzte Buchstabe beginnt vielleicht ein neues.
+            let last = self.shortcut.pop();
+            self.shortcut.clear();
+            if let Some(l) = last
+                && table.iter().any(|(k, _)| k.starts_with(l))
+            {
+                self.shortcut.push(l);
+            }
+        }
+        Response::redraw()
+    }
+
+    /// Leertaste bei gewählten Bauteilen (wie Revit): Wände drehen um, Türen
+    /// schalten durch die vier Lagen von Aufschlag und Anschlag (ADR 0047).
+    fn flip_with_space(&mut self, doc: &mut Document) -> Response {
+        let project = doc.project();
+        let has_walls = self.selection.iter().any(|id| project.wall(*id).is_some());
+        let has_doors = self.selection.iter().any(|id| {
+            matches!(project.elements.get(id), Some(Element::Opening(Opening { kind: OpeningKind::Door(_), .. })))
+        });
+        if has_walls {
+            return self.flip_selection(doc);
+        }
+        if has_doors {
+            // Bänder vorne links, hinten links, hinten rechts, vorne rechts: jede Taste dreht weiter.
+            return self.change_doors(doc, "Tür drehen", |d| {
+                let (side, at_end) = match (d.opens_to, d.hinge_at_end()) {
+                    (WallSide::Left, false) => (WallSide::Left, true),
+                    (WallSide::Left, true) => (WallSide::Right, true),
+                    (WallSide::Right, true) => (WallSide::Right, false),
+                    (WallSide::Right, false) => (WallSide::Left, false),
+                };
+                d.opens_to = side;
+                d.hinge = if (side == WallSide::Left) == at_end { Handing::DinLeft } else { Handing::DinRight };
+            });
+        }
+        Response::default()
+    }
+
+    /// Kopiert die Auswahl mit der Abbildung `t`; danach sind die Kopien gewählt.
+    fn copy_selection(&mut self, doc: &mut Document, t: Transform) -> Response {
+        let ops = transform::copy_ops(doc.project(), &self.selection, &t, None);
+        if ops.is_empty() {
+            return Response::redraw();
+        }
+        let new: Vec<ElementId> = ops
+            .iter()
+            .filter_map(|op| match op {
+                Operation::Insert { id, .. } => Some(*id),
+                _ => None,
+            })
+            .collect();
+        let result = doc.apply(Operation::Group { label: "Kopieren".into(), ops });
+        if result.is_ok() {
+            self.set_selection(new);
+        }
+        Response::from_result(result)
     }
 
     fn set_tool(&mut self, tool: Tool) -> Response {
@@ -1404,6 +1754,66 @@ impl Editor {
     }
 }
 
+/// Zwei-Buchstaben-Kürzel wie in Revit (ADR 0044), dazu eigene für
+/// Werkzeuge, die Revit so nicht hat (BW, DB, KA).
+pub fn shortcuts() -> Vec<(&'static str, Command)> {
+    vec![
+        ("MD", Command::SelectTool),
+        ("WA", Command::WallTool),
+        ("BW", Command::ArcWallTool),
+        ("GR", Command::GridTool),
+        ("CL", Command::ColumnTool),
+        ("RM", Command::SpaceTool),
+        ("DR", Command::DoorTool),
+        ("WN", Command::WindowTool),
+        ("DB", Command::SlabOpeningTool),
+        ("LI", Command::LineTool),
+        ("TX", Command::TextTool),
+        ("KA", Command::CalibrateUnderlayTool),
+        ("DI", Command::DimensionWalls),
+        ("SA", Command::SelectSimilar),
+        ("DE", Command::DeleteSelection),
+    ]
+}
+
+/// Kurzer Name eines Befehls für den Hinweis zu Kürzeln.
+fn command_title(command: &Command) -> &'static str {
+    match command {
+        Command::SelectTool => "Auswählen",
+        Command::WallTool => "Wand",
+        Command::ArcWallTool => "Bogenwand",
+        Command::GridTool => "Achse",
+        Command::ColumnTool => "Stütze",
+        Command::SpaceTool => "Raum",
+        Command::DoorTool => "Tür",
+        Command::WindowTool => "Fenster",
+        Command::SlabOpeningTool => "Deckendurchbruch",
+        Command::LineTool => "Linie",
+        Command::TextTool => "Text",
+        Command::CalibrateUnderlayTool => "Unterlage kalibrieren",
+        Command::DimensionWalls => "Bemaßen",
+        Command::SelectSimilar => "Gleiche wählen",
+        Command::DeleteSelection => "Löschen",
+        _ => "",
+    }
+}
+
+/// Kürzel eines Befehls zur Anzeige, sonst leer.
+fn shortcut_of(command: &Command) -> &'static str {
+    shortcuts().into_iter().find(|(_, c)| c == command).map_or("", |(k, _)| k)
+}
+
+/// Auswahl nach einem ⇧-Klick: Ist alles schon gewählt, fällt es heraus, sonst kommt es hinzu.
+fn toggled(selection: &[ElementId], ids: &[ElementId]) -> Vec<ElementId> {
+    if ids.iter().all(|id| selection.contains(id)) {
+        selection.iter().copied().filter(|s| !ids.contains(s)).collect()
+    } else {
+        let mut v = selection.to_vec();
+        v.extend(ids.iter().copied().filter(|id| !selection.contains(id)));
+        v
+    }
+}
+
 /// Ersetzt mehrere Elemente als eine Operation.
 fn replace_all(doc: &mut Document, label: &str, changes: Vec<(ElementId, Element)>) -> Result<(), ModelError> {
     let project = doc.project();
@@ -1422,7 +1832,7 @@ fn replace_all(doc: &mut Document, label: &str, changes: Vec<(ElementId, Element
 
 /// Nächste freie Achsbezeichnung: senkrechte Achsen mit Zahlen (1, 2, ...),
 /// waagerechte mit Buchstaben (A, B, ...).
-fn next_grid_label(project: &Project, a: Point2, b: Point2) -> String {
+pub(crate) fn next_grid_label(project: &Project, a: Point2, b: Point2) -> String {
     let used: Vec<String> = project.grid_lines().map(|(_, g)| g.label.clone()).collect();
     let vertical = (b.y - a.y).abs() > (b.x - a.x).abs();
     if vertical {
@@ -1447,7 +1857,7 @@ fn sagitta_from(start: Point2, end: Point2, p: Point2) -> f64 {
 /// Nächste Raumnummer im Geschoss: Ebene, Punkt, laufende Nummer, etwa „0.03“
 /// im Erdgeschoss, „1.01“ im ersten Obergeschoss, „-1.02“ im Keller. Die Ebene
 /// zählt ab dem untersten Geschoss mit OKFF auf oder über ±0,00.
-fn next_space_number(project: &Project, storey: ElementId, skip: u32) -> String {
+pub(crate) fn next_space_number(project: &Project, storey: ElementId, skip: u32) -> String {
     let storeys = project.storeys();
     let ground = storeys.iter().position(|(_, s)| s.elevation >= -0.01).unwrap_or(0) as i64;
     let level = storeys.iter().position(|(id, _)| *id == storey).map_or(0, |i| i as i64 - ground);

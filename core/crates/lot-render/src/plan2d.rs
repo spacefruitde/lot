@@ -45,10 +45,46 @@ impl Default for PlanCamera {
 /// Was über dem Plan gezeichnet wird. Größen in Pixeln, Lagen in Blattmillimetern.
 #[derive(Debug, Clone, PartialEq)]
 pub enum OverlayItem {
-    Polygon { points: Vec<[f64; 2]>, fill: [f32; 4], stroke: [f32; 4], width_px: f32 },
-    Square { center: [f64; 2], size_px: f32, color: [f32; 4] },
-    Ring { center: [f64; 2], radius_px: f32, width_px: f32, color: [f32; 4] },
-    Text { at: [f64; 2], text: String, height_px: f32, color: [f32; 4] },
+    Polygon {
+        points: Vec<[f64; 2]>,
+        fill: [f32; 4],
+        stroke: [f32; 4],
+        width_px: f32,
+    },
+    Square {
+        center: [f64; 2],
+        size_px: f32,
+        color: [f32; 4],
+    },
+    Ring {
+        center: [f64; 2],
+        radius_px: f32,
+        width_px: f32,
+        color: [f32; 4],
+    },
+    Text {
+        at: [f64; 2],
+        text: String,
+        height_px: f32,
+        color: [f32; 4],
+    },
+    /// Linienzug, wahlweise gestrichelt (Strich und Lücke in Pixeln).
+    Path {
+        points: Vec<[f64; 2]>,
+        closed: bool,
+        color: [f32; 4],
+        width_px: f32,
+        dash_px: Option<(f32, f32)>,
+    },
+    /// Kurzer Text am Zeiger: links ausgerichtet, um `offset_px` versetzt, auf einem Feld.
+    Label {
+        at: [f64; 2],
+        offset_px: [f32; 2],
+        text: String,
+        height_px: f32,
+        color: [f32; 4],
+        background: [f32; 4],
+    },
 }
 
 struct Tess {
@@ -179,6 +215,45 @@ pub fn tessellate_overlay(items: &[OverlayItem], px_per_mm: f64) -> PlanMesh {
                     text: text.clone(),
                     height_mm: mm(*height_px) as f64,
                     anchor: lot_plan::Anchor::Center,
+                    rotation: 0.0,
+                };
+                plan_font().outline(&text, &mut sink);
+                sink.finish_open();
+                t.fill(&sink.0.build(), *color, FillRule::NonZero);
+            }
+            OverlayItem::Path { points, closed, color, width_px, dash_px } => {
+                let mut b = Path::builder();
+                match dash_px {
+                    Some((on, off)) => {
+                        let mut pts: Vec<PaperPoint> = points.iter().map(|p| PaperPoint::new(p[0], p[1])).collect();
+                        if *closed && let Some(first) = pts.first().copied() {
+                            pts.push(first);
+                        }
+                        for dash in dashes(&pts, &[mm(*on) as f64, mm(*off) as f64]) {
+                            add_ring(&mut b, dash.iter().map(|p| [p.x, p.y]), false);
+                        }
+                    }
+                    None => add_ring(&mut b, points.iter().copied(), *closed),
+                }
+                t.stroke(&b.build(), mm(*width_px), *color);
+            }
+            OverlayItem::Label { at, offset_px, text, height_px, color, background } => {
+                let h = mm(*height_px) as f64;
+                let (x, y) = (at[0] + mm(offset_px[0]) as f64, at[1] + mm(offset_px[1]) as f64);
+                let (w, pad) = (plan_font().width(text, h), h * 0.5);
+                let mut b = Path::builder();
+                add_ring(
+                    &mut b,
+                    [[x - pad, y - pad], [x + w + pad, y - pad], [x + w + pad, y + h + pad], [x - pad, y + h + pad]],
+                    true,
+                );
+                t.fill(&b.build(), *background, FillRule::NonZero);
+                let mut sink = LyonSink(Path::builder(), false);
+                let text = lot_plan::Text {
+                    position: PaperPoint::new(x, y),
+                    text: text.clone(),
+                    height_mm: h,
+                    anchor: lot_plan::Anchor::Left,
                     rotation: 0.0,
                 };
                 plan_font().outline(&text, &mut sink);

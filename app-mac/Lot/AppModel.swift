@@ -22,6 +22,8 @@ final class AppModel {
     /// Bauzustand der Auswahl: 0 Bestand, 1 Abbruch, 2 Neubau; `nil` ohne Bauteile mit Bauzustand,
     /// -1 bei gemischter Auswahl.
     private(set) var selectionPhase: Int?
+    /// Auswahl nach Art und Typ, bei mehr als einem Bauteil (ADR 0043).
+    private(set) var groups: [SelectionGroup] = []
     /// Flächen je Geschoss, für die Übersicht im Inspektor.
     private(set) var storeyAreas: [StoreyAreaInfo] = []
     /// Nutzungsgruppen nach DIN 277.
@@ -106,6 +108,7 @@ final class AppModel {
         viewState = state
         commands = viewport.commands()
         parameters = state.selection.isEmpty ? [] : document.parameters(ids: state.selection)
+        groups = state.selection.count > 1 ? document.selectionGroups(ids: state.selection) : []
         spaces = state.selection.isEmpty ? [] : document.spaces(ids: state.selection)
         doors = state.selection.isEmpty ? [] : document.doors(ids: state.selection)
         let phases = Set(state.selection.compactMap { document.elementPhase(element: $0) })
@@ -130,6 +133,26 @@ final class AppModel {
         refresh()
         updateViewState()
         requestRedraw?()
+    }
+
+    /// Setzt einen Parameter an mehreren Elementen in einem Undo-Schritt.
+    func set(_ values: [Double], for elements: [UInt64], kind: ParamKind) {
+        do {
+            try document.setParams(elements: elements, kind: kind, values: values)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+        if let viewport {
+            stats.rebuildMs = viewport.refresh()
+        }
+        refresh()
+        updateViewState()
+        requestRedraw?()
+    }
+
+    /// Wählt genau diese Elemente, etwa eine Gruppe aus dem Inspektor.
+    func select(_ ids: [UInt64]) {
+        run("SetSelection([\(ids.map(String.init).joined(separator: ","))])")
     }
 
     /// Ändert Stempeltext, Nutzung oder Wohnflächen-Merkmal eines Raums.
