@@ -16,6 +16,10 @@ Ben am 26.10.2026: „11 ok“, zu den Fangkürzeln „12 die kürzel kenn ich n
 - **Zeichenrichtung von einer Kante** für schiefwinklige Grundrisse und Altbauten.
 - **Kein Skizzenmodus.** Bauteile entstehen sofort (Kette, Rechteck, Polygon, Klick in eine Fläche, aus Linien einer Unterlage) und werden danach direkt am Bauteil bearbeitet.
 - **Achtelmeter-Fang** (DIN 4172) als Schalter, ab Werk aus.
+- **Nachfrage Ben zu 14:** „naja aber wie macht man dann zb ausschnitte oder entscheidet bis wo genau der fußboden geht in einer öffnung zb?“ Mein Vorschlag:
+  - Löcher in Decken (Treppenloch, Schacht, Luftraum) sind eigene Bauteile „Durchbruch“: Rechteck, Polygon oder Klick in eine umschlossene Fläche, dann wie jedes Bauteil mit Griffen und temporären Maßen bearbeitet. Treppen schneiden ihr Loch selbst.
+  - Kerben am Rand: Decke wählen, Kante oder Ecke ziehen, Doppelklick auf eine Kante setzt einen Punkt; ein Rechteck über den Rand zieht mit ⌥ ab und fügt mit ⇧ an.
+  - Fußboden in der Öffnung als Eigenschaft der Öffnung: bis unter das Türblatt, bis Wandmitte oder durchlaufend von einem der beiden Räume; im Grundriss als Linie des Belagswechsels, ein Klick schaltet um. Voreinstellung „Wechsel unter dem Türblatt“ ist eine Frage fürs nächste Prüfpaket.
 
 ## Alternativen
 
