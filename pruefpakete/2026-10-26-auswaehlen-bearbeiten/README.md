@@ -41,4 +41,4 @@ App bauen und starten wie in `CLAUDE.md` (Xcode ⌘R), dann Ablage, Testprojekt 
 
 ## Was ich nicht selbst prüfen konnte
 
-Die App lag beim Test auf einem anderen Space; dort zeichnet sie nicht, und meine Klicks kamen nicht als Wände an. Alles oben ist im Kern mit Tests abgesichert (66 Tests im Bearbeiten-Teil), die Bedienung in der App aber nur gebaut, nicht von mir ausprobiert.
+Ich habe die App nur kurz selbst bedient: **WA** und Klicks zeichnen Wände wie gewünscht. Danach lag dein Bildschirm in einer Vollbild-App, und im Hintergrund kommen weder Ziehen (Rahmen, Lasso, ⌥-Kopie) noch neue Bilder der Planansicht an. Alles oben ist im Kern mit Tests abgesichert (66 Tests im Bearbeiten-Teil), Rahmen, Lasso, Vorschau und temporäre Maße in der App aber nur gebaut, nicht von mir ausprobiert.
