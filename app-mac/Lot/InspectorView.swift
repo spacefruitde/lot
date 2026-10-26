@@ -79,7 +79,8 @@ struct InspectorView: View {
                     Text("Kürzel wie Revit: WA Wand, DR Tür, WN Fenster, RM Raum, GR Achse, CL Stütze, DI Bemaßen, LI Linie, TX Text, SA Gleiche wählen, Esc Auswählen, ⌘K Befehle")
                     Text("Auswählen: Klick, Ziehen ergibt einen Rahmen (nach links auch Angeschnittenes), ⌥ ein Lasso, ⇧ fügt hinzu, ⇥ blättert unter dem Zeiger, ⌘← vorige Auswahl")
                     Text("Bearbeiten: Ziehen verschiebt die Auswahl, mit ⌥ als Kopie, Pfeile 1 cm (⇧ 10 cm), Leertaste dreht um")
-                    Text("Zeichnen: klicken, Länge tippen und ⏎, ⇧ rechtwinklig")
+                    Text("Ändern: MV verschieben, CO kopieren, RO drehen, MM spiegeln, AR Reihe, OF versetzen, AL ausrichten, TR stutzen, SL teilen; ⏎ wiederholt")
+                    Text("Zeichnen: klicken oder tippen, etwa 3,65 · <30 · 3,65<30 · @1,20;0,80 · 2*1,25+0,115, dann ⏎; ⇧ rechtwinklig")
                     Text("Grundriss: zwei Finger verschieben, spreizen zoomt")
                     Text("3D: zwei Finger drehen, mit ⇧ verschieben")
                 }

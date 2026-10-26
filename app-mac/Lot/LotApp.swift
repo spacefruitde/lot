@@ -89,6 +89,16 @@ struct LotApp: App {
                 Button("Unterlage kalibrieren (KA)") { model.run("CalibrateUnderlayTool") }
                 Button("Unterlage ausrichten") { model.run("AlignUnderlayTool") }
                 Divider()
+                Button("Verschieben (MV)") { model.run("MoveTool") }
+                Button("Kopieren (CO)") { model.run("CopyTool") }
+                Button("Drehen (RO)") { model.run("RotateTool") }
+                Button("Spiegeln (MM)") { model.run("MirrorTool") }
+                Button("Reihe (AR)") { model.run("ArrayTool") }
+                Button("Versetzen (OF)") { model.run("OffsetTool") }
+                Button("Ausrichten (AL)") { model.run("AlignTool") }
+                Button("Stutzen und Dehnen (TR)") { model.run("TrimTool") }
+                Button("Wand teilen (SL)") { model.run("SplitTool") }
+                Divider()
                 Button("Alles auswählen") { model.run("SelectAll") }
                     .keyboardShortcut("a")
                 Button("Gleiche wählen (SA)") { model.run("SelectSimilar") }

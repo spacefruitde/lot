@@ -222,7 +222,20 @@ pub fn transformed_opening(o: &lot_model::Opening, wall_length: f64, t: &Transfo
 /// kopiert, um den Anteil der Verschiebung entlang der Wand. Maßketten nur,
 /// wenn alle ihre Bezüge mitkommen. Räume und Achsen bekommen neue Nummern.
 pub fn copy_ops(project: &Project, ids: &[ElementId], t: &Transform, storey: Option<ElementId>) -> Vec<Operation> {
-    let mut cp = Copier { next: project.next_id().0, map: HashMap::new(), ops: Vec::new(), scratch: project.clone() };
+    copy_ops_into(project, project, ids, t, storey)
+}
+
+/// Wie [`copy_ops`], aber die Elemente kommen aus `project` (etwa der
+/// Zwischenablage) und landen in `target`: Kennungen, Raumnummern und
+/// Achsnamen richten sich nach `target`.
+pub fn copy_ops_into(
+    project: &Project,
+    target: &Project,
+    ids: &[ElementId],
+    t: &Transform,
+    storey: Option<ElementId>,
+) -> Vec<Operation> {
+    let mut cp = Copier { next: target.next_id().0, map: HashMap::new(), ops: Vec::new(), scratch: target.clone() };
     // Erst Wände und Decken, dann was in ihnen sitzt, dann der Rest.
     let rank = |id: &ElementId| match project.elements.get(id) {
         Some(Element::Wall(_) | Element::Slab(_)) => 0,
@@ -263,7 +276,7 @@ pub fn copy_ops(project: &Project, ids: &[ElementId], t: &Transform, storey: Opt
             }
             Element::Opening(o) if !with_host.contains(id) => {
                 // Allein kopiert: in derselben Wand, um den Anteil entlang der Wand.
-                let Some(wall) = project.wall(o.host) else { continue };
+                let Some(wall) = project.wall(o.host).filter(|_| target.wall(o.host).is_some()) else { continue };
                 let from = wall.point_at(o.offset + o.width / 2.0, 0.0);
                 let to = t.point(from);
                 let (tx, ty) = wall.tangent_at(o.offset + o.width / 2.0);
@@ -273,7 +286,9 @@ pub fn copy_ops(project: &Project, ids: &[ElementId], t: &Transform, storey: Opt
                 cp.insert(Some(*id), Element::Opening(c));
             }
             Element::SlabOpening(o) if !with_host.contains(id) => {
-                if let Some(Element::SlabOpening(c)) = transformed(e, t) {
+                if target.elements.contains_key(&o.host)
+                    && let Some(Element::SlabOpening(c)) = transformed(e, t)
+                {
                     cp.insert(Some(*id), Element::SlabOpening(lot_model::SlabOpening { host: o.host, ..c }));
                 }
             }

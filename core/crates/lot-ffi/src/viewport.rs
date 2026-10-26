@@ -520,7 +520,16 @@ impl Viewport {
                         Tool::Line => "line",
                         Tool::Text => "text",
                         Tool::CalibrateUnderlay => "calibrate",
-                        Tool::AlignUnderlay => "align",
+                        Tool::AlignUnderlay => "alignUnderlay",
+                        Tool::Move => "move",
+                        Tool::Copy => "copy",
+                        Tool::Rotate => "rotate",
+                        Tool::Mirror => "mirror",
+                        Tool::Array => "array",
+                        Tool::Offset => "offset",
+                        Tool::Align => "align",
+                        Tool::Trim => "trim",
+                        Tool::Split => "split",
                     }
                     .to_string(),
                 )
@@ -771,6 +780,33 @@ fn update_overlay(s: &mut State) {
             width_px: 1.5,
         });
     }
+    // Wo die Auswahl nach dem laufenden Befehl läge, gestrichelt.
+    for ghost in overlay.ghosts {
+        items.push(OverlayItem::Path {
+            points: ghost.into_iter().map(paper).collect(),
+            closed: true,
+            color: blue,
+            width_px: 1.2,
+            dash_px: Some((5.0, 3.0)),
+        });
+    }
+    for (a, b) in overlay.guides {
+        items.push(OverlayItem::Path {
+            points: vec![paper([a.x, a.y]), paper([b.x, b.y])],
+            closed: false,
+            color: linear([0.95, 0.45, 0.05], 1.0),
+            width_px: 1.0,
+            dash_px: Some((4.0, 3.0)),
+        });
+    }
+    for m in overlay.marks {
+        items.push(OverlayItem::Ring {
+            center: paper([m.x, m.y]),
+            radius_px: 4.0,
+            width_px: 2.0,
+            color: linear([0.95, 0.45, 0.05], 1.0),
+        });
+    }
     if let Some((points, crossing)) = overlay.frame {
         let points: Vec<[f64; 2]> = points.into_iter().map(|p| paper([p.x, p.y])).collect();
         // Wie in Revit: durchgezogen wählt ganz innen, gestrichelt auch Angeschnittenes.
@@ -814,6 +850,39 @@ fn update_overlay(s: &mut State) {
             text,
             height_px: 12.0,
             color: linear([0.05, 0.25, 0.6], 1.0),
+        });
+    }
+    // Temporäre Maße: dünne Linie mit Endstrichen, die Zahl zum Anklicken auf einem Feld.
+    let dim_color = linear([0.10, 0.35, 0.80], 1.0);
+    for (a, b, text, editing) in overlay.temp_dims {
+        let (pa, pb) = (paper([a.x, a.y]), paper([b.x, b.y]));
+        items.push(OverlayItem::Path {
+            points: vec![pa, pb],
+            closed: false,
+            color: dim_color,
+            width_px: 1.0,
+            dash_px: None,
+        });
+        let len = ((pb[0] - pa[0]).powi(2) + (pb[1] - pa[1]).powi(2)).sqrt().max(1e-9);
+        let (nx, ny) = (-(pb[1] - pa[1]) / len, (pb[0] - pa[0]) / len);
+        for p in [pa, pb] {
+            let k = 1.2;
+            items.push(OverlayItem::Path {
+                points: vec![[p[0] - nx * k, p[1] - ny * k], [p[0] + nx * k, p[1] + ny * k]],
+                closed: false,
+                color: dim_color,
+                width_px: 1.0,
+                dash_px: None,
+            });
+        }
+        let middle = [(pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0];
+        items.push(OverlayItem::Label {
+            at: middle,
+            offset_px: [-12.0, -5.0],
+            text,
+            height_px: 10.0,
+            color: if editing { linear([1.0, 1.0, 1.0], 1.0) } else { dim_color },
+            background: if editing { dim_color } else { linear([1.0, 1.0, 1.0], 0.95) },
         });
     }
     if let Some((at, text)) = overlay.tip {

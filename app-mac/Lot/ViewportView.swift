@@ -279,6 +279,16 @@ final class MetalViewportNSView: NSView {
         didInteract()
     }
 
+    /// ⌘C und ⌘V aus dem Menü Bearbeiten: Auswahl kopieren, an derselben Stelle
+    /// im aktuellen Geschoss einfügen.
+    @objc func copy(_ sender: Any?) {
+        model?.run("CopyToClipboard")
+    }
+
+    @objc func paste(_ sender: Any?) {
+        model?.run("Paste")
+    }
+
     /// Tasten gehen an den Kern: Kürzel aus zwei Buchstaben (WA, DR, SA …),
     /// Zahlen, Tab, Pfeile und Leertaste (ADR 0043, 0044).
     override func keyDown(with event: NSEvent) {

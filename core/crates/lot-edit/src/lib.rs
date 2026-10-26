@@ -6,9 +6,12 @@
 //! Wänden eine Gruppe, die ein Undo zurücknimmt.
 
 mod command;
+pub mod entry;
 pub mod geometry;
+pub mod modify;
 pub mod select;
 pub mod snap;
+pub mod tempdims;
 pub mod transform;
 
 pub use command::{Command, CommandInfo};
@@ -103,6 +106,24 @@ pub enum Tool {
     CalibrateUnderlay,
     /// Unterlage ausrichten: zwei Punkte, die waagerecht oder senkrecht liegen sollen
     AlignUnderlay,
+    /// Verschieben (MV): Basispunkt, dann Ziel klicken oder Abstand tippen.
+    Move,
+    /// Kopieren (CO): wie Verschieben, das Original bleibt.
+    Copy,
+    /// Drehen (RO): Winkel tippen oder Bezugs- und Zielrichtung klicken; Leertaste setzt den Drehpunkt.
+    Rotate,
+    /// Spiegeln (MM): zwei Punkte der Achse; als Kopie, mit ⇧ ohne.
+    Mirror,
+    /// Reihe (AR): Basispunkt und Abstand; „3x“ drei Stück im Abstand, „3/“ drei Stück bis zum Punkt.
+    Array,
+    /// Versetzen (OF): Wand oder Linie anklicken, Kopie zur Seite des Zeigers im getippten Abstand.
+    Offset,
+    /// Ausrichten (AL): Bezugslinie, dann die Fläche, die daran ausgerichtet wird.
+    Align,
+    /// Stutzen und Dehnen zur Ecke (TR): zwei Wände, die angeklickten Teile bleiben.
+    Trim,
+    /// Teilen (SL): Klick auf eine Wand teilt sie dort.
+    Split,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -155,6 +176,14 @@ pub struct Overlay {
     pub label: Option<(Point2, String)>,
     /// Umrisse des Kandidaten unter dem Zeiger (Vorhervorhebung).
     pub hovered: Vec<Vec<[f64; 2]>>,
+    /// Umrisse der Auswahl, wie sie nach dem laufenden Befehl läge (gestrichelt).
+    pub ghosts: Vec<Vec<[f64; 2]>>,
+    /// Hilfslinien des laufenden Befehls: Verschiebung, Drehung, Spiegelachse.
+    pub guides: Vec<(Point2, Point2)>,
+    /// Markierte Punkte: Basispunkt, Drehpunkt.
+    pub marks: Vec<Point2>,
+    /// Temporäre Maße am gewählten Bauteil: Anfang, Ende, Maßzahl, gerade in Bearbeitung.
+    pub temp_dims: Vec<(Point2, Point2, String, bool)>,
     /// Rahmen oder Lasso; `true`, wenn er auch Angeschnittenes wählt.
     pub frame: Option<(Vec<Point2>, bool)>,
     /// Kurzer Text am Zeiger, etwa „2 von 4: Wandkette (3 Wände)“.
@@ -188,6 +217,22 @@ pub struct Editor {
     shortcut: String,
     /// Letzter Befehl über ein Kürzel, für ⏎ ohne laufende Aktion.
     last_command: Option<Command>,
+    /// Drehpunkt für Drehen, anfangs die Mitte der Auswahl.
+    pivot: Option<Point2>,
+    /// Anzahl für Reihe: „3x“ oder „3/“.
+    series: Option<entry::Entry>,
+    /// Getippter Abstand für Versetzen.
+    offset_distance: Option<f64>,
+    /// Erste angeklickte Wand beim Stutzen.
+    picked: Option<(ElementId, Point2)>,
+    /// Bezugslinie beim Ausrichten.
+    align_ref: Option<modify::Line>,
+    /// Getippter Winkel, an dem die nächste Wand oder Linie entlangläuft.
+    angle_lock: Option<f64>,
+    /// Das temporäre Maß, dessen Zahl gerade getippt wird.
+    dim_edit: Option<usize>,
+    /// Zwischenablage: Stand des Projekts beim Kopieren und die kopierten Elemente.
+    clipboard: Option<(Box<Project>, Vec<ElementId>)>,
 }
 
 impl Editor {
@@ -213,6 +258,14 @@ impl Editor {
             history: Vec::new(),
             shortcut: String::new(),
             last_command: None,
+            pivot: None,
+            series: None,
+            offset_distance: None,
+            picked: None,
+            align_ref: None,
+            angle_lock: None,
+            dim_edit: None,
+            clipboard: None,
         }
     }
 
@@ -238,6 +291,19 @@ impl Editor {
                 Response::redraw()
             }
             Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column | Tool::SlabOpening | Tool::Line => {
+                let mut snapped =
+                    self.snap(project, self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[]);
+                // Ein getippter Winkel hält die Richtung; der Zeiger gibt nur die Länge.
+                if let (Some(a), Some(s)) = (self.angle_lock, self.chain_start) {
+                    let (sin, cos) = a.to_radians().sin_cos();
+                    let t = ((input.point.x - s.x) * cos + (input.point.y - s.y) * sin).max(0.0);
+                    let t = (t / snap::ROUND).round() * snap::ROUND;
+                    snapped = Snap { point: Point2::new(s.x + cos * t, s.y + sin * t), kind: SnapKind::Angle };
+                }
+                self.pointer = Some(snapped);
+                Response::redraw()
+            }
+            Tool::Move | Tool::Copy | Tool::Array | Tool::Mirror => {
                 self.pointer = Some(self.snap(
                     project,
                     self.storey,
@@ -247,6 +313,18 @@ impl Editor {
                     input.shift,
                     &[],
                 ));
+                Response::redraw()
+            }
+            Tool::Rotate => {
+                // Winkelraster um den Drehpunkt.
+                let from = if self.chain_start.is_some() { self.pivot } else { None };
+                self.pointer =
+                    Some(self.snap(project, self.storey, input.point, input.tolerance, from, input.shift, &[]));
+                Response::redraw()
+            }
+            Tool::Offset | Tool::Align | Tool::Trim | Tool::Split => {
+                self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
+                self.hover_tolerance = input.tolerance;
                 Response::redraw()
             }
             Tool::Door | Tool::Window | Tool::Text | Tool::CalibrateUnderlay | Tool::AlignUnderlay => {
@@ -429,6 +507,86 @@ impl Editor {
                     Some(start) => self.add_wall(doc, start, p),
                 }
             }
+            Tool::Move | Tool::Copy | Tool::Array | Tool::Mirror | Tool::Rotate => {
+                let from = if self.tool == Tool::Rotate {
+                    self.pivot.filter(|_| self.chain_start.is_some())
+                } else {
+                    self.chain_start
+                };
+                let p =
+                    self.snap(doc.project(), self.storey, input.point, input.tolerance, from, input.shift, &[]).point;
+                self.pointer = None;
+                match self.chain_start {
+                    None => {
+                        self.chain_start = Some(p);
+                        Response::redraw()
+                    }
+                    Some(_) => match self.modify_transform(p) {
+                        Some(t) => self.finish_modify(doc, t, input.shift),
+                        None => Response::redraw(),
+                    },
+                }
+            }
+            Tool::Split => {
+                let Some(id) = geometry::wall_at(doc.project(), self.storey, input.point, input.tolerance) else {
+                    return Response { error: Some("Zum Teilen auf eine Wand klicken".into()), ..Response::redraw() };
+                };
+                match modify::split_wall_ops(doc.project(), id, input.point) {
+                    Ok(ops) => Response::from_result(doc.apply(Operation::Group { label: "Teilen".into(), ops })),
+                    Err(e) => Response { error: Some(e), ..Response::redraw() },
+                }
+            }
+            Tool::Trim => {
+                let Some(id) = geometry::wall_at(doc.project(), self.storey, input.point, input.tolerance) else {
+                    return Response { error: Some("Zum Stutzen auf eine Wand klicken".into()), ..Response::redraw() };
+                };
+                match self.picked.take() {
+                    None => {
+                        self.picked = Some((id, input.point));
+                        Response::redraw()
+                    }
+                    Some(first) => match modify::trim_ops(doc.project(), first, (id, input.point)) {
+                        Ok(ops) => Response::from_result(doc.apply(Operation::Group { label: "Stutzen".into(), ops })),
+                        Err(e) => Response { error: Some(e), ..Response::redraw() },
+                    },
+                }
+            }
+            Tool::Align => {
+                let Some((id, line)) = modify::line_at(doc.project(), self.storey, input.point, input.tolerance) else {
+                    return Response {
+                        error: Some("Auf eine Wandfläche, Achse oder Linie klicken".into()),
+                        ..Response::redraw()
+                    };
+                };
+                match self.align_ref.take() {
+                    None => {
+                        self.align_ref = Some(line);
+                        Response::redraw()
+                    }
+                    Some(reference) => match modify::align_delta(reference, line) {
+                        Ok(delta) if delta.0.hypot(delta.1) < 1e-9 => Response::redraw(),
+                        Ok(delta) => {
+                            let changes = moved_elements(doc.project(), &[id], delta);
+                            Response::from_result(replace_all(doc, "Ausrichten", changes))
+                        }
+                        Err(e) => Response { error: Some(e), ..Response::redraw() },
+                    },
+                }
+            }
+            Tool::Offset if self.offset_distance.is_none() => Response {
+                error: Some("Erst den Abstand tippen und ⏎, dann auf die Wand klicken".into()),
+                ..Response::redraw()
+            },
+            Tool::Offset => match self.offset_target(doc.project(), input.point, input.tolerance) {
+                Some((id, delta)) => {
+                    let ops =
+                        transform::copy_ops(doc.project(), &[id], &Transform::translation(delta.0, delta.1), None);
+                    Response::from_result(doc.apply(Operation::Group { label: "Versetzen".into(), ops }))
+                }
+                None => {
+                    Response { error: Some("Auf eine Wand, Achse oder Linie klicken".into()), ..Response::redraw() }
+                }
+            },
             Tool::Select => {
                 let project = doc.project();
                 // Griff an einem Ende einer gewählten Wand?
@@ -440,6 +598,17 @@ impl Editor {
                             return Response::redraw();
                         }
                     }
+                }
+                // Klick auf die Zahl eines temporären Maßes: neuen Wert tippen.
+                self.dim_edit = None;
+                if let Some(i) = self
+                    .temp_dims_now(project)
+                    .iter()
+                    .position(|d| d.middle().distance(input.point) <= input.tolerance * 1.5)
+                {
+                    self.dim_edit = Some(i);
+                    self.typed.clear();
+                    return Response::redraw();
                 }
                 // Bauteile anderer Varianten sind nicht zu sehen und nicht zu treffen.
                 let shown = project.variant_view();
@@ -555,7 +724,7 @@ impl Editor {
                     return Response::redraw();
                 }
                 if copy {
-                    return self.copy_selection(doc, Transform::translation(delta.0, delta.1));
+                    return self.copy_selection(doc, Transform::translation(delta.0, delta.1), "Kopieren");
                 }
                 ("Verschieben", moved_elements(doc.project(), &self.selection, delta))
             }
@@ -600,7 +769,7 @@ impl Editor {
             Key::Escape => {
                 if !self.shortcut.is_empty() {
                     self.shortcut.clear();
-                } else if self.drag.take().is_some() {
+                } else if self.dim_edit.take().is_some() || self.drag.take().is_some() {
                 } else if self.arc_end.is_some() {
                     self.arc_end = None;
                 } else if self.chain_start.is_some() {
@@ -636,6 +805,10 @@ impl Editor {
                     None => Response::default(),
                 }
             }
+            Key::Enter if self.dim_edit.is_some() => self.apply_temp_dim(doc),
+            Key::Enter if matches!(self.tool, Tool::Move | Tool::Copy | Tool::Array | Tool::Rotate | Tool::Offset) => {
+                self.modify_enter(doc)
+            }
             Key::Enter => {
                 if self.tool == Tool::CalibrateUnderlay
                     && let (Some(a), Some(b), Some(distance)) =
@@ -654,13 +827,22 @@ impl Editor {
                     self.typed.clear();
                     return self.add_arc_wall(doc, start, end, side * height);
                 }
-                if let (Some(start), Some(length)) = (self.chain_start, parse_length(&self.typed)) {
-                    let target = self.pointer.map_or(Point2::new(start.x + 1.0, start.y), |s| s.point);
-                    let (dx, dy) = (target.x - start.x, target.y - start.y);
-                    let len = dx.hypot(dy);
-                    let (ux, uy) = if len > 1e-9 { (dx / len, dy / len) } else { (1.0, 0.0) };
-                    self.typed.clear();
-                    let end = Point2::new(start.x + ux * length, start.y + uy * length);
+                if let Some(start) = self.chain_start
+                    && !self.typed.is_empty()
+                {
+                    let typed = std::mem::take(&mut self.typed);
+                    let entry = entry::parse(&typed);
+                    if let Some(entry::Entry::Angle(a)) = entry {
+                        self.angle_lock = Some(a);
+                        return Response::redraw();
+                    }
+                    let Some((dx, dy)) = entry.and_then(|e| self.typed_vector(e, start)) else {
+                        return Response {
+                            error: Some(format!("Eingabe nicht verstanden: {typed}")),
+                            ..Response::redraw()
+                        };
+                    };
+                    let end = Point2::new(start.x + dx, start.y + dy);
                     if self.tool == Tool::ArcWall {
                         self.arc_end = Some(end);
                         return Response::redraw();
@@ -680,8 +862,21 @@ impl Editor {
                 self.delete_selection(doc)
             }
             Key::Char(c) => {
-                if self.chain_start.is_some() && (c.is_ascii_digit() || c == ',' || c == '.') {
+                let numbers = self.chain_start.is_some()
+                    || self.dim_edit.is_some()
+                    || matches!(self.tool, Tool::Move | Tool::Copy | Tool::Array | Tool::Rotate | Tool::Offset);
+                if numbers
+                    && ((self.typed.is_empty() && entry::starts(c)) || (!self.typed.is_empty() && entry::accepts(c)))
+                {
                     self.typed.push(c);
+                    return Response::redraw();
+                }
+                if c == ' ' && self.tool == Tool::Rotate {
+                    // Leertaste setzt den Drehpunkt an den Zeiger (wie Revit).
+                    if let Some(p) = self.pointer {
+                        self.pivot = Some(p.point);
+                        self.chain_start = None;
+                    }
                     return Response::redraw();
                 }
                 if c == ' ' && self.tool == Tool::Select && self.chain_start.is_none() {
@@ -715,6 +910,15 @@ impl Editor {
             Command::TextTool => self.set_tool(Tool::Text),
             Command::CalibrateUnderlayTool => self.set_tool(Tool::CalibrateUnderlay),
             Command::AlignUnderlayTool => self.set_tool(Tool::AlignUnderlay),
+            Command::MoveTool => self.start_modify(doc.project(), Tool::Move),
+            Command::CopyTool => self.start_modify(doc.project(), Tool::Copy),
+            Command::RotateTool => self.start_modify(doc.project(), Tool::Rotate),
+            Command::MirrorTool => self.start_modify(doc.project(), Tool::Mirror),
+            Command::ArrayTool => self.start_modify(doc.project(), Tool::Array),
+            Command::OffsetTool => self.set_tool(Tool::Offset),
+            Command::AlignTool => self.set_tool(Tool::Align),
+            Command::TrimTool => self.set_tool(Tool::Trim),
+            Command::SplitTool => self.set_tool(Tool::Split),
             Command::FlipDoorSwing => self.change_doors(doc, "Aufschlag wechseln", |d| {
                 // Die Bänder bleiben, wo sie sind: mit der Seite wechselt auch DIN links und rechts.
                 d.opens_to = d.opens_to.other();
@@ -852,6 +1056,42 @@ impl Editor {
                     },
                 }
             }
+            Command::CopyToClipboard => {
+                if self.selection.is_empty() {
+                    return Response::default();
+                }
+                self.clipboard = Some((Box::new(doc.project().clone()), self.selection.clone()));
+                Response::redraw()
+            }
+            Command::Paste => {
+                let Some((source, ids)) = &self.clipboard else {
+                    return Response { error: Some("Die Zwischenablage ist leer".into()), ..Response::redraw() };
+                };
+                // An derselben Stelle, im aktuellen Geschoss (etwa Wände vom EG ins OG).
+                let ops = transform::copy_ops_into(
+                    source,
+                    doc.project(),
+                    ids,
+                    &Transform::translation(0.0, 0.0),
+                    Some(self.storey),
+                );
+                let new: Vec<ElementId> = ops
+                    .iter()
+                    .filter_map(|op| match op {
+                        Operation::Insert { id, .. } => Some(*id),
+                        _ => None,
+                    })
+                    .collect();
+                if ops.is_empty() {
+                    return Response::redraw();
+                }
+                let result = doc.apply(Operation::Group { label: "Einfügen".into(), ops });
+                if result.is_ok() {
+                    self.tool = Tool::Select;
+                    self.set_selection(new);
+                }
+                Response::from_result(result)
+            }
             Command::SetSelection(ids) => {
                 let project = doc.project();
                 let ids = ids.iter().map(|i| ElementId(*i)).filter(|id| project.elements.contains_key(id)).collect();
@@ -910,8 +1150,19 @@ impl Editor {
             info(Command::DetectSpaces, "Räume erkennen (jeder umschlossene Bereich)", "Werkzeug"),
             CommandInfo::new(Command::SelectAll, "Alles im Geschoss wählen", "⌘A", "Auswahl"),
             info(Command::SelectSimilar, "Gleiche wählen (im Geschoss, zweimal: im Projekt)", "Auswahl"),
+            info(Command::MoveTool, "Verschieben", "Bearbeiten"),
+            info(Command::CopyTool, "Kopieren", "Bearbeiten"),
+            info(Command::RotateTool, "Drehen", "Bearbeiten"),
+            info(Command::MirrorTool, "Spiegeln (als Kopie, mit ⇧ ohne)", "Bearbeiten"),
+            info(Command::ArrayTool, "Reihe", "Bearbeiten"),
+            info(Command::OffsetTool, "Versetzen (parallel kopieren)", "Bearbeiten"),
+            info(Command::AlignTool, "Ausrichten", "Bearbeiten"),
+            info(Command::TrimTool, "Stutzen und Dehnen zur Ecke", "Bearbeiten"),
+            info(Command::SplitTool, "Wand teilen", "Bearbeiten"),
             CommandInfo::new(Command::PreviousSelection, "Vorige Auswahl", "⌘←", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
+            CommandInfo::new(Command::CopyToClipboard, "In die Zwischenablage kopieren", "⌘C", "Bearbeiten"),
+            CommandInfo::new(Command::Paste, "Einfügen an derselben Stelle, im aktuellen Geschoss", "⌘V", "Bearbeiten"),
             CommandInfo::new(Command::FlipWalls, "Wand umdrehen (innen und außen tauschen)", "␣", "Auswahl"),
             info(Command::SetPhase(lot_model::Phase::Existing), "Bauzustand: Bestand", "Auswahl"),
             info(Command::SetPhase(lot_model::Phase::Demolished), "Bauzustand: Abbruch", "Auswahl"),
@@ -967,6 +1218,11 @@ impl Editor {
             if let Some(w) = project_now.wall(*id) {
                 overlay.handles.extend([w.start, w.end]);
             }
+        }
+        for (i, d) in self.temp_dims_now(project).into_iter().enumerate() {
+            let editing = self.dim_edit == Some(i);
+            let text = if editing && !self.typed.is_empty() { self.typed.clone() } else { select::meters(d.value) };
+            overlay.temp_dims.push((d.a, d.b, text, editing));
         }
         if self.tool == Tool::Select {
             match &self.drag {
@@ -1095,6 +1351,7 @@ impl Editor {
                 _ => {}
             }
         }
+        self.modify_overlay(project, &mut overlay);
         if self.tool == Tool::Wall {
             overlay.snap = self.pointer;
             if let (Some(start), Some(p)) = (self.chain_start, self.pointer)
@@ -1107,6 +1364,110 @@ impl Editor {
             }
         }
         overlay
+    }
+
+    /// Vorschau der Bearbeiten-Befehle: Umrisse am Ziel, Hilfslinien, Maße.
+    fn modify_overlay(&self, project: &Project, overlay: &mut Overlay) {
+        let pointer = self.pointer.map(|p| p.point);
+        let moved = |ids: &[ElementId], t: &Transform| -> Vec<Vec<[f64; 2]>> {
+            ids.iter()
+                .filter_map(|id| outline(project, *id))
+                .map(|o| {
+                    o.into_iter()
+                        .map(|q| {
+                            let r = t.point(Point2::new(q[0], q[1]));
+                            [r.x, r.y]
+                        })
+                        .collect()
+                })
+                .collect()
+        };
+        match self.tool {
+            Tool::Move | Tool::Copy | Tool::Array | Tool::Rotate | Tool::Mirror => {
+                overlay.snap = self.pointer;
+                if let Some(c) = self.pivot.filter(|_| self.tool == Tool::Rotate) {
+                    overlay.marks.push(c);
+                }
+                let (Some(base), Some(p)) = (self.chain_start, pointer) else {
+                    overlay.marks.extend(self.chain_start);
+                    return;
+                };
+                overlay.marks.push(base);
+                let Some(t) = self.modify_transform(p) else { return };
+                match self.tool {
+                    Tool::Array => {
+                        let (n, divide) = match self.series {
+                            Some(entry::Entry::Count(n)) => (n, false),
+                            Some(entry::Entry::Divide(n)) => (n.max(2), true),
+                            _ => (2, false),
+                        };
+                        let o = t.point(Point2::new(0.0, 0.0));
+                        let step = if divide { (o.x / (n - 1) as f64, o.y / (n - 1) as f64) } else { (o.x, o.y) };
+                        for i in 1..n.min(30) {
+                            let ti = Transform::translation(step.0 * i as f64, step.1 * i as f64);
+                            overlay.ghosts.extend(moved(&self.selection, &ti));
+                        }
+                        overlay.guides.push((base, p));
+                        overlay.tip = Some((p, format_m(base.distance(p))));
+                    }
+                    Tool::Rotate => {
+                        if let Some(c) = self.pivot {
+                            overlay.guides.extend([(c, base), (c, p)]);
+                            let a = (p.y - c.y).atan2(p.x - c.x) - (base.y - c.y).atan2(base.x - c.x);
+                            overlay.tip = Some((p, format!("{:.2}°", a.to_degrees()).replace('.', ",")));
+                        }
+                        overlay.ghosts.extend(moved(&self.selection, &t));
+                    }
+                    Tool::Mirror => {
+                        overlay.guides.push((base, p));
+                        overlay.ghosts.extend(moved(&self.selection, &t));
+                    }
+                    _ => {
+                        overlay.guides.push((base, p));
+                        overlay.ghosts.extend(moved(&self.selection, &t));
+                        overlay.tip = Some((p, format_m(base.distance(p))));
+                    }
+                }
+            }
+            Tool::Offset => {
+                if let Some(p) = pointer
+                    && let Some((id, delta)) = self.offset_target(project, p, self.hover_tolerance)
+                {
+                    overlay.hovered.extend(outline(project, id));
+                    overlay.ghosts.extend(moved(&[id], &Transform::translation(delta.0, delta.1)));
+                    overlay.tip = Some((p, format_m(delta.0.hypot(delta.1))));
+                }
+            }
+            Tool::Trim | Tool::Split => {
+                if let Some((id, _)) = self.picked {
+                    overlay.selected.extend(outline(project, id));
+                }
+                if let Some(p) = pointer
+                    && let Some(id) = geometry::wall_at(project, self.storey, p, self.hover_tolerance)
+                {
+                    overlay.hovered.extend(outline(project, id));
+                    if self.tool == Tool::Split
+                        && let Some(w) = project.wall(id)
+                    {
+                        let s = ((w.locate(p).0 / snap::ROUND).round() * snap::ROUND).clamp(0.0, w.length());
+                        overlay.marks.push(w.point_at(s, 0.0));
+                        overlay.tip = Some((p, format!("{} | {}", format_m(s), format_m(w.length() - s))));
+                    }
+                }
+            }
+            Tool::Align => {
+                if let Some(r) = self.align_ref {
+                    let at = |k: f64| Point2::new(r.point.x + r.dir.0 * k, r.point.y + r.dir.1 * k);
+                    overlay.guides.push((at(-30.0), at(30.0)));
+                }
+                if let Some(p) = pointer
+                    && let Some((id, _)) = modify::line_at(project, self.storey, p, self.hover_tolerance)
+                {
+                    overlay.hovered.extend(outline(project, id));
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Hinweis für die Statuszeile.
@@ -1164,6 +1525,46 @@ impl Editor {
             (Tool::Space, _, _) => {
                 "Raum: in den Bereich klicken, dort steht der Raumstempel. Esc: zurück zum Auswählen.".into()
             }
+            (Tool::Move | Tool::Copy | Tool::Array | Tool::Rotate | Tool::Offset, _, _) if !self.typed.is_empty() => {
+                format!("Eingabe {}, ⏎ übernimmt. ⌫ korrigiert.", self.typed)
+            }
+            (Tool::Move, None, _) => "Verschieben: Basispunkt klicken. Esc: abbrechen.".into(),
+            (Tool::Move, Some(_), _) => {
+                "Verschieben: Ziel klicken oder tippen (3,65 · 3,65<30 · @1,20;0,80) und ⏎. ⇧: nur rechte Winkel.".into()
+            }
+            (Tool::Copy, None, _) => "Kopieren: Basispunkt klicken. Esc: abbrechen.".into(),
+            (Tool::Copy, Some(_), _) => "Kopieren: Ziel klicken oder Abstand tippen und ⏎.".into(),
+            (Tool::Array, chain, _) => {
+                let n = match self.series {
+                    Some(entry::Entry::Count(n)) => format!("{n} Stück im Abstand"),
+                    Some(entry::Entry::Divide(n)) => format!("{n} Stück bis zum Punkt"),
+                    _ => "2 Stück".into(),
+                };
+                let step = if chain.is_some() { "Abstand klicken oder tippen" } else { "Basispunkt klicken" };
+                format!("Reihe, {n}: {step}. „3x“ drei Stück im Abstand, „3/“ drei Stück bis zum Punkt.")
+            }
+            (Tool::Rotate, None, _) => {
+                "Drehen: Winkel tippen und ⏎, oder Bezugsrichtung klicken. Leertaste: Drehpunkt an den Zeiger.".into()
+            }
+            (Tool::Rotate, Some(_), _) => "Drehen: Zielrichtung klicken. Esc: abbrechen.".into(),
+            (Tool::Mirror, None, _) => "Spiegeln: ersten Punkt der Achse klicken.".into(),
+            (Tool::Mirror, Some(_), _) => "Spiegeln: zweiten Punkt der Achse klicken. Als Kopie; mit ⇧ ohne Kopie.".into(),
+            (Tool::Offset, _, _) => match self.offset_distance {
+                None => "Versetzen: Abstand tippen und ⏎, dann Wand, Achse oder Linie anklicken.".into(),
+                Some(d) => format!(
+                    "Versetzen um {}: Wand, Achse oder Linie anklicken, Kopie zur Seite des Zeigers. Neuer Abstand: tippen.",
+                    format_m(d)
+                ),
+            },
+            (Tool::Align, _, _) if self.align_ref.is_none() => {
+                "Ausrichten: Bezugslinie anklicken (Wandfläche, Achse oder Linie).".into()
+            }
+            (Tool::Align, _, _) => "Ausrichten: die Fläche anklicken, die an die Bezugslinie soll.".into(),
+            (Tool::Trim, _, _) if self.picked.is_none() => {
+                "Stutzen und Dehnen: erste Wand anklicken, auf dem Teil, der bleibt.".into()
+            }
+            (Tool::Trim, _, _) => "Stutzen und Dehnen: zweite Wand anklicken; beide enden in der Ecke.".into(),
+            (Tool::Split, _, _) => "Teilen: auf die Wand klicken, wo sie geteilt wird.".into(),
             (Tool::Select, _, Some(Drag::Frame { start, current, .. })) if current.x < start.x => {
                 "Rahmen nach links: wählt auch Angeschnittenes. ⇧: hinzufügen oder herausnehmen.".into()
             }
@@ -1177,14 +1578,19 @@ impl Editor {
                 "Klick wählt, Ziehen zieht einen Rahmen, ⌥ ein Lasso, ⇥ blättert. WA Wand, DR Tür, WN Fenster, RM Raum. ⌘K: Befehle."
                     .into()
             }
+            (Tool::Select, _, None) if self.dim_edit.is_some() => {
+                format!("Neues Maß {} tippen und ⏎. Esc bricht ab.", self.typed)
+            }
             (Tool::Select, _, None) => {
-                "Ziehen verschiebt, mit ⌥ als Kopie; Pfeile schieben 1 cm. SA: Gleiche. ␣ dreht um. ⌫ löscht.".into()
+                "Ziehen verschiebt, mit ⌥ als Kopie; Maßzahl anklicken ändert den Abstand. Pfeile 1 cm. SA: Gleiche. ⌫ löscht."
+                    .into()
             }
         }
     }
 
     /// Neue Auswahl; die alte kommt in den Verlauf (⌘←).
     fn set_selection(&mut self, new: Vec<ElementId>) {
+        self.dim_edit = None;
         if new == self.selection {
             return;
         }
@@ -1267,7 +1673,7 @@ impl Editor {
     }
 
     /// Kopiert die Auswahl mit der Abbildung `t`; danach sind die Kopien gewählt.
-    fn copy_selection(&mut self, doc: &mut Document, t: Transform) -> Response {
+    fn copy_selection(&mut self, doc: &mut Document, t: Transform, label: &str) -> Response {
         let ops = transform::copy_ops(doc.project(), &self.selection, &t, None);
         if ops.is_empty() {
             return Response::redraw();
@@ -1279,15 +1685,219 @@ impl Editor {
                 _ => None,
             })
             .collect();
-        let result = doc.apply(Operation::Group { label: "Kopieren".into(), ops });
+        let result = doc.apply(Operation::Group { label: label.into(), ops });
         if result.is_ok() {
             self.set_selection(new);
         }
         Response::from_result(result)
     }
 
+    /// Temporäre Maße, solange genau ein Bauteil gewählt ist und nichts gezogen wird.
+    fn temp_dims_now(&self, project: &Project) -> Vec<tempdims::TempDim> {
+        match (&self.selection[..], self.tool, &self.drag) {
+            ([id], Tool::Select, None) => tempdims::temp_dims(project, self.storey, *id),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Setzt das bearbeitete temporäre Maß auf den getippten Wert; das Bauteil rückt.
+    fn apply_temp_dim(&mut self, doc: &mut Document) -> Response {
+        let Some(i) = self.dim_edit.take() else { return Response::default() };
+        let typed = std::mem::take(&mut self.typed);
+        let Some(dim) = self.temp_dims_now(doc.project()).get(i).copied() else { return Response::redraw() };
+        let Some(entry::Entry::Length(v)) = entry::parse(&typed) else {
+            return Response { error: Some(format!("Eingabe nicht verstanden: {typed}")), ..Response::redraw() };
+        };
+        let d = v - dim.value;
+        let changes = moved_elements(doc.project(), &self.selection, (dim.grow.0 * d, dim.grow.1 * d));
+        Response::from_result(replace_all(doc, "Maß ändern", changes))
+    }
+
+    /// Startet einen Befehl an der Auswahl (MV, CO, RO, MM, AR); die Auswahl bleibt.
+    fn start_modify(&mut self, project: &Project, tool: Tool) -> Response {
+        if self.selection.is_empty() {
+            let k = match tool {
+                Tool::Move => "MV",
+                Tool::Copy => "CO",
+                Tool::Rotate => "RO",
+                Tool::Mirror => "MM",
+                _ => "AR",
+            };
+            return Response { error: Some(format!("Erst auswählen, dann {k}")), ..Response::redraw() };
+        }
+        self.tool = tool;
+        self.end_chain();
+        self.series = None;
+        self.pivot = if tool == Tool::Rotate { self.selection_center(project) } else { None };
+        Response::redraw()
+    }
+
+    /// Mitte des umschließenden Rechtecks der Auswahl, auf 1 cm gerundet.
+    fn selection_center(&self, project: &Project) -> Option<Point2> {
+        let points: Vec<[f64; 2]> = self.selection.iter().filter_map(|id| outline(project, *id)).flatten().collect();
+        let (x0, x1) = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| (a.min(p[0]), b.max(p[0])));
+        let (y0, y1) = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| (a.min(p[1]), b.max(p[1])));
+        let r = |v: f64| (v / snap::ROUND).round() * snap::ROUND;
+        (x0 <= x1).then(|| Point2::new(r((x0 + x1) / 2.0), r((y0 + y1) / 2.0)))
+    }
+
+    /// Abbildung, die der laufende Befehl mit dem Zielpunkt `p` ausführen würde.
+    fn modify_transform(&self, p: Point2) -> Option<Transform> {
+        match self.tool {
+            Tool::Move | Tool::Copy | Tool::Array => {
+                let b = self.chain_start?;
+                Some(Transform::translation(p.x - b.x, p.y - b.y))
+            }
+            Tool::Rotate => {
+                let (c, r) = (self.pivot?, self.chain_start?);
+                let a = (p.y - c.y).atan2(p.x - c.x) - (r.y - c.y).atan2(r.x - c.x);
+                let deg = (a.to_degrees() * 100.0).round() / 100.0;
+                Some(Transform::rotation(c, deg))
+            }
+            Tool::Mirror => Transform::mirror(self.chain_start?, p),
+            _ => None,
+        }
+    }
+
+    /// Verschiebung aus einer getippten Eingabe: Länge in Richtung des Zeigers
+    /// (oder des getippten Winkels), Länge mit Winkel oder relativ in x und y.
+    fn typed_vector(&self, e: entry::Entry, from: Point2) -> Option<(f64, f64)> {
+        match e {
+            entry::Entry::Length(l) => {
+                let (ux, uy) = match self.angle_lock {
+                    Some(a) => (a.to_radians().cos(), a.to_radians().sin()),
+                    None => {
+                        let target = self.pointer.map_or(Point2::new(from.x + 1.0, from.y), |s| s.point);
+                        let (dx, dy) = (target.x - from.x, target.y - from.y);
+                        let len = dx.hypot(dy);
+                        if len > 1e-9 { (dx / len, dy / len) } else { (1.0, 0.0) }
+                    }
+                };
+                Some((ux * l, uy * l))
+            }
+            entry::Entry::Polar { length, angle } => {
+                let (sin, cos) = angle.to_radians().sin_cos();
+                Some((cos * length, sin * length))
+            }
+            entry::Entry::Offset { dx, dy } => Some((dx, dy)),
+            _ => None,
+        }
+    }
+
+    /// ⏎ in Verschieben, Kopieren, Reihe, Drehen und Versetzen.
+    fn modify_enter(&mut self, doc: &mut Document) -> Response {
+        if self.typed.is_empty() {
+            return Response::default();
+        }
+        let typed = std::mem::take(&mut self.typed);
+        let parsed = entry::parse(&typed);
+        let not_understood =
+            || Response { error: Some(format!("Eingabe nicht verstanden: {typed}")), ..Response::redraw() };
+        match (self.tool, parsed) {
+            (Tool::Array, Some(e @ (entry::Entry::Count(_) | entry::Entry::Divide(_)))) => {
+                self.series = Some(e);
+                Response::redraw()
+            }
+            (Tool::Offset, Some(entry::Entry::Length(d))) => {
+                self.offset_distance = Some(d.abs());
+                Response::redraw()
+            }
+            (Tool::Rotate, Some(entry::Entry::Length(a) | entry::Entry::Angle(a))) => match self.pivot {
+                Some(c) => self.finish_modify(doc, Transform::rotation(c, a), false),
+                None => not_understood(),
+            },
+            (Tool::Move | Tool::Copy | Tool::Array, Some(e)) => {
+                let Some(base) = self.chain_start else {
+                    return Response { error: Some("Erst den Basispunkt klicken".into()), ..Response::redraw() };
+                };
+                match self.typed_vector(e, base) {
+                    Some((dx, dy)) => self.finish_modify(doc, Transform::translation(dx, dy), false),
+                    None => not_understood(),
+                }
+            }
+            _ => not_understood(),
+        }
+    }
+
+    /// Führt Verschieben, Kopieren, Reihe, Drehen oder Spiegeln aus; danach ist
+    /// das Ergebnis gewählt und das Auswahlwerkzeug aktiv.
+    fn finish_modify(&mut self, doc: &mut Document, t: Transform, shift: bool) -> Response {
+        let tool = self.tool;
+        self.tool = Tool::Select;
+        self.end_chain();
+        self.pivot = None;
+        match tool {
+            Tool::Move => {
+                let o = t.point(Point2::new(0.0, 0.0));
+                let changes = moved_elements(doc.project(), &self.selection, (o.x, o.y));
+                Response::from_result(replace_all(doc, "Verschieben", changes))
+            }
+            Tool::Copy => self.copy_selection(doc, t, "Kopieren"),
+            Tool::Mirror if !shift => self.copy_selection(doc, t, "Spiegeln"),
+            Tool::Rotate | Tool::Mirror => {
+                let ops = transform::transform_ops(doc.project(), &self.selection, &t);
+                let label = if tool == Tool::Rotate { "Drehen" } else { "Spiegeln" };
+                Response::from_result(doc.apply(Operation::Group { label: label.into(), ops }))
+            }
+            Tool::Array => {
+                let o = t.point(Point2::new(0.0, 0.0));
+                self.array(doc, (o.x, o.y))
+            }
+            _ => Response::redraw(),
+        }
+    }
+
+    /// Kopien der Auswahl in gleichen Abständen: „3x“ drei Stück im Abstand
+    /// `step`, „3/“ drei Stück, das letzte bei `step`. Gezählt wird das Original mit (wie Revit).
+    fn array(&mut self, doc: &mut Document, step: (f64, f64)) -> Response {
+        let (n, step) = match self.series.take() {
+            Some(entry::Entry::Divide(n)) if n >= 2 => (n, (step.0 / (n - 1) as f64, step.1 / (n - 1) as f64)),
+            Some(entry::Entry::Count(n)) => (n, step),
+            _ => (2, step),
+        };
+        let mut scratch = doc.project().clone();
+        let mut ops = Vec::new();
+        let mut new = Vec::new();
+        for i in 1..n {
+            let t = Transform::translation(step.0 * i as f64, step.1 * i as f64);
+            for op in transform::copy_ops(&scratch, &self.selection, &t, None) {
+                if let Operation::Insert { id, element } = &op {
+                    scratch.elements.insert(*id, element.clone());
+                    new.push(*id);
+                }
+                ops.push(op);
+            }
+        }
+        if ops.is_empty() {
+            return Response::redraw();
+        }
+        let result = doc.apply(Operation::Group { label: "Reihe".into(), ops });
+        if result.is_ok() {
+            self.set_selection(new);
+        }
+        Response::from_result(result)
+    }
+
+    /// Element und Verschiebung für Versetzen: die Wand, Achse oder Linie unter
+    /// dem Zeiger, zur Seite des Zeigers um den getippten Abstand.
+    fn offset_target(&self, project: &Project, p: Point2, tolerance: f64) -> Option<(ElementId, (f64, f64))> {
+        let d = self.offset_distance?;
+        let (id, mut line) = modify::line_at(project, self.storey, p, tolerance)?;
+        // Bei Wänden zählt die Mitte zwischen den Flächen.
+        if let Some(w) = project.wall(id) {
+            let (left, right) = geometry::faces(project, w);
+            line.point = w.point_at(0.0, (left + right) / 2.0);
+        }
+        let (nx, ny) = (-line.dir.1, line.dir.0);
+        let t = (p.x - line.point.x) * nx + (p.y - line.point.y) * ny;
+        let side = if t >= 0.0 { 1.0 } else { -1.0 };
+        Some((id, (nx * d * side, ny * d * side)))
+    }
+
     fn set_tool(&mut self, tool: Tool) -> Response {
         self.tool = tool;
+        self.pivot = None;
+        self.series = None;
         self.selection.clear();
         self.end_chain();
         Response::redraw()
@@ -1297,6 +1907,9 @@ impl Editor {
         self.chain_start = None;
         self.arc_end = None;
         self.typed.clear();
+        self.angle_lock = None;
+        self.picked = None;
+        self.align_ref = None;
     }
 
     fn new_wall(&self, start: Point2, end: Point2) -> Option<Wall> {
@@ -1323,6 +1936,7 @@ impl Editor {
         let result = doc.insert(Element::Wall(wall)).map(|_| ());
         if result.is_ok() {
             self.chain_start = Some(end);
+            self.angle_lock = None;
         }
         Response::from_result(result)
     }
@@ -1387,6 +2001,7 @@ impl Editor {
         let result = doc.insert(Element::Annotation(line)).map(|_| ());
         if result.is_ok() {
             self.chain_start = Some(end);
+            self.angle_lock = None;
         }
         Response::from_result(result)
     }
@@ -1773,6 +2388,16 @@ pub fn shortcuts() -> Vec<(&'static str, Command)> {
         ("DI", Command::DimensionWalls),
         ("SA", Command::SelectSimilar),
         ("DE", Command::DeleteSelection),
+        ("MV", Command::MoveTool),
+        ("CO", Command::CopyTool),
+        ("CC", Command::CopyTool),
+        ("RO", Command::RotateTool),
+        ("MM", Command::MirrorTool),
+        ("AR", Command::ArrayTool),
+        ("OF", Command::OffsetTool),
+        ("AL", Command::AlignTool),
+        ("TR", Command::TrimTool),
+        ("SL", Command::SplitTool),
     ]
 }
 
@@ -1794,6 +2419,15 @@ fn command_title(command: &Command) -> &'static str {
         Command::DimensionWalls => "Bemaßen",
         Command::SelectSimilar => "Gleiche wählen",
         Command::DeleteSelection => "Löschen",
+        Command::MoveTool => "Verschieben",
+        Command::CopyTool => "Kopieren",
+        Command::RotateTool => "Drehen",
+        Command::MirrorTool => "Spiegeln",
+        Command::ArrayTool => "Reihe",
+        Command::OffsetTool => "Versetzen",
+        Command::AlignTool => "Ausrichten",
+        Command::TrimTool => "Stutzen und Dehnen",
+        Command::SplitTool => "Teilen",
         _ => "",
     }
 }

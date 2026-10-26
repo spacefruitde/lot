@@ -938,3 +938,230 @@ fn mirrored_wall_keeps_layers_and_door_side_in_the_mirror() {
     assert_eq!(a.opens_to, b.opens_to);
     assert_ne!(a.hinge, b.hinge);
 }
+
+fn typed(doc: &mut Document, ed: &mut Editor, text: &str) -> Response {
+    let mut last = Response::default();
+    for c in text.chars() {
+        last = ed.key(doc, Key::Char(c));
+    }
+    let enter = ed.key(doc, Key::Enter);
+    if enter.error.is_some() { enter } else { Response { error: last.error, ..enter } }
+}
+
+#[test]
+fn typed_angle_and_relative_points_draw_walls() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::WallTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    typed(&mut doc, &mut ed, "4<90");
+    typed(&mut doc, &mut ed, "@3;0");
+    // Erst den Winkel, dann die Länge (in Revit nicht möglich).
+    typed(&mut doc, &mut ed, "<-90");
+    typed(&mut doc, &mut ed, "2*1,25+150cm");
+    let w = walls(&doc);
+    assert_eq!(w.len(), 3);
+    assert!(w[0].end.distance(Point2::new(0.0, 4.0)) < 1e-9, "{:?}", w[0].end);
+    assert!(w[1].end.distance(Point2::new(3.0, 4.0)) < 1e-9, "{:?}", w[1].end);
+    assert!(w[2].end.distance(Point2::new(3.0, 0.0)) < 1e-9, "{:?}", w[2].end);
+}
+
+#[test]
+fn move_by_typed_distance_keeps_corners() {
+    let (mut doc, mut ed) = house();
+    let top = wall_with(&doc, Point2::new(0.0, 4.0), Point2::new(6.0, 4.0));
+    click(&mut doc, &mut ed, 1.5, 4.0);
+    for c in "mv".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    assert_eq!(ed.tool, Tool::Move);
+    click(&mut doc, &mut ed, 1.5, 4.0);
+    ed.pointer_moved(doc.project(), input(1.5, 6.0));
+    typed(&mut doc, &mut ed, "50cm");
+    assert_eq!(ed.tool, Tool::Select);
+    assert_eq!(doc.project().wall(top).unwrap().start.y, 4.5);
+    assert!(walls(&doc).iter().any(|w| w.start == Point2::new(0.0, 0.0) && w.end == Point2::new(0.0, 4.5)));
+}
+
+#[test]
+fn rotate_by_typed_angle_about_the_selection_center() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.key(&mut doc, Key::Escape);
+    click(&mut doc, &mut ed, 3.0, 0.0);
+    ed.run(&mut doc, &Command::RotateTool);
+    typed(&mut doc, &mut ed, "90");
+    let w = doc.project().wall(wall).unwrap();
+    assert!((w.start.x - w.end.x).abs() < 1e-9, "senkrecht: {w:?}");
+    assert!((w.start.y + w.end.y).abs() < 0.2, "um die Mitte gedreht: {w:?}");
+}
+
+#[test]
+fn mirror_copies_by_default() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.key(&mut doc, Key::Escape);
+    click(&mut doc, &mut ed, 3.0, 0.0);
+    ed.run(&mut doc, &Command::MirrorTool);
+    click(&mut doc, &mut ed, 0.0, 2.0);
+    click(&mut doc, &mut ed, 5.0, 2.0);
+    assert_eq!(walls(&doc).len(), 2);
+    assert_eq!(doc.project().wall(wall).unwrap().start, Point2::new(0.0, 0.0));
+    assert!(walls(&doc).iter().any(|w| (w.start.y - 4.0).abs() < 1e-9 && (w.end.y - 4.0).abs() < 1e-9));
+}
+
+#[test]
+fn array_makes_series_counted_like_revit() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::ColumnTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    ed.key(&mut doc, Key::Escape);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    ed.run(&mut doc, &Command::ArrayTool);
+    typed(&mut doc, &mut ed, "4x");
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    ed.pointer_moved(doc.project(), input(5.0, 0.0));
+    typed(&mut doc, &mut ed, "2,5");
+    let mut xs: Vec<f64> = doc.project().columns_on(ed.storey).map(|(_, c)| c.position.x).collect();
+    xs.sort_by(f64::total_cmp);
+    assert_eq!(xs, vec![0.0, 2.5, 5.0, 7.5], "vier Stück einschließlich Original");
+    assert!(doc.undo().unwrap());
+    assert_eq!(doc.project().columns_on(ed.storey).count(), 1, "ein Undo-Schritt");
+    // „3/“: drei Stück, das letzte am Punkt.
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    ed.run(&mut doc, &Command::ArrayTool);
+    typed(&mut doc, &mut ed, "3/");
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    click(&mut doc, &mut ed, 6.0, 0.0);
+    let mut xs: Vec<f64> = doc.project().columns_on(ed.storey).map(|(_, c)| c.position.x).collect();
+    xs.sort_by(f64::total_cmp);
+    assert_eq!(xs, vec![0.0, 3.0, 6.0]);
+}
+
+#[test]
+fn split_keeps_openings_on_their_side() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::WindowTool);
+    click(&mut doc, &mut ed, 4.5, 0.0);
+    ed.run(&mut doc, &Command::SplitTool);
+    // Durch die Öffnung geht es nicht.
+    assert!(click(&mut doc, &mut ed, 4.5, 0.0).error.is_some());
+    click(&mut doc, &mut ed, 2.0, 0.05);
+    let p = doc.project();
+    assert_eq!(p.walls().count(), 2);
+    assert_eq!(p.wall(wall).unwrap().end, Point2::new(2.0, 0.0));
+    let (back, _) = p.walls().find(|(id, _)| *id != wall).unwrap();
+    let o = p.openings_in(back).next().expect("das Fenster wandert mit dem hinteren Teil").1;
+    assert!((o.offset - (4.5 - 0.63 - 2.0)).abs() < 1e-9, "{o:?}");
+}
+
+#[test]
+fn trim_extends_two_walls_to_a_corner() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::WallTool);
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    click(&mut doc, &mut ed, 4.0, 0.0);
+    ed.key(&mut doc, Key::Escape);
+    click(&mut doc, &mut ed, 5.0, 1.0);
+    click(&mut doc, &mut ed, 5.0, 3.0);
+    ed.key(&mut doc, Key::Escape);
+    ed.run(&mut doc, &Command::TrimTool);
+    click(&mut doc, &mut ed, 1.0, 0.0);
+    click(&mut doc, &mut ed, 5.0, 2.0);
+    let w = walls(&doc);
+    assert_eq!(w[0].end, Point2::new(5.0, 0.0));
+    assert_eq!(w[1].start, Point2::new(5.0, 0.0));
+}
+
+#[test]
+fn offset_copies_a_wall_to_the_pointer_side() {
+    let (mut doc, mut ed, _) = one_wall();
+    ed.run(&mut doc, &Command::OffsetTool);
+    assert!(click(&mut doc, &mut ed, 3.0, 0.05).error.is_some(), "erst der Abstand");
+    typed(&mut doc, &mut ed, "3,0");
+    click(&mut doc, &mut ed, 3.0, 0.05);
+    let w = walls(&doc);
+    assert_eq!(w.len(), 2);
+    assert!((w[1].start.y - 3.0).abs() < 1e-9, "{:?}", w[1]);
+}
+
+#[test]
+fn align_moves_a_wall_face_onto_a_grid_line() {
+    let (mut doc, mut ed, wall) = one_wall();
+    ed.run(&mut doc, &Command::GridTool);
+    click(&mut doc, &mut ed, -1.0, 2.0);
+    click(&mut doc, &mut ed, 8.0, 2.0);
+    ed.key(&mut doc, Key::Escape);
+    ed.run(&mut doc, &Command::AlignTool);
+    click(&mut doc, &mut ed, 3.0, 2.0);
+    // Die obere Fläche der Wand anklicken: Sie liegt danach auf der Achse.
+    let (left, _) = geometry::faces(doc.project(), doc.project().wall(wall).unwrap());
+    click(&mut doc, &mut ed, 3.0, left);
+    let w = doc.project().wall(wall).unwrap();
+    assert!((w.start.y + left - 2.0).abs() < 1e-9, "{w:?}");
+}
+
+#[test]
+fn temp_dims_show_clear_widths_and_move_the_wall() {
+    let (mut doc, mut ed) = house();
+    let inner = wall_with(&doc, Point2::new(3.0, 0.0), Point2::new(3.0, 4.0));
+    click(&mut doc, &mut ed, 3.0, 2.0);
+    assert_eq!(ed.selection, vec![inner]);
+    let dims = tempdims::temp_dims(doc.project(), ed.storey, inner);
+    assert_eq!(dims.len(), 2, "lichte Weite zu beiden Seiten");
+    let t = {
+        let p = doc.project();
+        let (l, r) = geometry::faces(p, p.wall(inner).unwrap());
+        (l - r) / 2.0
+    };
+    // Außenwände in der Achse 0 und 6, alle Wände gleich dick: lichte Weite 3 - 2 · halbe Dicke.
+    assert!(dims.iter().all(|d| (d.value - (3.0 - 2.0 * t)).abs() < 1e-9), "{dims:?}");
+    // Zahl anklicken, neuen Wert tippen: Die Innenwand rückt, die Außenwände bleiben.
+    let target = dims.iter().find(|d| d.a.x < 3.0 || d.b.x < 3.0).unwrap().middle();
+    click(&mut doc, &mut ed, target.x, target.y);
+    typed(&mut doc, &mut ed, "2,0");
+    let w = doc.project().wall(inner).unwrap();
+    let left_dim = tempdims::temp_dims(doc.project(), ed.storey, inner)
+        .into_iter()
+        .map(|d| (d.value, d.a.x.min(d.b.x)))
+        .fold(f64::INFINITY, |m, (v, x)| if x < w.start.x { v.min(m) } else { m });
+    assert!((left_dim - 2.0).abs() < 1e-9, "{left_dim} {w:?}");
+    assert_eq!(ed.selection, vec![inner]);
+}
+
+#[test]
+fn temp_dims_of_an_opening_reach_the_next_wall_face() {
+    let (mut doc, mut ed) = house();
+    let bottom = wall_with(&doc, Point2::new(0.0, 0.0), Point2::new(6.0, 0.0));
+    ed.run(&mut doc, &Command::WindowTool);
+    click(&mut doc, &mut ed, 1.5, 0.0);
+    let (id, o) = doc.project().openings_in(bottom).next().map(|(id, o)| (id, o.clone())).unwrap();
+    assert!((o.width - 1.26).abs() < 1e-9);
+    let dims = tempdims::temp_dims(doc.project(), ed.storey, id);
+    assert_eq!(dims.len(), 2);
+    let (l, r) = {
+        let p = doc.project();
+        geometry::faces(p, p.wall(bottom).unwrap())
+    };
+    let half = (l - r) / 2.0;
+    // Fenster mittig bei x = 1,5: links bis zur Innenfläche der Außenwand, rechts bis zur Innenwand bei x = 3.
+    let mut values: Vec<f64> = dims.iter().map(|d| d.value).collect();
+    values.sort_by(f64::total_cmp);
+    assert!((values[0] - (1.5 - 0.63 - half)).abs() < 1e-9, "{dims:?}");
+    assert!((values[1] - (3.0 - half - 2.13)).abs() < 1e-9, "{dims:?}");
+}
+
+#[test]
+fn paste_puts_walls_at_the_same_place_in_another_storey() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SelectAll);
+    let count = ed.selection.len();
+    ed.run(&mut doc, &Command::CopyToClipboard);
+    ed.run(&mut doc, &Command::AddStorey);
+    let upper = ed.storey;
+    ed.run(&mut doc, &Command::Paste);
+    let p = doc.project();
+    assert_eq!(p.walls_on(upper).count(), 5);
+    assert_eq!(ed.selection.len(), count);
+    assert!(p.walls_on(upper).any(|(_, w)| w.start == Point2::new(0.0, 0.0) || w.end == Point2::new(0.0, 0.0)));
+    // Ein Undo nimmt alles zurück.
+    doc.undo().unwrap();
+    assert_eq!(doc.project().walls_on(upper).count(), 0);
+}

@@ -280,7 +280,7 @@ pub fn groups(project: &Project, ids: &[ElementId]) -> Vec<(String, Vec<ElementI
 }
 
 /// Maß in m mit zwei Stellen, mit drei, wenn die dritte zählt (1,01 und 2,135).
-fn meters(v: f64) -> String {
+pub fn meters(v: f64) -> String {
     let s = if (v * 1000.0).round() as i64 % 10 != 0 { format!("{v:.3}") } else { format!("{v:.2}") };
     s.replace('.', ",")
 }
