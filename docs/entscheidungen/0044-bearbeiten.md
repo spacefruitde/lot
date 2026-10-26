@@ -1,6 +1,6 @@
 # 0044 Bearbeiten
 
-Status: entschieden von Ben · 26.10.2026
+Status: entschieden von Ben · 26.10.2026; umgesetzt bis auf die Punkte unter „Folgen“
 
 ## Kontext
 
@@ -27,3 +27,4 @@ Ben am 26.10.2026 zu Frage 4 bis 7: „4 ok“, „5 ok“, „6 ok“, „7 ok�
 
 - Jede Bearbeitung bleibt eine Operation (Regel 7); Kopieren, Drehen und Spiegeln werden neue Operationen in `lot-edit`.
 - Die Zahleneingabe ist ein eigener Parser im Kern, damit die Schreibweise überall gleich ist (siehe ADR 0046).
+- Umgesetzt am 26.10.2026 (Branch `bedienung-auswaehlen`): Kürzel, Zahleneingabe (`entry.rs`), temporäre Maße für Wand, Stütze und Öffnung (lichte Weite), ⌥-Kopie, Pfeile, Mehrfachauswahl im Inspektor, MV, CO, RO, MM, AR, OF, AL, TR, SL, ⌘C und ⌘V. Offen: temporäre Maße bei Mehrfachauswahl mit EQ und wechselbarem Bezug, Tippen beim Ziehen, Wiederholen mit demselben Versatz, Verbinden.

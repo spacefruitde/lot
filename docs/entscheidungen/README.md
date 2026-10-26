@@ -46,8 +46,8 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0040](0040-buerostandard.md) | Bürostandard je Büro | umgesetzt |
 | [0041](0041-praesentationsplaene.md) | Präsentationspläne | umgesetzt, Vorschlag |
 | [0042](0042-meilensteine-anhalten-bedienung-vergleichen.md) | Meilensteine anhalten, erst die Bedienung vergleichen | entschieden |
-| [0043](0043-auswaehlen.md) | Auswählen | entschieden |
-| [0044](0044-bearbeiten.md) | Bearbeiten | entschieden |
+| [0043](0043-auswaehlen.md) | Auswählen | umgesetzt, Teile offen |
+| [0044](0044-bearbeiten.md) | Bearbeiten | umgesetzt, Teile offen |
 | [0045](0045-wandlogik.md) | Wandlogik: Bezugslinie, Anschlüsse, Höhen | entschieden |
 | [0046](0046-zeichnen-und-fangen.md) | Zeichnen mit Zahleneingabe und Fangen | entschieden |
 | [0047](0047-oeffnungen.md) | Öffnungen: Rohbauöffnung zuerst, zwei Brüstungshöhen | entschieden, Ben testet |
