@@ -37,6 +37,12 @@ Stand 21.10.2026. Grundlage ist Bens Priorisierung im Artefakt „BIM-Werkzeug F
 
 _Noch offen. Ben trägt hier ein, was ihn an Revit täglich aufregt, möglichst mit Situationen aus echten Projekten. Diese Liste wiegt schwerer als die Hypothesen oben._
 
+Am 26.10.2026, was in Lot fehlt (Bens Worte):
+
+- „eigene bauteile bauen - wir bauen viel im bestand und müssen häufig individuelle situationen darstellen“
+- „planerstellung / planköpfe / 3d / perspektiven / materialien etc“
+- Gauben: „was in revit sehr schlecht umgesetzt ist“
+
 ## 3. Umfang
 
 ### Version 1: Kern (49 Positionen)
@@ -324,6 +330,14 @@ Jeder Meilenstein liefert etwas, das Ben in der App benutzen oder als Plan prüf
   - Abstandsflächen (5.01), Bauantragspläne nach Bauvorlagenverordnung (5.02), Barrierefreiheit nach DIN 18040 (5.03), Rettungswege (5.05)
   - Tür- und Fensterlisten (4.05), Bürostandard (2.08), Präsentationspläne (3.11)
 - **Abnahme durch Ben:** Für das MFH-Testprojekt entstehen vollständige Bauantragsunterlagen. Die Abstandsflächen sind gegen eine Handberechnung geprüft.
+
+### Zwischenschritt nach M5: Bedienung und Grundfunktionen
+
+- **Entschieden am 25.10.2026** (ADR 0042): Die Meilensteine ruhen. Erst vergleiche ich je Thema, wie etablierte BIM-Programme es lösen; Ben entscheidet, dann baue ich es.
+- **Reihenfolge:** Auswählen, Bearbeiten, Wandlogik; danach Zeichnen mit Zahleneingabe und Fangen, Öffnungen, Typen und Eigenschaften, Navigation, Sichtbarkeit, Decken, Dächer und Treppen in der App.
+- **Maßstab:** mindestens so gut wie Revit, Archicad, Vectorworks und Allplan, oder besser, weil sinnvoller, schneller, klarer oder schöner.
+- **Entschieden am 26.10.2026** (ADR 0043 bis 0051): Ben hat die 30 Fragen der Pakete 1 bis 3 beantwortet. Gebaut wird in dieser Reihenfolge: Auswählen und Bearbeiten, Zeichnen und Fangen, Wände und Öffnungen, Typen, Navigation mit Schnitten und Blättern, Sichtbarkeit, Decken, Dächer und Treppen.
+- **Paket 4** vergleicht, was Ben in Lot am meisten fehlt: eigene Bauteile für den Bestand, Planerstellung und Planköpfe, 3D, Perspektiven und Materialien.
 
 ### M6: Bauteile, Ausstattung und Fassade
 

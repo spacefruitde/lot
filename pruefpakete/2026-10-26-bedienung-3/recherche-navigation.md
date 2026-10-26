@@ -1,0 +1,64 @@
+# Recherche: Navigation (Projektbrowser, Geschosse, Schnitte, Blätter)
+
+Anhang zum Paket. Etwa 57 Seitenaufrufe. Viele Autodesk-Seiten nur über Suchauszüge gelesen (die Hilfe lädt per JavaScript); Autodesk-Foren und Allplan Connect sperrten den direkten Abruf. Archicad in Version 28 geprüft. Nummern in eckigen Klammern verweisen auf die Quellen am Ende.
+
+## Revit 2025/2026
+
+- **Projektbrowser:** Baum für Ansichten, Pläne, Listen, Familien, Gruppen, Links; Browser-Organisation mit bis zu 6 Gruppier- und 3 Filterebenen [1]; Suche mit Live-Hervorhebung, Symbol zeigt platzierte Ansichten [2]; seit 2025.2 Registerkarten [3]; seit 2026 platzierte Ansichten vom Plan aus öffnen [5]; Umbenennen einer Ebene benennt die Ansichten mit um [6].
+- **Geschosse:** Ebenen nur in Schnitt oder Ansicht anlegen, Grundriss entsteht automatisch [6]; Kürzel für Geschoss hoch/runter unbelegt; Unterlage mit Basis- und Oberebene, halbtonig [7].
+- **Schnitte:** Knick durch „Segment teilen“ [8]; Tiefe über „Versatz hintere Schnittebene“ [9]; Doppelklick auf den Schnittkopf öffnet die Ansicht [10], zurück über „Verweisende Ansichten“ [11]; Ansichtsvorlagen anwenden oder zuweisen [12].
+- **Planblätter:** Ansichten aus dem Browser auf den Plan ziehen; jede Ansicht nur auf einem Plan, sonst duplizieren [13]; seit 2026 Ansichtsanker und gespeicherte Positionen [4].
+- **Fenster:** kacheln oder Tabs, Strg+Tab in Tab- oder Verlaufsreihenfolge [14]; Zurück/Vorwärts unbelegt.
+- **3D:** Schnittbox, „An Ansicht ausrichten“ [15]. Revit läuft nur unter Windows [16].
+
+## Archicad 28
+
+- **Navigator:** Projektmappe, Ansichtsmappe, Planbuch, Publisher [17, 18]; Suche seit 26 [19]; Organizer zum Ziehen zwischen den Mappen [20].
+- **Geschosse:** Dialog Geschosseinstellungen [21]; Geschoss hoch/runter, „Gehe zu Geschoss“ [22], Kontextmenü der Registerkarte [23]; Trace & Reference folgt „Geschoss darunter“ automatisch, mit Intensität [24, 25].
+- **Schnitte:** einfach oder abgesetzt [26]; Reichweite unendlich, begrenzt, null [27]; verknüpfte Marken springen zum Ziel [28]; gespeicherte Ansichten halten Einstellungen [70].
+- **Layouts:** Ansicht aufs Layout ziehen erzeugt eine Zeichnung, aufs Planbuch ein neues Layout [20]; Kopieren zwischen Layouts [30]; Ausrichten über Trace [31].
+- **Fenster:** Tab-Leiste mit Vorschau, Abdocken; nur ein Grundriss- und ein 3D-Fenster gleichzeitig [23]; F2, F3, F6, F7 springen zum letzten Grundriss, 3D, Schnitt, Layout [17]; Zoom zurück 20 Stufen [32]; Auswahl in 3D zeigen [33].
+- **3D:** Filtern und Schneiden nach Geschoss, Auswahlrechteck, Schnittebenen [34]; Trackpad-Gesten [35].
+
+## Vectorworks 2025/2026
+
+- **Navigation-Palette:** Klassen, Konstruktionsebenen, Planebenen, Ansichtsfenster, gespeicherte Ansichten, Referenzen; Suche, Tags, Doppelklick aktiviert [36]; 2026 Tag-Spalte [37].
+- **Geschosse:** Stories mit absoluten Höhen [38]; Cmd+Pfeil hoch/runter wechselt die Ebene [39]; andere Ebenen zeigen, grau, fangbar [40].
+- **Schnitte:** vertikal und horizontal aus Ebene, Clip Cube oder Ansichtsfenster [41]; Tiefe grafisch oder als Zahl [42].
+- **Planebenen:** Ansichtsfenster mit Ansicht, Ebenen, Maßstab, Titel, Nummer [43]; dasselbe Modell mehrfach möglich (abgeleitet).
+- **Fenster:** mehrere Ansichtsbereiche, nicht rückgängig zu machen [44]; Verlauf bis 50 Ansichten [45]. **3D:** Clip Cube speicherbar [46], Flyover [47].
+
+## Allplan 2026
+
+- **Struktur:** Projekt, Teilbilder, Zeichnungen, Pläne; Bauwerksstruktur mit Standardebenen [48]; Navigation über den Dialog „Projektbezogen öffnen“ [49].
+- **Geschosse:** Teilbildstatus aktiv, aktiv im Hintergrund, passiv, Leertaste schaltet durch [50, 51]. **Schnitte:** „Schnitt generieren“ per Punkten oder Polygonzug, automatisch aktualisieren, aus der Bauwerksstruktur [52]. **Pläne:** Format, Rahmen, Plankopf, dann Planelemente [53, 54].
+
+## Ideengeber
+
+- **Snaptrude:** jedes Geschoss bekommt automatisch einen Grundriss, Geschoss-Dropdown mit Höhe und Name [55]; Unterlagen und Überlagerungen je Ansicht mit eigener Linienart [56].
+- **Arcol:** Geschosse im Dropdown rechts, „+“ legt an [57]; Boards als unendliche Fläche mit Blättern, Blattsätze als Live-Link [58].
+- **Qonic:** Schnittebene und Schnittbox per Kürzel, Grundrissschnitt aus den Geschossdaten [59]; Baum nach Modell, Ort, IFC-Klasse [60].
+- **Figma:** ⇧1 alles zeigen, ⇧2 Auswahl, ⌘K Befehlssuche [62]. **Xcode:** „Open Quickly“ ⇧⌘O, Zurück/Vor ⌃⌘Pfeil [63], Verlauf durch langes Drücken [64].
+
+## Was Nutzer nervt
+
+- **Revit:** eine Ansicht nur auf einem Plan, lange Diskussion, Gegenargument „worauf zeigt dann die Schnittmarke“ [65]; Ansichten über Pläne ausrichten [66]; Unterlage begrenzt, Wunsch nach einer anderen Ansicht als Unterlage [67]; mehrere Ansichtsbereiche in einem Grundriss [68]; Favoriten im Browser [69].
+- **Archicad:** Projektmappe gegen Ansichtsmappe verwirrt, Bildschirmänderungen landen nicht in der gespeicherten Ansicht [70]; nur ein Grundrissfenster [23, 71]; Zoomen mit dem Trackpad ruckelt [72].
+- **Vectorworks:** Registerkarten der Navigation-Palette nicht getrennt nutzbar [73].
+- **Allplan:** Wechsel zwischen Grundriss, Schnitt, Ansicht über die Bauwerksstruktur und Dialoge, Wunsch nach einem Navigator im Fenster [74].
+
+## Quellen
+
+1 https://help.autodesk.com/cloudhelp/2025/ENU/Revit-Customize/files/GUID-96F9CDB5-C46D-4597-943B-DF231E8EC688.htm · 2 https://help.autodesk.com/cloudhelp/2025/ENU/Revit-GetStarted/files/GUID-C8D3E5A6-02A5-43A9-AFFC-D49DD27398B1.htm · 3 https://help.autodesk.com/cloudhelp/2025/ENU/Revit-WhatsNew/files/GUID-CD1B9FEB-BAFD-4690-89F0-B6DD5370EC89.htm · 4 https://help.autodesk.com/cloudhelp/2026/ENU/Revit-WhatsNew/files/GUID-3C1A3AB1-BBEC-4F61-892B-32E0195DF9AA.htm · 5 https://help.autodesk.com/cloudhelp/2026/ENU/Revit-WhatsNew/files/GUID-C81929D7-02CB-4BF7-A637-9B98EC9EB38B.htm · 6 https://help.autodesk.com/view/RVT/2024/ENU/?guid=GUID-54EDD889-9AEA-40B5-BD60-FC2F860DF95D · 7 https://help.autodesk.com/view/RVT/2024/ENU/?guid=GUID-77184183-E245-4F3B-8486-617E9A9FB296 · 8 https://help.autodesk.com/cloudhelp/2020/ENU/Revit-DocumentPresent/files/GUID-8DB917CB-DAF0-4584-8BFC-77F1B64DFEAF.htm · 9 https://help.autodesk.com/cloudhelp/2017/ENU/Revit-DocumentPresent/files/GUID-FDE17051-D7D0-4A2F-9A22-D015DA1108E0.htm · 10 https://help.autodesk.com/cloudhelp/2025/ENU/Revit-DocumentPresent/files/GUID-06A7F33C-0F52-4075-8896-3E27963A98D9.htm · 11 https://help.autodesk.com/view/RVT/2022/ENU/?guid=GUID-C18CDB60-A79B-48C6-B759-2072F0270B24 · 12 https://help.autodesk.com/cloudhelp/2024/ENU/Revit-Customize/files/GUID-DA062846-32C9-4FFF-9BC1-BBB548868ACA.htm · 13 https://help.autodesk.com/cloudhelp/2023/ENU/Revit-DocumentPresent/files/GUID-D3E7FDC3-57AB-4497-AB87-D195476254C2.htm · 14 https://help.autodesk.com/view/RVT/2025/ENU/?guid=GUID-1359FBB5-AFEF-49E7-8F4A-B31A2B830BFE und https://help.autodesk.com/view/RVT/2024/ENU/?guid=GUID-C25E7343-0E12-4578-BB1F-77E4551109CA · 15 https://help.autodesk.com/cloudhelp/2023/ENU/RevitLT-DocumentPresent/files/GUID-70CCCB83-EE47-4108-A6B1-E583377A4F59.htm · 16 https://www.autodesk.com/solutions/mac-compatible-software
+
+17 https://help.graphisoft.com/AC/28/INT/_AC28_Help/030_Interaction/030_Interaction-2.htm · 18 https://help.graphisoft.com/AC/28/INT/_AC28_Help/070_Documentation/070_Documentation-117.htm · 19 https://help.graphisoft.com/AC/26/INT/_AC26_Help/005_NewFeatures/005_NewFeatures-4.htm · 20 https://help.graphisoft.com/AC/28/INT/_AC28_Help/070_Documentation/070_Documentation-88.htm · 21 https://help.graphisoft.com/AC/28/INT/_AC28_Help/140_UserInterfaceDialogBoxes/140_UserInterfaceDialogBoxes-33.htm und https://help.graphisoft.com/AC/28/INT/_AC28_Help/050_ViewsVB/050_ViewsVB-9.htm · 22 https://help.graphisoft.com/AC/19/INT/AC19Help/03_2_Views_Virtual_Building/03_2_Views_Virtual_Building-7.htm · 23 https://help.graphisoft.com/AC/28/INT/_AC28_Help/020_Configuration/020_Configuration-18.htm · 24 https://help.graphisoft.com/AC/28/INT/_AC28_Help/030_Interaction/030_Interaction-104.htm · 25 https://help.graphisoft.com/AC/28/INT/_AC28_Help/030_Interaction/030_Interaction-103.htm · 26 https://help.graphisoft.com/AC/28/INT/_AC28_Help/050_ViewsVB/050_ViewsVB-34.htm · 27 https://help.graphisoft.com/AC/28/INT/_AC28_Help/150_UserInterfaceToolSettings/150_UserInterfaceToolSettings-32.htm · 28 https://help.graphisoft.com/AC/28/INT/_AC28_Help/050_ViewsVB/050_ViewsVB-41.htm · 30 https://community.graphisoft.com/t5/Graphisoft-Insights/Tip-of-the-Month-copy-content-between-Layouts/ba-p/703856 · 31 https://community.graphisoft.com/t5/Documentation/Getting-floor-plans-to-be-in-same-location-on-different-sheets/td-p/572320 · 32 https://help.graphisoft.com/AC/28/INT/_AC28_Help/030_Interaction/030_Interaction-9.htm · 33 https://help.graphisoft.com/AC/28/INT/_AC28_Help/050_ViewsVB/050_ViewsVB-18.htm · 34 https://help.graphisoft.com/AC/28/INT/_AC28_Help/140_UserInterfaceDialogBoxes/140_UserInterfaceDialogBoxes-45.htm · 35 https://community.graphisoft.com/t5/Installation-update/How-to-use-Apple-s-Magic-Trackpad-in-Archicad/ta-p/303796
+
+36 https://app-help.vectorworks.net/2025/eng/VW2025_Guide/Structure/The_Navigation_palette.htm · 37 https://app-help.vectorworks.net/2026/eng/VW2026_Guide/LandingPage/New_features.htm · 38 https://app-help.vectorworks.net/2025/eng/VW2025_Guide/Structure/Creating_and_managing_stories.htm · 39 https://app-help.vectorworks.net/2025/eng/assets/docs/VWKeyboardShortcuts.pdf · 40 https://app-help.vectorworks.net/2025/eng/VW2025_Guide/Basic2/Setting%20global_visibility_with_class_and_design_layer_options.htm · 41 https://app-help.vectorworks.net/2026/eng/VW2026_Guide/Viewports1/Creating_section_viewports.htm · 42 https://app-help.vectorworks.net/2020/eng/VW2020_Guide/Viewports2/Modifying_section_viewports_and_section_lines.htm · 43 https://app-help.vectorworks.net/2026/eng/VW2026_Guide/Viewports1/Creating_sheet_layer_viewports.htm · 44 https://app-help.vectorworks.net/2025/eng/VW2025_Guide/Views/Using_multiple_drawing_views.htm · 45 https://app-help.vectorworks.net/2018/eng/VW2018_Guide/Start/The_View_Bar.htm · 46 https://app-help.vectorworks.net/2025/eng/VW2025_Guide/Views/Viewing_a_model_with_the_clip_cube.htm · 47 https://app-help.vectorworks.net/2025/eng/VW2025_Guide/Views/Flyover.htm
+
+48 https://help.allplan.com/Allplan/2026-0/1031/Allplan/5515.htm · 49 https://help.allplan.com/Allplan/2026-0/1031/Allplan/5721.htm · 50 https://help.allplan.com/Allplan/2023-0/1031/Allplan/45592.htm · 51 https://help.allplan.com/Allplan/2026-1/1031/Allplan/46391.htm · 52 https://help.allplan.com/Allplan/2026-0/1031/Allplan/88642.htm · 53 https://help.allplan.com/Allplan/2026-1/1031/Allplan/6174.htm · 54 https://help.allplan.com/Allplan/2026-0/1031/Allplan/6223.htm
+
+55 https://help.snaptrude.com/en/articles/8556221-explore-snaptrude-interface · 56 https://www.snaptrude.com/blog/configure-storey-visibility-plan-views · 57 https://arcol.io/product/product-updates · 58 https://intercom.help/arcol/en/articles/10448024-sheet-sets · 59 https://help.qonic.com/documentation/qonic-application/basics · 60 https://help.qonic.com/documentation/qonic-application/querying-and-reporting/browse-panel · 61 https://aecmag.com/featured/motif-v1-our-first-thoughts/ · 62 https://help.figma.com/hc/en-us/articles/360041065034-Adjust-your-zoom-and-view-options · 63 https://developer.apple.com/library/archive/documentation/IDEs/Conceptual/xcode_help-command_shortcuts/MenuCommands/MenuCommands014.html · 64 https://developer.apple.com/videos/play/wwdc2024/10181/
+
+Foren: 65 https://forums.autodesk.com/t5/revit-ideas/allow-more-than-one-sheet-to-contain-the-same-view/idi-p/6326104 · 66 https://forums.autodesk.com/t5/revit-ideas/align-views-on-separate-sheets/idi-p/8745278 · 67 https://forums.autodesk.com/t5/revit-ideas/underlay-another-view/idi-p/14074118 · 68 https://forums.autodesk.com/t5/revit-ideas/multiple-view-range-s-on-a-single-plan/idi-p/10552038 · 69 https://forums.autodesk.com/t5/revit-ideas/add-quot-favorites-quot-in-the-project-browser/idi-p/9491166 · 70 https://community.graphisoft.com/t5/Modeling/Project-Map-v-s-View-Map/td-p/156160 · 71 https://community.graphisoft.com/t5/Modeling/ac19-tabs-multiple-floors-opened-simultaneously/td-p/289977 · 72 https://community.graphisoft.com/t5/Project-data-BIM/zoom-with-magic-trackpad-or-mouse-jittery/td-p/362425 · 73 https://forum.vectorworks.net/index.php?/topic/67064-navigation-panel-allow-separate-windows-for-classes-layers-sheets-viewports-and-saved-views/ · 74 https://connect.allplan.com/at/forum/themen/topic/topics/cad-architektur/anregungen-und-konstruktive-kritik-aus-der-sicht-eines-architekten.html
+
+Lücken: Allplan (Fenster, Tabs, 3D, Mehrfachplatzierung, Suche), Kopplung der Auswahl zwischen Fenstern in allen vier Programmen, Revit-Kürzel für den Geschosswechsel, Archicad 29, Vectorworks (Knicke im Schnitt, Trackpad), Motif.
