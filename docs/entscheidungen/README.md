@@ -49,7 +49,7 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0043](0043-auswaehlen.md) | Auswählen | umgesetzt, Teile offen |
 | [0044](0044-bearbeiten.md) | Bearbeiten | umgesetzt, Teile offen |
 | [0045](0045-wandlogik.md) | Wandlogik: Bezugslinie, Anschlüsse, Höhen | entschieden |
-| [0046](0046-zeichnen-und-fangen.md) | Zeichnen mit Zahleneingabe und Fangen | entschieden |
+| [0046](0046-zeichnen-und-fangen.md) | Zeichnen mit Zahleneingabe und Fangen | umgesetzt, Teile offen |
 | [0047](0047-oeffnungen.md) | Öffnungen: Rohbauöffnung zuerst, zwei Brüstungshöhen | entschieden, Ben testet |
 | [0048](0048-typen-und-eigenschaften.md) | Typen und Eigenschaften | entschieden, Ben testet |
 | [0049](0049-navigation.md) | Navigation: Seitenleiste, Geschosse, Schnitte und Blätter | entschieden, Ben testet |

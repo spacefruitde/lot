@@ -1,6 +1,6 @@
 # 0046 Zeichnen mit Zahleneingabe und Fangen
 
-Status: entschieden von Ben · 26.10.2026
+Status: entschieden von Ben · 26.10.2026; umgesetzt am 27.10.2026 bis auf die Punkte unter „Folgen“
 
 ## Kontext
 
@@ -29,3 +29,4 @@ Ben am 26.10.2026: „11 ok“, zu den Fangkürzeln „12 die kürzel kenn ich n
 ## Folgen
 
 - Die Schreibweise der Zahleneingabe ist ein Parser im Kern (`lot-edit`), mit Tests je Form.
+- Umgesetzt am 27.10.2026 (Branch `bedienung-auswaehlen`): Zahleneingabe, Fangpunkte mit Namen und Tab, SE bis SO, Bezugspunkte mit Spurlinien, Zeichenrichtung (ZR), Wandrechteck (WR). Offen: Achtelmeter-Fang, Wände aus Linien einer Unterlage, Polygon, Fang-Einstellungen im Projekt, Klick in eine Fläche (kommt mit den Decken).

@@ -1,6 +1,6 @@
 # Auswählen und Bearbeiten: zum Ausprobieren in der App
 
-26.10.2026. Etwa 15 Minuten **am Mac**, in der App. Erster Bauschritt nach deinen Antworten (ADR 0043, 0044, 0046). Branch `bedienung-auswaehlen`.
+26.10.2026. Etwa 20 Minuten **am Mac**, in der App. Die ersten Bauschritte nach deinen Antworten (ADR 0043, 0044, 0046). Branch `bedienung-auswaehlen`.
 
 ## So probierst du es aus
 
@@ -20,6 +20,12 @@ App bauen und starten wie in `CLAUDE.md` (Xcode ⌘R), dann Ablage, Testprojekt 
 - **Mehrfachauswahl im Inspektor:** gleiche Werte stehen da, sonst „verschieden“ mit Spanne; eine Zahl setzt alle, `+0,10` ändert alle relativ, ein Undo-Schritt.
 - **⌘C, ⌘V:** an derselben Stelle ins aktuelle Geschoss einfügen, etwa Wände vom EG ins OG.
 
+**Zeichnen und Fangen** (ADR 0046, seit 27.10.2026)
+- Am Zeiger steht, was gefangen wird („Ende Wand“, „Mitte“, „Schnittpunkt“, „Ecke Wandfläche“, „lotrecht“, „Wandfläche“, „Ecke Decke“). **⇥** blättert durch alle Fangpunkte unter dem Zeiger („⇥ 2/5“), der Klick nimmt den gewählten.
+- **SE, SM, SI, SP, SN, SO** gelten für einen Klick (nur Endpunkte, Mitten, Schnittpunkte, lotrecht, auf Linien, Fangen aus).
+- **Q** setzt am Fangpunkt einen Bezugspunkt (bis zu drei, nummeriert). Von dort laufen Spurlinien waagerecht und senkrecht; am Zeiger steht „Spurlinie 1 · 1,20 m“. **Länge tippen und ⏎** setzt den Punkt auf der Spurlinie, `@0,50;0` setzt ihn relativ zum Bezugspunkt. Zwei Bezugspunkte: Der Schnitt ihrer Spurlinien ist fangbar. **Esc** löscht sie.
+- **ZR**, dann Klick auf eine Wand, Achse oder Linie: Die Zeichenrichtung folgt ihr. Rechte Winkel (⇧), Winkelraster, `@x;y`, Pfeiltasten und **WR** (Wände als Rechteck) richten sich danach. ZR und Klick ins Leere setzt auf 0° zurück.
+
 ## Fragen
 
 1. **Rahmen statt Verschieben:** Fühlt es sich richtig an, dass Ziehen auf ein nicht gewähltes Bauteil einen Rahmen aufzieht und erst Gewähltes sich verschieben lässt?
@@ -29,7 +35,9 @@ App bauen und starten wie in `CLAUDE.md` (Xcode ⌘R), dann Ablage, Testprojekt 
 5. **Reihe zählt das Original mit** (wie Revit: `4x` ergibt vier Stück). Ok?
 6. **Versetzen (OF)** braucht erst den getippten Abstand, dann den Klick auf die Wand, die Kopie entsteht zur Seite des Zeigers. Fehlt dir das grafische Versetzen mit zwei Klicks?
 7. **Einfügen ⌘V** setzt an dieselbe Stelle ins aktuelle Geschoss. Brauchst du zusätzlich Revits „an ausgewählten Ebenen ausrichten“ für mehrere Geschosse auf einmal?
-8. **Was fehlt dir beim Auswählen und Bearbeiten am meisten**, wenn du es ausprobiert hast?
+8. **Fangen:** Der nächste Punkt gewinnt, egal welcher Art. Bei gleichem Ort gilt Ende vor Mitte vor Schnittpunkt. Passt das, oder soll ein Wandende immer vor allem anderen kommen (wie AutoCAD)?
+9. **Bezugspunkte:** Reichen waagerechte und senkrechte Spurlinien, oder brauchst du auch 45°?
+10. **Was fehlt dir beim Auswählen, Bearbeiten und Fangen am meisten**, wenn du es ausprobiert hast?
 
 ## Noch nicht gebaut (kommt in den nächsten Schritten)
 
@@ -37,7 +45,7 @@ App bauen und starten wie in `CLAUDE.md` (Xcode ⌘R), dann Ablage, Testprojekt 
 - Temporäre Maße bei Mehrfachauswahl mit EQ, Bezug per Klick wechseln.
 - Beim Ziehen tippen setzt den Abstand; „Wiederholen“ mit demselben Versatz.
 - Fixieren, Verbinden fluchtender Wände, Auswahl in 3D und im Schnitt.
-- Fangen mit Bezugspunkten (Q), Zeichenrichtung von einer Kante, Fangkürzel (Paket „Zeichnen und Fangen“).
+- Achtelmeter-Fang (DIN 4172), Wände aus Linien einer Unterlage, Fang-Einstellungen im Projekt.
 
 ## Was ich nicht selbst prüfen konnte
 
