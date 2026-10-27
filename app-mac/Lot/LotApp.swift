@@ -73,6 +73,7 @@ struct LotApp: App {
                 Divider()
                 Button("Auswählen (Esc)") { model.run("SelectTool") }
                 Button("Wand zeichnen (WA)") { model.run("WallTool") }
+                Button("Wände als Rechteck (WR)") { model.run("WallRectTool") }
                 Button("Bogenwand zeichnen (BW)") { model.run("ArcWallTool") }
                 Button("Achse zeichnen (GR)") { model.run("GridTool") }
                 Button("Stütze setzen (CL)") { model.run("ColumnTool") }
@@ -88,6 +89,16 @@ struct LotApp: App {
                 Button("Text setzen, 2D (TX)") { model.run("TextTool") }
                 Button("Unterlage kalibrieren (KA)") { model.run("CalibrateUnderlayTool") }
                 Button("Unterlage ausrichten") { model.run("AlignUnderlayTool") }
+                Divider()
+                Button("Zeichenrichtung von einer Kante (ZR)") { model.run("DirectionFromEdge") }
+                Menu("Fangen für einen Klick") {
+                    Button("Nur Endpunkte (SE)") { model.run("SnapOverride(Endpoints)") }
+                    Button("Nur Mitten (SM)") { model.run("SnapOverride(Midpoints)") }
+                    Button("Nur Schnittpunkte (SI)") { model.run("SnapOverride(Intersections)") }
+                    Button("Nur lotrecht (SP)") { model.run("SnapOverride(Perpendicular)") }
+                    Button("Nur auf Linien (SN)") { model.run("SnapOverride(Nearest)") }
+                    Button("Fangen aus (SO)") { model.run("SnapOverride(Off)") }
+                }
                 Divider()
                 Button("Verschieben (MV)") { model.run("MoveTool") }
                 Button("Kopieren (CO)") { model.run("CopyTool") }

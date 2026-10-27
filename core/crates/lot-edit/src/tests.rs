@@ -81,8 +81,11 @@ fn snaps_to_wall_end_and_wall_line() {
     let p = doc.project();
     let s = snap::snap(p, ed.storey, Point2::new(4.93, 0.06), 0.15, None, false, &[]);
     assert_eq!((s.kind, s.point), (SnapKind::Endpoint, Point2::new(5.0, 0.0)));
-    let s = snap::snap(p, ed.storey, Point2::new(2.5, 0.08), 0.15, None, false, &[]);
+    let s = snap::snap(p, ed.storey, Point2::new(2.0, 0.08), 0.15, None, false, &[]);
     assert_eq!(s.kind, SnapKind::OnWall);
+    // Nahe der Mitte gewinnt die Mitte.
+    let s = snap::snap(p, ed.storey, Point2::new(2.47, 0.04), 0.15, None, false, &[]);
+    assert_eq!((s.kind, s.point), (SnapKind::Midpoint, Point2::new(2.5, 0.0)));
     assert!(s.point.y.abs() < 1e-9);
 }
 
@@ -1164,4 +1167,103 @@ fn paste_puts_walls_at_the_same_place_in_another_storey() {
     // Ein Undo nimmt alles zurück.
     doc.undo().unwrap();
     assert_eq!(doc.project().walls_on(upper).count(), 0);
+}
+
+#[test]
+fn tab_cycles_snap_candidates_under_the_pointer() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::LineTool);
+    // An der Ecke liegen Wandende, Flächenecken und Linien übereinander.
+    ed.pointer_moved(doc.project(), input(0.05, 0.05));
+    let first = ed.overlay(doc.project()).tip.unwrap().1;
+    assert!(first.starts_with("Ende Wand"), "{first}");
+    ed.key(&mut doc, Key::Tab);
+    let second = ed.overlay(doc.project()).tip.unwrap().1;
+    assert!(second.contains("⇥ 2/"), "{second}");
+    // Der Klick nimmt den mit Tab gewählten Punkt.
+    let chosen = ed.pointer.unwrap().point;
+    ed.pointer_down(&mut doc, input(0.05, 0.05), 1);
+    ed.pointer_moved(doc.project(), input(2.0, 2.0));
+    ed.pointer_down(&mut doc, input(2.0, 2.0), 1);
+    let a = annotations(&doc);
+    let lot_model::AnnotationShape::Polyline(pts) = &a[0].shape else { panic!() };
+    assert_eq!(pts[0], chosen);
+    assert_ne!(chosen, Point2::new(0.0, 0.0));
+}
+
+#[test]
+fn snap_override_takes_only_midpoints_for_one_click() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::LineTool);
+    for c in "sm".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    // Bei (3 | 4) liegen das Ende der Innenwand und die Mitte der oberen Wand aufeinander.
+    ed.pointer_moved(doc.project(), input(3.05, 3.95));
+    assert_eq!(ed.pointer.unwrap().kind, SnapKind::Midpoint);
+    ed.pointer_down(&mut doc, input(3.05, 3.95), 1);
+    ed.pointer_moved(doc.project(), input(3.05, 3.95));
+    assert_eq!(ed.pointer.unwrap().kind, SnapKind::Endpoint, "nur für einen Klick");
+}
+
+#[test]
+fn reference_point_with_tracking_line_places_the_first_point() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::WallTool);
+    // Q an der Hausecke, dann an der waagerechten Spurlinie entlang 1,20 tippen.
+    ed.pointer_moved(doc.project(), input(6.0, 4.0));
+    ed.key(&mut doc, Key::Char('q'));
+    assert_eq!(ed.references, vec![Point2::new(6.0, 4.0)]);
+    ed.pointer_moved(doc.project(), input(7.5, 4.03));
+    assert_eq!(ed.pointer.unwrap().kind, SnapKind::Tracking);
+    typed(&mut doc, &mut ed, "1,20");
+    ed.pointer_moved(doc.project(), input(7.2, 6.0));
+    typed(&mut doc, &mut ed, "2");
+    let w = walls(&doc);
+    let last = w.last().unwrap();
+    assert_eq!(last.start, Point2::new(7.2, 4.0));
+    assert!(last.end.distance(Point2::new(7.2, 6.0)) < 1e-9);
+    // Zwei Bezugspunkte: Ihre Spurlinien kreuzen sich und lassen sich fangen.
+    ed.key(&mut doc, Key::Escape);
+    ed.pointer_moved(doc.project(), input(0.0, 0.0));
+    ed.key(&mut doc, Key::Char('q'));
+    ed.pointer_moved(doc.project(), input(6.02, 0.03));
+    assert_eq!(ed.pointer.unwrap().kind, SnapKind::Endpoint);
+    ed.pointer_moved(doc.project(), input(7.18, 0.02));
+    let s = ed.pointer.unwrap();
+    assert!(matches!(s.kind, SnapKind::Tracking | SnapKind::TrackingIntersection), "{s:?}");
+}
+
+#[test]
+fn drawing_direction_from_an_edge_turns_right_angles_and_rectangles() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::WallTool);
+    // Eine um 10° gedrehte Wand.
+    click(&mut doc, &mut ed, 0.0, 0.0);
+    typed(&mut doc, &mut ed, "5<10");
+    ed.key(&mut doc, Key::Escape);
+    for c in "zr".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    assert_eq!(ed.tool, Tool::PickDirection);
+    let mid = walls(&doc)[0].point_at(2.5, 0.0);
+    click(&mut doc, &mut ed, mid.x, mid.y);
+    assert_eq!(ed.tool, Tool::Wall);
+    assert!((ed.direction - 10.0).abs() < 1e-9);
+    // Wandrechteck in der Zeichenrichtung, im Uhrzeigersinn.
+    ed.run(&mut doc, &Command::WallRectTool);
+    click(&mut doc, &mut ed, 10.0, 0.0);
+    typed(&mut doc, &mut ed, "@4;3");
+    let w = walls(&doc);
+    assert_eq!(w.len(), 5);
+    let lengths: Vec<f64> = w[1..].iter().map(|w| (w.length() * 1000.0).round() / 1000.0).collect();
+    assert!(lengths.contains(&4.0) && lengths.contains(&3.0), "{lengths:?}");
+    for wall in &w[1..] {
+        let a = wall.direction().1.atan2(wall.direction().0).to_degrees();
+        assert!(((a - 10.0) / 90.0 - ((a - 10.0) / 90.0).round()).abs() < 1e-6, "{a}");
+    }
+    // Ins Leere klicken setzt die Richtung zurück.
+    ed.run(&mut doc, &Command::DirectionFromEdge);
+    click(&mut doc, &mut ed, 50.0, 50.0);
+    assert_eq!(ed.direction, 0.0);
 }

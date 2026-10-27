@@ -124,6 +124,10 @@ pub enum Tool {
     Trim,
     /// Teilen (SL): Klick auf eine Wand teilt sie dort.
     Split,
+    /// Wände als Rechteck (WR): zwei Ecken, ausgerichtet an der Zeichenrichtung.
+    WallRect,
+    /// Zeichenrichtung von einer Kante (ZR): Klick auf Wand, Achse oder Linie; ins Leere setzt sie zurück.
+    PickDirection,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -182,6 +186,8 @@ pub struct Overlay {
     pub guides: Vec<(Point2, Point2)>,
     /// Markierte Punkte: Basispunkt, Drehpunkt.
     pub marks: Vec<Point2>,
+    /// Bezugspunkte mit ihrer Nummer.
+    pub references: Vec<(Point2, String)>,
     /// Temporäre Maße am gewählten Bauteil: Anfang, Ende, Maßzahl, gerade in Bearbeitung.
     pub temp_dims: Vec<(Point2, Point2, String, bool)>,
     /// Rahmen oder Lasso; `true`, wenn er auch Angeschnittenes wählt.
@@ -233,6 +239,20 @@ pub struct Editor {
     dim_edit: Option<usize>,
     /// Zwischenablage: Stand des Projekts beim Kopieren und die kopierten Elemente.
     clipboard: Option<(Box<Project>, Vec<ElementId>)>,
+    /// Bezugspunkte (Q), höchstens drei, der zuletzt gesetzte zuletzt.
+    pub references: Vec<Point2>,
+    /// Zeichenrichtung in Grad: rechte Winkel, Winkelraster, Rechteck und Pfeile folgen ihr.
+    pub direction: f64,
+    /// Fangkürzel für den nächsten Klick (SE, SM, SI, SP, SN, SO).
+    snap_only: Option<snap::SnapOnly>,
+    /// Fangpunkte unter dem Zeiger, der mit Tab gewählte und wo der Zeiger stand.
+    snap_choices: Vec<Snap>,
+    snap_index: usize,
+    snap_raw: Option<Point2>,
+    /// Ein genau gesetzter Punkt (getippt an einer Spurlinie), der statt des Fangs gilt.
+    exact_next: Option<Point2>,
+    /// Werkzeug, zu dem es nach dem Wählen der Zeichenrichtung zurückgeht.
+    resume_tool: Option<Tool>,
 }
 
 impl Editor {
@@ -266,6 +286,14 @@ impl Editor {
             angle_lock: None,
             dim_edit: None,
             clipboard: None,
+            references: Vec::new(),
+            direction: 0.0,
+            snap_only: None,
+            snap_choices: Vec::new(),
+            snap_index: 0,
+            snap_raw: None,
+            exact_next: None,
+            resume_tool: None,
         }
     }
 
@@ -291,8 +319,7 @@ impl Editor {
                 Response::redraw()
             }
             Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column | Tool::SlabOpening | Tool::Line => {
-                let mut snapped =
-                    self.snap(project, self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[]);
+                let mut snapped = self.update_snap(project, input, self.chain_start, &[]);
                 // Ein getippter Winkel hält die Richtung; der Zeiger gibt nur die Länge.
                 if let (Some(a), Some(s)) = (self.angle_lock, self.chain_start) {
                     let (sin, cos) = a.to_radians().sin_cos();
@@ -303,23 +330,19 @@ impl Editor {
                 self.pointer = Some(snapped);
                 Response::redraw()
             }
-            Tool::Move | Tool::Copy | Tool::Array | Tool::Mirror => {
-                self.pointer = Some(self.snap(
-                    project,
-                    self.storey,
-                    input.point,
-                    input.tolerance,
-                    self.chain_start,
-                    input.shift,
-                    &[],
-                ));
+            Tool::Move | Tool::Copy | Tool::Array | Tool::Mirror | Tool::WallRect => {
+                self.pointer = Some(self.update_snap(project, input, self.chain_start, &[]));
                 Response::redraw()
             }
             Tool::Rotate => {
                 // Winkelraster um den Drehpunkt.
                 let from = if self.chain_start.is_some() { self.pivot } else { None };
-                self.pointer =
-                    Some(self.snap(project, self.storey, input.point, input.tolerance, from, input.shift, &[]));
+                self.pointer = Some(self.update_snap(project, input, from, &[]));
+                Response::redraw()
+            }
+            Tool::PickDirection => {
+                self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
+                self.hover_tolerance = input.tolerance;
                 Response::redraw()
             }
             Tool::Offset | Tool::Align | Tool::Trim | Tool::Split => {
@@ -349,7 +372,51 @@ impl Editor {
     }
 
     pub fn pointer_down(&mut self, doc: &mut Document, input: Input, clicks: u32) -> Response {
+        let response = self.pointer_down_at(doc, input, clicks);
+        // Fangkürzel und mit Tab gewählte Fangpunkte gelten für einen Klick.
+        self.snap_only = None;
+        self.snap_index = 0;
+        self.exact_next = None;
+        response
+    }
+
+    fn pointer_down_at(&mut self, doc: &mut Document, input: Input, clicks: u32) -> Response {
         match self.tool {
+            Tool::WallRect => {
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
+                self.pointer = None;
+                match self.chain_start {
+                    None => {
+                        self.chain_start = Some(p);
+                        Response::redraw()
+                    }
+                    Some(a) => {
+                        self.chain_start = None;
+                        self.add_wall_rect(doc, a, p)
+                    }
+                }
+            }
+            Tool::PickDirection => {
+                self.direction = match modify::line_at(doc.project(), self.storey, input.point, input.tolerance) {
+                    Some((_, line)) => {
+                        let a = line.dir.1.atan2(line.dir.0).to_degrees();
+                        // Auf (-90°, 90°] bringen, gerundet auf 0,01°.
+                        let a = if a > 90.0 {
+                            a - 180.0
+                        } else if a <= -90.0 {
+                            a + 180.0
+                        } else {
+                            a
+                        };
+                        (a * 100.0).round() / 100.0
+                    }
+                    None => 0.0,
+                };
+                self.tool = self.resume_tool.take().unwrap_or(Tool::Select);
+                Response::redraw()
+            }
             Tool::Column => {
                 let p = self.snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
                 let column = Column {
@@ -774,6 +841,9 @@ impl Editor {
                     self.arc_end = None;
                 } else if self.chain_start.is_some() {
                     self.end_chain();
+                } else if self.snap_only.take().is_some() {
+                } else if !self.references.is_empty() {
+                    self.references.clear();
                 } else if self.tool != Tool::Select {
                     self.tool = Tool::Select;
                 } else {
@@ -783,6 +853,11 @@ impl Editor {
                 Response::redraw()
             }
             Key::Tab => {
+                if self.tool != Tool::Select && self.pointer.is_some() && self.snap_choices.len() > 1 {
+                    self.snap_index = (self.snap_index + 1) % self.snap_choices.len();
+                    self.pointer = Some(self.snap_choices[self.snap_index]);
+                    return Response::redraw();
+                }
                 if self.tool == Tool::Select && self.hover.len() > 1 {
                     self.hover_index = (self.hover_index + 1) % self.hover.len();
                     return Response::redraw();
@@ -794,7 +869,10 @@ impl Editor {
                     return Response::default();
                 }
                 let step = if large { 0.1 } else { 0.01 };
-                let delta = (dx as f64 * step, dy as f64 * step);
+                // Pfeile folgen der Zeichenrichtung.
+                let (sin, cos) = self.direction.to_radians().sin_cos();
+                let (x, y) = (dx as f64 * step, dy as f64 * step);
+                let delta = (x * cos - y * sin, x * sin + y * cos);
                 let changes = moved_elements(doc.project(), &self.selection, delta);
                 Response::from_result(replace_all(doc, "Verschieben", changes))
             }
@@ -827,13 +905,35 @@ impl Editor {
                     self.typed.clear();
                     return self.add_arc_wall(doc, start, end, side * height);
                 }
+                if self.chain_start.is_none()
+                    && !self.typed.is_empty()
+                    && !self.references.is_empty()
+                    && matches!(
+                        self.tool,
+                        Tool::Wall
+                            | Tool::Line
+                            | Tool::Grid
+                            | Tool::ArcWall
+                            | Tool::SlabOpening
+                            | Tool::WallRect
+                            | Tool::Column
+                    )
+                {
+                    let typed = std::mem::take(&mut self.typed);
+                    return match self.typed_reference_point(&typed) {
+                        Some(q) => self.click_exact(doc, q),
+                        None => {
+                            Response { error: Some(format!("Eingabe nicht verstanden: {typed}")), ..Response::redraw() }
+                        }
+                    };
+                }
                 if let Some(start) = self.chain_start
                     && !self.typed.is_empty()
                 {
                     let typed = std::mem::take(&mut self.typed);
                     let entry = entry::parse(&typed);
                     if let Some(entry::Entry::Angle(a)) = entry {
-                        self.angle_lock = Some(a);
+                        self.angle_lock = Some(a + self.direction);
                         return Response::redraw();
                     }
                     let Some((dx, dy)) = entry.and_then(|e| self.typed_vector(e, start)) else {
@@ -843,6 +943,10 @@ impl Editor {
                         };
                     };
                     let end = Point2::new(start.x + dx, start.y + dy);
+                    if self.tool == Tool::WallRect {
+                        self.chain_start = None;
+                        return self.add_wall_rect(doc, start, end);
+                    }
                     if self.tool == Tool::ArcWall {
                         self.arc_end = Some(end);
                         return Response::redraw();
@@ -862,7 +966,22 @@ impl Editor {
                 self.delete_selection(doc)
             }
             Key::Char(c) => {
+                // Q setzt einen Bezugspunkt am Fangpunkt (wie Archicad), höchstens drei.
+                if (c == 'q' || c == 'Q')
+                    && self.shortcut.is_empty()
+                    && self.typed.is_empty()
+                    && self.tool != Tool::Select
+                {
+                    if let Some(p) = self.pointer {
+                        self.references.push(p.point);
+                        if self.references.len() > 3 {
+                            self.references.remove(0);
+                        }
+                    }
+                    return Response::redraw();
+                }
                 let numbers = self.chain_start.is_some()
+                    || (!self.references.is_empty() && self.pointer.is_some() && self.tool != Tool::Select)
                     || self.dim_edit.is_some()
                     || matches!(self.tool, Tool::Move | Tool::Copy | Tool::Array | Tool::Rotate | Tool::Offset);
                 if numbers
@@ -919,6 +1038,25 @@ impl Editor {
             Command::AlignTool => self.set_tool(Tool::Align),
             Command::TrimTool => self.set_tool(Tool::Trim),
             Command::SplitTool => self.set_tool(Tool::Split),
+            Command::WallRectTool => self.set_tool(Tool::WallRect),
+            Command::DirectionFromEdge => {
+                if self.tool != Tool::PickDirection {
+                    self.resume_tool = Some(self.tool);
+                }
+                self.tool = Tool::PickDirection;
+                Response::redraw()
+            }
+            Command::SnapOverride(only) => {
+                if self.tool == Tool::Select {
+                    return Response {
+                        error: Some("Fangkürzel gelten beim Zeichnen und Bearbeiten".into()),
+                        ..Response::redraw()
+                    };
+                }
+                self.snap_only = Some(*only);
+                self.snap_index = 0;
+                Response::redraw()
+            }
             Command::FlipDoorSwing => self.change_doors(doc, "Aufschlag wechseln", |d| {
                 // Die Bänder bleiben, wo sie sind: mit der Seite wechselt auch DIN links und rechts.
                 d.opens_to = d.opens_to.other();
@@ -1159,6 +1297,22 @@ impl Editor {
             info(Command::AlignTool, "Ausrichten", "Bearbeiten"),
             info(Command::TrimTool, "Stutzen und Dehnen zur Ecke", "Bearbeiten"),
             info(Command::SplitTool, "Wand teilen", "Bearbeiten"),
+            info(Command::WallRectTool, "Wände als Rechteck", "Werkzeug"),
+            info(Command::DirectionFromEdge, "Zeichenrichtung von einer Kante (ins Leere: zurück auf 0°)", "Fangen"),
+            info(Command::SnapOverride(snap::SnapOnly::Endpoints), "Fangen für einen Klick: nur Endpunkte", "Fangen"),
+            info(Command::SnapOverride(snap::SnapOnly::Midpoints), "Fangen für einen Klick: nur Mitten", "Fangen"),
+            info(
+                Command::SnapOverride(snap::SnapOnly::Intersections),
+                "Fangen für einen Klick: nur Schnittpunkte",
+                "Fangen",
+            ),
+            info(
+                Command::SnapOverride(snap::SnapOnly::Perpendicular),
+                "Fangen für einen Klick: nur lotrecht",
+                "Fangen",
+            ),
+            info(Command::SnapOverride(snap::SnapOnly::Nearest), "Fangen für einen Klick: nur auf Linien", "Fangen"),
+            info(Command::SnapOverride(snap::SnapOnly::Off), "Fangen für einen Klick: aus", "Fangen"),
             CommandInfo::new(Command::PreviousSelection, "Vorige Auswahl", "⌘←", "Auswahl"),
             CommandInfo::new(Command::DeleteSelection, "Auswahl löschen", "⌫", "Auswahl"),
             CommandInfo::new(Command::CopyToClipboard, "In die Zwischenablage kopieren", "⌘C", "Bearbeiten"),
@@ -1352,6 +1506,7 @@ impl Editor {
             }
         }
         self.modify_overlay(project, &mut overlay);
+        self.snap_overlay(&mut overlay);
         if self.tool == Tool::Wall {
             overlay.snap = self.pointer;
             if let (Some(start), Some(p)) = (self.chain_start, self.pointer)
@@ -1364,6 +1519,59 @@ impl Editor {
             }
         }
         overlay
+    }
+
+    /// Bezugspunkte, Spurlinien unter dem Zeiger, Name des Fangpunkts und das Wandrechteck.
+    fn snap_overlay(&self, overlay: &mut Overlay) {
+        for (i, r) in self.references.iter().enumerate() {
+            overlay.references.push((*r, (i + 1).to_string()));
+        }
+        if self.tool == Tool::Select {
+            return;
+        }
+        let Some(s) = self.pointer else { return };
+        let dirs = [self.direction, self.direction + 90.0].map(|a| {
+            let (sn, c) = a.to_radians().sin_cos();
+            (c, sn)
+        });
+        let mut on_track: Option<(usize, f64)> = None;
+        for (i, r) in self.references.iter().enumerate() {
+            for d in dirs {
+                let across = (s.point.x - r.x) * d.1 - (s.point.y - r.y) * d.0;
+                if across.abs() < 1e-6 {
+                    let reach = snap::TRACK_REACH;
+                    overlay.guides.push((
+                        Point2::new(r.x - d.0 * reach, r.y - d.1 * reach),
+                        Point2::new(r.x + d.0 * reach, r.y + d.1 * reach),
+                    ));
+                    on_track.get_or_insert((i, r.distance(s.point)));
+                }
+            }
+        }
+        let mut text = match (s.kind, on_track) {
+            (SnapKind::Tracking, Some((i, d))) => format!("Spurlinie {} · {}", i + 1, format_m(d)),
+            _ => s.kind.label().to_string(),
+        };
+        if let Some(only) = self.snap_only {
+            text = if text.is_empty() { only.label().into() } else { format!("{} · {text}", only.label()) };
+        }
+        if self.snap_choices.len() > 1 && !text.is_empty() {
+            text = format!("{text}  ⇥ {}/{}", self.snap_index + 1, self.snap_choices.len());
+        }
+        if !text.is_empty() && overlay.tip.is_none() {
+            overlay.tip = Some((s.point, text));
+        }
+        if self.tool == Tool::WallRect {
+            overlay.snap = self.pointer;
+            if let Some(a) = self.chain_start
+                && let Some(r) = self.rect_corners(a, s.point)
+            {
+                overlay.preview = Some(r.iter().map(|p| [p.x, p.y]).collect());
+                let (w, h) = (r[0].distance(r[1]), r[1].distance(r[2]));
+                let mid = Point2::new((r[0].x + r[2].x) / 2.0, (r[0].y + r[2].y) / 2.0);
+                overlay.label = Some((mid, format!("{} × {}", format_m(w), format_m(h))));
+            }
+        }
     }
 
     /// Vorschau der Bearbeiten-Befehle: Umrisse am Ziel, Hilfslinien, Maße.
@@ -1470,8 +1678,26 @@ impl Editor {
         }
     }
 
-    /// Hinweis für die Statuszeile.
+    /// Hinweis für die Statuszeile, mit Fangkürzel, Bezugspunkten und Zeichenrichtung.
     pub fn hint(&self) -> String {
+        let mut h = self.base_hint();
+        if self.tool != Tool::Select {
+            if let Some(only) = self.snap_only {
+                h = format!("Fangkürzel „{}“ gilt für den nächsten Klick. {h}", only.label());
+            }
+            if !self.references.is_empty() {
+                h.push_str(&format!(" {} Bezugspunkt(e), Esc löscht sie.", self.references.len()));
+            } else if !matches!(self.tool, Tool::PickDirection) {
+                h.push_str(" Q: Bezugspunkt.");
+            }
+            if self.direction.abs() > 1e-9 {
+                h.push_str(&format!(" Zeichenrichtung {}°.", format!("{:.2}", self.direction).replace('.', ",")));
+            }
+        }
+        h
+    }
+
+    fn base_hint(&self) -> String {
         if !self.shortcut.is_empty() {
             let options: Vec<String> = shortcuts()
                 .iter()
@@ -1565,6 +1791,13 @@ impl Editor {
             }
             (Tool::Trim, _, _) => "Stutzen und Dehnen: zweite Wand anklicken; beide enden in der Ecke.".into(),
             (Tool::Split, _, _) => "Teilen: auf die Wand klicken, wo sie geteilt wird.".into(),
+            (Tool::WallRect, None, _) => "Wandrechteck: erste Ecke klicken. Esc: zurück zum Auswählen.".into(),
+            (Tool::WallRect, Some(_), _) => {
+                "Wandrechteck: gegenüberliegende Ecke klicken oder tippen (@6,00;4,00) und ⏎.".into()
+            }
+            (Tool::PickDirection, _, _) => {
+                "Zeichenrichtung: Wand, Achse oder Linie anklicken; ins Leere klicken setzt 0° zurück.".into()
+            }
             (Tool::Select, _, Some(Drag::Frame { start, current, .. })) if current.x < start.x => {
                 "Rahmen nach links: wählt auch Angeschnittenes. ⇧: hinzufügen oder herausnehmen.".into()
             }
@@ -1776,12 +2009,87 @@ impl Editor {
                 Some((ux * l, uy * l))
             }
             entry::Entry::Polar { length, angle } => {
-                let (sin, cos) = angle.to_radians().sin_cos();
+                let (sin, cos) = (angle + self.direction).to_radians().sin_cos();
                 Some((cos * length, sin * length))
             }
-            entry::Entry::Offset { dx, dy } => Some((dx, dy)),
+            entry::Entry::Offset { dx, dy } => {
+                // Relativ in der Zeichenrichtung.
+                let (sin, cos) = self.direction.to_radians().sin_cos();
+                Some((dx * cos - dy * sin, dx * sin + dy * cos))
+            }
             _ => None,
         }
+    }
+
+    /// Punkt aus einer Eingabe ohne Anfangspunkt, gemessen vom Bezugspunkt:
+    /// eine Länge entlang der Spurlinie unter dem Zeiger, sonst vom letzten
+    /// Bezugspunkt in Richtung des Zeigers; „@x;y“ und „l<w“ vom letzten.
+    fn typed_reference_point(&self, typed: &str) -> Option<Point2> {
+        let last = *self.references.last()?;
+        let e = entry::parse(typed)?;
+        if let entry::Entry::Length(l) = e
+            && let Some(p) = self.pointer.map(|s| s.point)
+        {
+            let dirs = [self.direction, self.direction + 90.0].map(|a| {
+                let (s, c) = a.to_radians().sin_cos();
+                (c, s)
+            });
+            for r in self.references.iter().rev() {
+                for d in dirs {
+                    let across = (p.x - r.x) * d.1 - (p.y - r.y) * d.0;
+                    let along = (p.x - r.x) * d.0 + (p.y - r.y) * d.1;
+                    if across.abs() < 1e-6 && along.abs() > 1e-9 {
+                        let sign = along.signum();
+                        return Some(Point2::new(r.x + d.0 * l * sign, r.y + d.1 * l * sign));
+                    }
+                }
+            }
+        }
+        let (dx, dy) = self.typed_vector(e, last)?;
+        Some(Point2::new(last.x + dx, last.y + dy))
+    }
+
+    /// Wirkt wie ein Klick genau auf `q`, ohne zu fangen.
+    fn click_exact(&mut self, doc: &mut Document, q: Point2) -> Response {
+        self.exact_next = Some(q);
+        self.pointer_down(doc, Input { point: q, tolerance: 1e-6, shift: false, alt: false }, 1)
+    }
+
+    /// Vier Wände als Rechteck von `a` bis `c`, ausgerichtet an der
+    /// Zeichenrichtung, im Uhrzeigersinn wie von Hand gezeichnet: Die
+    /// Außenseite des Aufbaus liegt außen.
+    fn add_wall_rect(&mut self, doc: &mut Document, a: Point2, c: Point2) -> Response {
+        let ring = self.rect_corners(a, c);
+        let Some(mut ring) = ring else { return Response::redraw() };
+        let area: f64 = (0..4).map(|i| ring[i].x * ring[(i + 1) % 4].y - ring[(i + 1) % 4].x * ring[i].y).sum();
+        if area > 0.0 {
+            ring.reverse();
+        }
+        let first = doc.project().next_id().0;
+        let mut ops = Vec::new();
+        for i in 0..4 {
+            let Some(wall) = self.new_wall(ring[i], ring[(i + 1) % 4]) else {
+                return Response {
+                    error: Some("Im Projekt gibt es noch keinen Wandaufbau".into()),
+                    ..Default::default()
+                };
+            };
+            ops.push(Operation::Insert { id: ElementId(first + i as u64), element: Element::Wall(wall) });
+        }
+        Response::from_result(doc.apply(Operation::Group { label: "Wandrechteck".into(), ops }))
+    }
+
+    /// Ecken eines Rechtecks von `a` bis `c` in der Zeichenrichtung; `None`, wenn es zu schmal ist.
+    fn rect_corners(&self, a: Point2, c: Point2) -> Option<[Point2; 4]> {
+        let (s, co) = self.direction.to_radians().sin_cos();
+        let (u, v) = ((co, s), (-s, co));
+        let du = (c.x - a.x) * u.0 + (c.y - a.y) * u.1;
+        let dv = (c.x - a.x) * v.0 + (c.y - a.y) * v.1;
+        if du.abs() < 0.05 || dv.abs() < 0.05 {
+            return None;
+        }
+        let at = |x: f64, y: f64| Point2::new(a.x + u.0 * x + v.0 * y, a.y + u.1 * x + v.1 * y);
+        Some([at(0.0, 0.0), at(du, 0.0), at(du, dv), at(0.0, dv)])
     }
 
     /// ⏎ in Verschieben, Kopieren, Reihe, Drehen und Versetzen.
@@ -1790,6 +2098,15 @@ impl Editor {
             return Response::default();
         }
         let typed = std::mem::take(&mut self.typed);
+        if self.chain_start.is_none()
+            && !self.references.is_empty()
+            && matches!(self.tool, Tool::Move | Tool::Copy | Tool::Array)
+        {
+            return match self.typed_reference_point(&typed) {
+                Some(q) => self.click_exact(doc, q),
+                None => Response { error: Some(format!("Eingabe nicht verstanden: {typed}")), ..Response::redraw() },
+            };
+        }
         let parsed = entry::parse(&typed);
         let not_understood =
             || Response { error: Some(format!("Eingabe nicht verstanden: {typed}")), ..Response::redraw() };
@@ -1941,8 +2258,8 @@ impl Editor {
         Response::from_result(result)
     }
 
-    /// Fangpunkt wie [`snap::snap`], dazu Endpunkte in Unterlagen, wenn kein
-    /// Wandende oder Achsschnittpunkt näher liegt.
+    /// Fangpunkt zum Zeiger mit Bezugspunkten, Zeichenrichtung, Fangkürzel und
+    /// Unterlagen; mit Tab gewählt, wenn der Zeiger noch dort steht.
     #[allow(clippy::too_many_arguments)]
     fn snap(
         &self,
@@ -1954,16 +2271,52 @@ impl Editor {
         orthogonal: bool,
         exclude: &[ElementId],
     ) -> Snap {
-        let s = snap::snap(project, storey, p, tolerance, from, orthogonal, exclude);
-        if matches!(s.kind, SnapKind::Endpoint | SnapKind::GridIntersection) {
-            return s;
+        if let Some(q) = self.exact_next {
+            return Snap { point: q, kind: SnapKind::Tracking };
         }
-        self.underlay_points
-            .iter()
-            .map(|q| (*q, q.distance(p)))
-            .filter(|(_, d)| *d <= tolerance)
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map_or(s, |(q, _)| Snap { point: q, kind: SnapKind::Underlay })
+        if self.snap_index > 0
+            && self.snap_raw.is_some_and(|r| r.distance(p) <= tolerance * 0.3)
+            && let Some(s) = self.snap_choices.get(self.snap_index)
+        {
+            return *s;
+        }
+        self.snap_list(project, storey, p, tolerance, from, orthogonal, exclude)[0]
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn snap_list(
+        &self,
+        project: &Project,
+        storey: ElementId,
+        p: Point2,
+        tolerance: f64,
+        from: Option<Point2>,
+        orthogonal: bool,
+        exclude: &[ElementId],
+    ) -> Vec<Snap> {
+        let ctx = snap::Context {
+            from,
+            orthogonal,
+            exclude,
+            references: &self.references,
+            direction: self.direction,
+            only: self.snap_only,
+            underlay_points: &self.underlay_points,
+        };
+        snap::candidates(project, storey, p, tolerance, &ctx)
+    }
+
+    /// Fangen bei einer Zeigerbewegung: merkt sich die Kandidaten für Tab.
+    fn update_snap(&mut self, project: &Project, input: Input, from: Option<Point2>, exclude: &[ElementId]) -> Snap {
+        let list = self.snap_list(project, self.storey, input.point, input.tolerance, from, input.shift, exclude);
+        let same = list.len() == self.snap_choices.len()
+            && list.iter().zip(&self.snap_choices).all(|(a, b)| a.kind == b.kind && a.point.distance(b.point) < 1e-6);
+        if !same {
+            self.snap_index = 0;
+        }
+        self.snap_choices = list;
+        self.snap_raw = Some(input.point);
+        self.snap_choices[self.snap_index.min(self.snap_choices.len() - 1)]
     }
 
     /// Die Unterlage, auf die Kalibrieren und Ausrichten wirken: die gewählte,
@@ -2398,6 +2751,14 @@ pub fn shortcuts() -> Vec<(&'static str, Command)> {
         ("AL", Command::AlignTool),
         ("TR", Command::TrimTool),
         ("SL", Command::SplitTool),
+        ("WR", Command::WallRectTool),
+        ("ZR", Command::DirectionFromEdge),
+        ("SE", Command::SnapOverride(snap::SnapOnly::Endpoints)),
+        ("SM", Command::SnapOverride(snap::SnapOnly::Midpoints)),
+        ("SI", Command::SnapOverride(snap::SnapOnly::Intersections)),
+        ("SP", Command::SnapOverride(snap::SnapOnly::Perpendicular)),
+        ("SN", Command::SnapOverride(snap::SnapOnly::Nearest)),
+        ("SO", Command::SnapOverride(snap::SnapOnly::Off)),
     ]
 }
 
@@ -2428,6 +2789,9 @@ fn command_title(command: &Command) -> &'static str {
         Command::AlignTool => "Ausrichten",
         Command::TrimTool => "Stutzen und Dehnen",
         Command::SplitTool => "Teilen",
+        Command::WallRectTool => "Wandrechteck",
+        Command::DirectionFromEdge => "Zeichenrichtung",
+        Command::SnapOverride(only) => only.label(),
         _ => "",
     }
 }

@@ -530,6 +530,8 @@ impl Viewport {
                         Tool::Align => "align",
                         Tool::Trim => "trim",
                         Tool::Split => "split",
+                        Tool::WallRect => "wallRect",
+                        Tool::PickDirection => "direction",
                     }
                     .to_string(),
                 )
@@ -797,6 +799,19 @@ fn update_overlay(s: &mut State) {
             color: linear([0.95, 0.45, 0.05], 1.0),
             width_px: 1.0,
             dash_px: Some((4.0, 3.0)),
+        });
+    }
+    // Bezugspunkte (Q) mit ihrer Nummer.
+    for (p, n) in overlay.references {
+        let at = paper([p.x, p.y]);
+        items.push(OverlayItem::Square { center: at, size_px: 7.0, color: linear([0.95, 0.45, 0.05], 1.0) });
+        items.push(OverlayItem::Label {
+            at,
+            offset_px: [6.0, 4.0],
+            text: n,
+            height_px: 8.0,
+            color: linear([1.0, 1.0, 1.0], 1.0),
+            background: linear([0.95, 0.45, 0.05], 1.0),
         });
     }
     for m in overlay.marks {

@@ -80,6 +80,7 @@ struct InspectorView: View {
                     Text("Auswählen: Klick, Ziehen ergibt einen Rahmen (nach links auch Angeschnittenes), ⌥ ein Lasso, ⇧ fügt hinzu, ⇥ blättert unter dem Zeiger, ⌘← vorige Auswahl")
                     Text("Bearbeiten: Ziehen verschiebt die Auswahl, mit ⌥ als Kopie, Pfeile 1 cm (⇧ 10 cm), Leertaste dreht um")
                     Text("Ändern: MV verschieben, CO kopieren, RO drehen, MM spiegeln, AR Reihe, OF versetzen, AL ausrichten, TR stutzen, SL teilen; ⏎ wiederholt")
+                    Text("Fangen: Name am Zeiger, ⇥ nächster Fangpunkt, Q Bezugspunkt mit Spurlinien (Länge tippen setzt den Punkt), SE SM SI SP SN SO für einen Klick, ZR Zeichenrichtung von einer Kante, WR Wandrechteck")
                     Text("Zeichnen: klicken oder tippen, etwa 3,65 · <30 · 3,65<30 · @1,20;0,80 · 2*1,25+0,115, dann ⏎; ⇧ rechtwinklig")
                     Text("Grundriss: zwei Finger verschieben, spreizen zoomt")
                     Text("3D: zwei Finger drehen, mit ⇧ verschieben")

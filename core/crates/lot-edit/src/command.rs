@@ -37,6 +37,12 @@ pub enum Command {
     AlignTool,
     TrimTool,
     SplitTool,
+    /// Wände als Rechteck in der Zeichenrichtung (WR).
+    WallRectTool,
+    /// Zeichenrichtung von einer Kante setzen (ZR).
+    DirectionFromEdge,
+    /// Fangkürzel für den nächsten Klick (SE, SM, SI, SP, SN, SO).
+    SnapOverride(crate::snap::SnapOnly),
     /// Gewählte Türen schlagen zur anderen Wandseite auf.
     FlipDoorSwing,
     /// Gewählte Türen: DIN links und DIN rechts tauschen.

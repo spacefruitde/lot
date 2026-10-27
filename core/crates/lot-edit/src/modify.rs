@@ -106,7 +106,7 @@ impl Line {
 }
 
 /// Die Linie unter dem Zeiger, an der sich etwas ausrichten lässt: Flächen
-/// gerader Wände, Achsen, 2D-Linien; mit dem Element, zu dem sie gehört.
+/// und Bezugslinien gerader Wände, Achsen, 2D-Linien; mit dem Element, zu dem sie gehört.
 pub fn line_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<(ElementId, Line)> {
     let mut best: Option<(f64, ElementId, Line)> = None;
     let mut consider = |id: ElementId, line: Line, along_ok: bool| {
@@ -120,7 +120,7 @@ pub fn line_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) 
         let along = s >= -tolerance && s <= w.length() + tolerance;
         let (left, right) = geometry::faces(project, w);
         let (dx, dy) = w.direction();
-        for t in [left, right] {
+        for t in [left, right, 0.0] {
             consider(id, Line { point: w.point_at(0.0, t), dir: (dx, dy) }, along);
         }
     }
