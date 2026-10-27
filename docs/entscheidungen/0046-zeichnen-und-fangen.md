@@ -1,6 +1,6 @@
 # 0046 Zeichnen mit Zahleneingabe und Fangen
 
-Status: entschieden von Ben · 26.10.2026
+Status: entschieden von Ben · 26.10.2026; umgesetzt am 27.10.2026 bis auf die Punkte unter „Folgen“
 
 ## Kontext
 
@@ -16,6 +16,10 @@ Ben am 26.10.2026: „11 ok“, zu den Fangkürzeln „12 die kürzel kenn ich n
 - **Zeichenrichtung von einer Kante** für schiefwinklige Grundrisse und Altbauten.
 - **Kein Skizzenmodus.** Bauteile entstehen sofort (Kette, Rechteck, Polygon, Klick in eine Fläche, aus Linien einer Unterlage) und werden danach direkt am Bauteil bearbeitet.
 - **Achtelmeter-Fang** (DIN 4172) als Schalter, ab Werk aus.
+- **Nachfrage Ben zu 14:** „naja aber wie macht man dann zb ausschnitte oder entscheidet bis wo genau der fußboden geht in einer öffnung zb?“ Mein Vorschlag:
+  - Löcher in Decken (Treppenloch, Schacht, Luftraum) sind eigene Bauteile „Durchbruch“: Rechteck, Polygon oder Klick in eine umschlossene Fläche, dann wie jedes Bauteil mit Griffen und temporären Maßen bearbeitet. Treppen schneiden ihr Loch selbst.
+  - Kerben am Rand: Decke wählen, Kante oder Ecke ziehen, Doppelklick auf eine Kante setzt einen Punkt; ein Rechteck über den Rand zieht mit ⌥ ab und fügt mit ⇧ an.
+  - Fußboden in der Öffnung als Eigenschaft der Öffnung: bis unter das Türblatt, bis Wandmitte oder durchlaufend von einem der beiden Räume; im Grundriss als Linie des Belagswechsels, ein Klick schaltet um. Voreinstellung „Wechsel unter dem Türblatt“ ist eine Frage fürs nächste Prüfpaket.
 
 ## Alternativen
 
@@ -25,3 +29,4 @@ Ben am 26.10.2026: „11 ok“, zu den Fangkürzeln „12 die kürzel kenn ich n
 ## Folgen
 
 - Die Schreibweise der Zahleneingabe ist ein Parser im Kern (`lot-edit`), mit Tests je Form.
+- Umgesetzt am 27.10.2026 (Branch `bedienung-auswaehlen`): Zahleneingabe, Fangpunkte mit Namen und Tab, SE bis SO, Bezugspunkte mit Spurlinien, Zeichenrichtung (ZR), Wandrechteck (WR). Offen: Achtelmeter-Fang, Wände aus Linien einer Unterlage, Polygon, Fang-Einstellungen im Projekt, Klick in eine Fläche (kommt mit den Decken).

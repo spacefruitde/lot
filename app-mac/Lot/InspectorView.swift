@@ -41,11 +41,28 @@ struct InspectorView: View {
                         .labelsHidden()
                     }
                 }
-                ForEach(groups, id: \.0) { element, parameters in
-                    Section(model.label(for: element)) {
-                        ForEach(parameters, id: \.kind) { ParameterRow(parameter: $0) }
-                        if let door = model.doors.first(where: { $0.element == element }) {
-                            DoorRows(door: door)
+                if model.groups.count > 0 {
+                    SelectionGroupsSection()
+                }
+                if model.groups.isEmpty {
+                    ForEach(groups, id: \.0) { element, parameters in
+                        Section(model.label(for: element)) {
+                            ForEach(parameters, id: \.kind) { ParameterRow(parameter: $0) }
+                            if let door = model.doors.first(where: { $0.element == element }) {
+                                DoorRows(door: door)
+                            }
+                        }
+                    }
+                } else {
+                    // Mehrfachauswahl: je Gruppe ein Feld je Eigenschaft, „verschieden“ mit Spanne (ADR 0044).
+                    ForEach(model.groups, id: \.label) { group in
+                        let values = model.parameters.filter { group.ids.contains($0.element) }
+                        if !values.isEmpty {
+                            Section("\(group.label) · \(group.ids.count)") {
+                                ForEach(kinds(of: values), id: \.self) { kind in
+                                    MultiParameterRow(kind: kind, values: values.filter { $0.kind == kind })
+                                }
+                            }
                         }
                     }
                 }
@@ -59,8 +76,12 @@ struct InspectorView: View {
             }
             Section("Bedienung") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("W: Wand, B: Bogenwand, T: Tür, F: Fenster, R: Raum, A: Achse, S: Stütze, M: Bemaßen, D: Deckendurchbruch, L: Linie, X: Text, K: Unterlage kalibrieren, V: Auswählen, ⌘K: Befehle")
-                    Text("Zeichnen: klicken, Länge tippen und ⏎, ⇧ rechtwinklig")
+                    Text("Kürzel wie Revit: WA Wand, DR Tür, WN Fenster, RM Raum, GR Achse, CL Stütze, DI Bemaßen, LI Linie, TX Text, SA Gleiche wählen, Esc Auswählen, ⌘K Befehle")
+                    Text("Auswählen: Klick, Ziehen ergibt einen Rahmen (nach links auch Angeschnittenes), ⌥ ein Lasso, ⇧ fügt hinzu, ⇥ blättert unter dem Zeiger, ⌘← vorige Auswahl")
+                    Text("Bearbeiten: Ziehen verschiebt die Auswahl, mit ⌥ als Kopie, Pfeile 1 cm (⇧ 10 cm), Leertaste dreht um")
+                    Text("Ändern: MV verschieben, CO kopieren, RO drehen, MM spiegeln, AR Reihe, OF versetzen, AL ausrichten, TR stutzen, SL teilen; ⏎ wiederholt")
+                    Text("Fangen: Name am Zeiger, ⇥ nächster Fangpunkt, Q Bezugspunkt mit Spurlinien (Länge tippen setzt den Punkt), SE SM SI SP SN SO für einen Klick, ZR Zeichenrichtung von einer Kante, WR Wandrechteck")
+                    Text("Zeichnen: klicken oder tippen, etwa 3,65 · <30 · 3,65<30 · @1,20;0,80 · 2*1,25+0,115, dann ⏎; ⇧ rechtwinklig")
                     Text("Grundriss: zwei Finger verschieben, spreizen zoomt")
                     Text("3D: zwei Finger drehen, mit ⇧ verschieben")
                 }
@@ -69,6 +90,13 @@ struct InspectorView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// Eigenschaften in der Reihenfolge ihres ersten Auftretens.
+    private func kinds(of values: [ParamValue]) -> [ParamKind] {
+        var out: [ParamKind] = []
+        for v in values where !out.contains(v.kind) { out.append(v.kind) }
+        return out
     }
 
     private var groups: [(UInt64, [ParamValue])] {
@@ -184,6 +212,82 @@ private struct DoorRows: View {
                 Button("Wechseln") { model.run("FlipDoorSwing") }
             }
         }
+    }
+}
+
+/// Gruppen einer Mehrfachauswahl mit Anzahl; „nur diese“ wählt eine Gruppe allein, „ohne“ nimmt sie heraus.
+private struct SelectionGroupsSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let all = model.groups.flatMap(\.ids)
+        Section("Auswahl · \(all.count) Bauteile") {
+            ForEach(model.groups, id: \.label) { group in
+                HStack {
+                    Text(group.label)
+                    Spacer()
+                    Text("\(group.ids.count)").monospacedDigit().foregroundStyle(.secondary)
+                    Button("nur diese") { model.select(group.ids) }
+                        .buttonStyle(.borderless)
+                    Button("ohne") { model.select(all.filter { !group.ids.contains($0) }) }
+                        .buttonStyle(.borderless)
+                }
+            }
+        }
+    }
+}
+
+/// Eine Eigenschaft für mehrere Bauteile: gleicher Wert oder „verschieden“
+/// mit Spanne. Eine Zahl setzt alle, „+0,10“ oder „-0,05“ ändert alle relativ.
+private struct MultiParameterRow: View {
+    @Environment(AppModel.self) private var model
+    let kind: ParamKind
+    let values: [ParamValue]
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private var low: Double { values.map(\.value).min() ?? 0 }
+    private var high: Double { values.map(\.value).max() ?? 0 }
+    private var same: Bool { high - low < 0.0005 }
+
+    var body: some View {
+        LabeledContent(kind.label) {
+            HStack(spacing: 4) {
+                TextField(same ? "" : "verschieden", text: $text)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 72)
+                    .focused($focused)
+                    .onSubmit(commit)
+                Text(kind == .roofSlope ? "°" : "m").foregroundStyle(.secondary)
+            }
+        }
+        .help(same ? "Gilt für alle \(values.count)" : "\(german(low)) bis \(german(high)); eine Zahl setzt alle, +0,10 ändert alle")
+        .onAppear(perform: load)
+        .onChange(of: values.map(\.value)) { load() }
+        .onChange(of: focused) { if !focused { commit() } }
+        if !same {
+            Text("\(german(low)) bis \(german(high))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func load() {
+        text = same ? german(low) : ""
+    }
+
+    private func commit() {
+        let t = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        guard !t.isEmpty, !(same && t == german(low).replacingOccurrences(of: ",", with: ".")) else { return }
+        let relative = t.hasPrefix("+") || (t.hasPrefix("-") && !same)
+        guard let number = Double(relative ? String(t.dropFirst()) : t) else { load(); return }
+        let delta = t.hasPrefix("-") ? -number : number
+        let new = values.map { relative ? $0.value + delta : number }
+        model.set(new, for: values.map(\.element), kind: kind)
+    }
+
+    private func german(_ v: Double) -> String {
+        v.formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "de_DE")))
     }
 }
 
