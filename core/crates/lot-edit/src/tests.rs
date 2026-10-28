@@ -2026,3 +2026,19 @@ fn reasons_name_why_and_fix_it_with_one_click() {
     let reasons = visibility::reasons(doc.project(), &look, &Default::default(), middle);
     assert!(reasons.iter().any(|r| matches!(r.fix, Some((_, Fix::Go(_))))));
 }
+
+#[test]
+fn view_fields_parse_as_the_app_writes_them() {
+    use visibility::ViewField;
+    for (text, field) in [
+        ("Scale(Some(50.0))", ViewField::Scale(Some(50.0))),
+        ("Detail(Some(Fine))", ViewField::Detail(Some(lot_model::Detail::Fine))),
+        ("Phase(None)", ViewField::Phase(None)),
+        ("Theme(Some(\"Brandschutz\"))", ViewField::Theme(Some("Brandschutz".into()))),
+        ("Theme(Some(\"\"))", ViewField::Theme(Some(String::new()))),
+        ("FadedBelow(Some(false))", ViewField::FadedBelow(Some(false))),
+        ("CutHeight(Some(1.5))", ViewField::CutHeight(Some(1.5))),
+    ] {
+        assert_eq!(ViewField::parse(text), Some(field), "{text}");
+    }
+}

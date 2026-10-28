@@ -25,6 +25,12 @@ pub enum ViewField {
     FadedBelow(Option<bool>),
 }
 
+impl ViewField {
+    pub fn parse(text: &str) -> Option<ViewField> {
+        ron::from_str(text).ok()
+    }
+}
+
 /// Ändert die Einstellungen einer Ansicht; legt sie an, wenn es noch keine
 /// gibt, und löscht sie, wenn die Ansicht danach nichts mehr selbst setzt.
 pub fn change_ops(project: &Project, view: ViewContent, change: impl FnOnce(&mut ViewSettings)) -> Vec<Operation> {
