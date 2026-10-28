@@ -26,7 +26,10 @@ pub mod terrain;
 
 use std::collections::BTreeMap;
 
-pub use joins::{Band, LayerRegion, column_area, layer_regions, solid_regions, wall_section};
+pub use joins::{
+    ArmRole, Band, Cause, Contact, Junction, JunctionArm, LayerRef, LayerRegion, column_area, contacts, junction_at,
+    junctions, layer_regions, solid_regions, wall_section,
+};
 use lot_model::{Element, ElementId, Project};
 use manifold_rust::linalg::{Vec2, Vec3};
 use manifold_rust::manifold::Manifold;

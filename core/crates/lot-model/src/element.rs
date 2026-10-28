@@ -264,6 +264,20 @@ impl WallType {
     pub fn thickness(&self) -> f64 {
         self.layers.iter().map(|l| l.thickness).sum()
     }
+
+    /// Kern: von der ersten bis zur letzten Tragschicht, als Abstand von der
+    /// Außenfläche (außen, innen). Ohne Tragschicht der ganze Aufbau.
+    pub fn core(&self) -> (f64, f64) {
+        let mut depth = 0.0;
+        let mut core: Option<(f64, f64)> = None;
+        for l in &self.layers {
+            if l.function == LayerFunction::Structure {
+                core = Some((core.map_or(depth, |c| c.0), depth + l.thickness));
+            }
+            depth += l.thickness;
+        }
+        core.unwrap_or((0.0, depth))
+    }
 }
 
 /// Schicht eines Wandaufbaus (IfcMaterialLayer).
@@ -306,7 +320,9 @@ impl LayerFunction {
     }
 }
 
-/// Lage der Bezugslinie einer Wand im Aufbau.
+/// Lage der Bezugslinie einer Wand im Aufbau. Sie ist eine Lesart, keine
+/// Geometrie (ADR 0045): Ein Wechsel verschiebt die Wand nicht, sondern die
+/// Bezugslinie innerhalb der Wand.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum WallAlignment {
     /// Mitte des Gesamtaufbaus
@@ -316,6 +332,58 @@ pub enum WallAlignment {
     Exterior,
     /// Innenkante (rechte Seite in Zeichenrichtung)
     Interior,
+    /// Mitte des Kerns (von der ersten bis zur letzten Tragschicht)
+    CoreCenter,
+    /// Außenkante des Kerns
+    CoreExterior,
+    /// Innenkante des Kerns
+    CoreInterior,
+}
+
+impl WallAlignment {
+    pub const ALL: [WallAlignment; 6] = [
+        WallAlignment::Center,
+        WallAlignment::Exterior,
+        WallAlignment::Interior,
+        WallAlignment::CoreCenter,
+        WallAlignment::CoreExterior,
+        WallAlignment::CoreInterior,
+    ];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            WallAlignment::Center => "Mitte",
+            WallAlignment::Exterior => "Außenfläche",
+            WallAlignment::Interior => "Innenfläche",
+            WallAlignment::CoreCenter => "Kernmitte",
+            WallAlignment::CoreExterior => "Kern außen",
+            WallAlignment::CoreInterior => "Kern innen",
+        }
+    }
+
+    /// Abstand der Bezugslinie von der Außenfläche des Aufbaus.
+    pub fn depth(self, wall_type: &WallType) -> f64 {
+        let (outer, inner) = wall_type.core();
+        match self {
+            WallAlignment::Center => wall_type.thickness() / 2.0,
+            WallAlignment::Exterior => 0.0,
+            WallAlignment::Interior => wall_type.thickness(),
+            WallAlignment::CoreCenter => (outer + inner) / 2.0,
+            WallAlignment::CoreExterior => outer,
+            WallAlignment::CoreInterior => inner,
+        }
+    }
+
+    /// Dieselbe Lage von der anderen Seite gelesen: außen wird innen.
+    pub fn mirrored(self) -> Self {
+        match self {
+            WallAlignment::Exterior => WallAlignment::Interior,
+            WallAlignment::Interior => WallAlignment::Exterior,
+            WallAlignment::CoreExterior => WallAlignment::CoreInterior,
+            WallAlignment::CoreInterior => WallAlignment::CoreExterior,
+            a => a,
+        }
+    }
 }
 
 /// Oberkante eines Bauteils.
@@ -349,6 +417,51 @@ pub struct Wall {
     /// Bestand, Abbruch oder Neubau (2.05).
     #[serde(default, skip_serializing_if = "Phase::is_new")]
     pub phase: Phase,
+    /// Ausnahmen am Anschluss für Anfang und Ende (ADR 0045).
+    #[serde(default, skip_serializing_if = "JoinRule::both_auto")]
+    pub joins: [JoinRule; 2],
+}
+
+/// Ausnahme am Anschluss eines Wandendes (ADR 0045). Ohne Ausnahme greifen die
+/// Schichten nach ihrem Rang ineinander.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum JoinRule {
+    #[default]
+    Auto,
+    /// An einer Ecke aus zwei Wänden läuft diese Wand durch, die andere stößt an.
+    Through,
+    /// Nicht verbinden: Die Wand stößt stumpf an, Schichten greifen nicht ineinander.
+    Butt,
+}
+
+impl JoinRule {
+    fn both_auto(rules: &[JoinRule; 2]) -> bool {
+        rules.iter().all(|r| *r == JoinRule::Auto)
+    }
+}
+
+impl WallEnd {
+    pub fn index(self) -> usize {
+        match self {
+            WallEnd::Start => 0,
+            WallEnd::End => 1,
+        }
+    }
+
+    pub fn other(self) -> Self {
+        match self {
+            WallEnd::Start => WallEnd::End,
+            WallEnd::End => WallEnd::Start,
+        }
+    }
+}
+
+impl Phase {
+    /// Ob Wände dieser Bauzustände sich verbinden: Bestand und Abbruch waren
+    /// ein Gebäude, Neubau stößt nur an (ADR 0045).
+    pub fn joins_with(self, other: Phase) -> bool {
+        (self == Phase::New) == (other == Phase::New)
+    }
 }
 
 fn is_zero(v: &f64) -> bool {
@@ -492,12 +605,7 @@ impl Wall {
     /// Lage der Schichten quer zur Bezugslinie, als (links, rechts) je Schicht,
     /// von außen nach innen. Positive Werte liegen links der Bezugslinie.
     pub fn layer_offsets(&self, wall_type: &WallType) -> Vec<(f64, f64)> {
-        let total = wall_type.thickness();
-        let mut left = match self.alignment {
-            WallAlignment::Center => total / 2.0,
-            WallAlignment::Exterior => 0.0,
-            WallAlignment::Interior => total,
-        };
+        let mut left = self.alignment.depth(wall_type);
         wall_type
             .layers
             .iter()
@@ -1007,6 +1115,7 @@ mod tests {
 
     fn arc_wall(sagitta: f64) -> Wall {
         Wall {
+            joins: Default::default(),
             phase: Default::default(),
             storey: ElementId(1),
             wall_type: ElementId(2),

@@ -1267,3 +1267,108 @@ fn drawing_direction_from_an_edge_turns_right_angles_and_rectangles() {
     click(&mut doc, &mut ed, 50.0, 50.0);
     assert_eq!(ed.direction, 0.0);
 }
+
+/// Fläche aller Wände in Brüstungshöhe, als eine Fläche.
+fn wall_body(doc: &Document, storey: ElementId) -> lot_geom::Area {
+    let regions = lot_geom::solid_regions(doc.project(), storey, 1.0);
+    lot_geom::Area::union_all(regions.iter().map(|r| &r.area))
+}
+
+#[test]
+fn alignment_change_keeps_walls_and_corners_in_place() {
+    let (mut doc, mut ed) = house();
+    let body = wall_body(&doc, ed.storey);
+    let joins = lot_geom::junctions(doc.project(), ed.storey).len();
+    ed.run(&mut doc, &Command::SelectAll);
+    ed.run(&mut doc, &Command::SetAlignment(WallAlignment::Exterior));
+    let after = wall_body(&doc, ed.storey);
+    assert!((after.area() - body.area()).abs() < 1e-6 && after.difference(&body).area() < 1e-6);
+    assert_eq!(lot_geom::junctions(doc.project(), ed.storey).len(), joins);
+    // Die Ecken liegen jetzt an der Außenkante: Die Wände wurden länger, nicht verschoben.
+    let t = doc.project().wall_types().next().unwrap().1.thickness();
+    assert!(doc.project().walls().any(|(_, w)| (w.length() - (6.0 + t)).abs() < 1e-9));
+    // Kernmitte, und zurück zur Mitte: wieder genau wie vorher.
+    ed.run(&mut doc, &Command::SetAlignment(WallAlignment::CoreCenter));
+    assert!(wall_body(&doc, ed.storey).difference(&body).area() < 1e-6);
+    ed.run(&mut doc, &Command::SetAlignment(WallAlignment::Center));
+    assert!(doc.project().walls().any(|(_, w)| w.start == Point2::new(0.0, 0.0)));
+    assert!(doc.undo().unwrap());
+}
+
+#[test]
+fn flip_keeps_the_wall_and_swaps_its_layers() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SelectAll);
+    ed.run(&mut doc, &Command::SetAlignment(WallAlignment::CoreExterior));
+    let bottom =
+        doc.project().walls().find(|(_, w)| w.start.y.abs() < 1.0 && w.end.y.abs() < 1.0).map(|(id, _)| id).unwrap();
+    let door = doc
+        .insert(lot_model::Element::Opening(Opening {
+            phase: Default::default(),
+            host: bottom,
+            offset: 1.0,
+            width: 1.01,
+            height: 2.135,
+            sill_height: 0.0,
+            kind: lot_model::OpeningKind::Door(lot_model::Door {
+                opens_to: lot_model::WallSide::Left,
+                hinge: lot_model::Handing::DinLeft,
+            }),
+        }))
+        .unwrap();
+    let body = wall_body(&doc, ed.storey);
+    let joins = lot_geom::junctions(doc.project(), ed.storey).len();
+    let storey = ed.storey;
+    let side_of = |doc: &Document| {
+        let w = doc.project().wall(bottom).unwrap();
+        let regions = lot_geom::solid_regions(doc.project(), storey, 1.0);
+        // Dämmung: Schicht 1 des Außenwandaufbaus. Mitte in y.
+        let r = regions.iter().find(|r| r.element == bottom && r.layer == 1).unwrap();
+        let (lo, hi) = r.area.bounds().unwrap();
+        ((lo[1] + hi[1]) / 2.0, w.clone())
+    };
+    let (before, w0) = side_of(&doc);
+    ed.selection = vec![bottom];
+    ed.key(&mut doc, Key::Char(' '));
+    let (after, w1) = side_of(&doc);
+    assert!(wall_body(&doc, ed.storey).difference(&body).area() < 1e-6, "Wand ist verrutscht");
+    assert_eq!(lot_geom::junctions(doc.project(), ed.storey).len(), joins);
+    assert!(before < 0.0 && after > before, "Dämmung lag bei {before}, jetzt bei {after}");
+    assert_eq!(w1.alignment, WallAlignment::CoreInterior);
+    assert_eq!(w0.joins, w1.joins);
+    // Die Tür schlägt weiter nach Süden auf, mit den Bändern an derselben Stelle.
+    let d = match &doc.project().elements[&door] {
+        lot_model::Element::Opening(o) => o.clone(),
+        _ => unreachable!(),
+    };
+    let lot_model::OpeningKind::Door(dd) = d.kind else { panic!("keine Tür") };
+    let hinge =
+        |w: &lot_model::Wall, o: &Opening, at_end: bool| w.point_at(o.offset + if at_end { o.width } else { 0.0 }, 0.0);
+    let o0 = Opening { offset: 1.0, width: 1.01, ..d.clone() };
+    let before_hinge = hinge(&w0, &o0, true);
+    let after_hinge = hinge(&w1, &d, dd.hinge_at_end());
+    assert!(before_hinge.distance(after_hinge) < 0.4, "{before_hinge:?} {after_hinge:?}");
+    assert_eq!(dd.opens_to, lot_model::WallSide::Right);
+}
+
+#[test]
+fn double_click_at_a_corner_selects_the_junction() {
+    let (mut doc, mut ed) = house();
+    ed.pointer_moved(doc.project(), input(0.05, 0.05));
+    ed.pointer_down(&mut doc, input(0.05, 0.05), 1);
+    ed.pointer_up(&mut doc);
+    ed.pointer_down(&mut doc, input(0.05, 0.05), 2);
+    ed.pointer_up(&mut doc);
+    let j = ed.selected_junction(doc.project()).expect("Anschluss gewählt");
+    assert!(ed.selection.is_empty());
+    assert_eq!(j.arms.len(), 2);
+    assert!(ed.overlay(doc.project()).junction.is_some());
+    // Ausnahme: Die erste Wand läuft durch.
+    let a = j.arms[0];
+    ed.run(&mut doc, &Command::SetJoinRule(a.wall.0, a.end.unwrap(), lot_model::JoinRule::Through));
+    let j = ed.selected_junction(doc.project()).unwrap();
+    let role = j.arms.iter().find(|x| x.wall == a.wall).unwrap().role;
+    assert_eq!(role, lot_geom::ArmRole::Through);
+    ed.key(&mut doc, Key::Escape);
+    assert!(ed.junction.is_none());
+}

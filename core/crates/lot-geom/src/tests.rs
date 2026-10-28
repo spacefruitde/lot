@@ -69,6 +69,7 @@ fn add_wall(
     p.elements.insert(
         id,
         Element::Wall(Wall {
+            joins: Default::default(),
             phase: Default::default(),
             storey: STOREY,
             wall_type,
@@ -710,4 +711,94 @@ fn slab_layers_stack_down_from_the_floor_level() {
     assert_eq!(layers.len(), 2);
     let (lo, hi) = layers[1].mesh.bounds().unwrap();
     assert!((hi[2] + 0.05).abs() < 1e-9 && (lo[2] + 0.25).abs() < 1e-9, "Rohdecke von -0,25 bis -0,05: {lo:?} {hi:?}");
+}
+
+fn set_wall(p: &mut Project, id: ElementId, change: impl FnOnce(&mut Wall)) {
+    if let Some(Element::Wall(w)) = p.elements.get_mut(&id) {
+        change(w);
+    }
+}
+
+#[test]
+fn new_wall_butts_against_existing_without_interlock() {
+    // Bestandsaußenwand, eine neue Innenwand stößt von Süden an (ADR 0045).
+    let mut p = project();
+    let outer = add_wall(&mut p, WDVS, (-4.0, 0.0), (4.0, 0.0), WallAlignment::Exterior);
+    let inner = add_wall(&mut p, INNEN, (0.0, -4.0), (0.0, -0.365), WallAlignment::Center);
+    set_wall(&mut p, outer, |w| w.phase = lot_model::Phase::Existing);
+    let r = regions(&p);
+    assert_no_overlaps(&r);
+    // Die Tragschicht der neuen Wand endet am Putz des Bestands, der Putz bleibt ganz.
+    let (_, hi) = region(&r, inner, 1).area.bounds().unwrap();
+    assert!((hi[1] - (-0.365)).abs() < 1e-6, "Tragschicht endet bei y = {}", hi[1]);
+    assert_eq!(region(&r, outer, 3).area.rings().len(), 1);
+    let j = junctions(&p, STOREY);
+    assert_eq!(j.len(), 1);
+    let arm = j[0].arms.iter().find(|a| a.wall == inner).unwrap();
+    assert_eq!((arm.role, arm.cause), (ArmRole::Separate, Some(Cause::Phase)));
+}
+
+#[test]
+fn butt_exception_lets_the_other_wall_run_through() {
+    let mut p = project();
+    let a = add_wall(&mut p, WDVS, (-4.0, 0.0), (0.0, 0.0), WallAlignment::Exterior);
+    let b = add_wall(&mut p, WDVS, (0.0, 0.0), (0.0, -4.0), WallAlignment::Exterior);
+    set_wall(&mut p, b, |w| w.joins[0] = lot_model::JoinRule::Butt);
+    let r = regions(&p);
+    assert_no_overlaps(&r);
+    // Wand a läuft bis an die Außenkante von b durch (x = 0), b beginnt an der Fläche von a.
+    let (_, hi) = region(&r, a, 1).area.bounds().unwrap();
+    assert!((hi[0] - 0.0).abs() < 1e-6, "Dämmung von a endet bei x = {}", hi[0]);
+    let (_, hi) = region(&r, b, 2).area.bounds().unwrap();
+    assert!((hi[1] - (-0.365)).abs() < 1e-6, "Tragschicht von b beginnt bei y = {}", hi[1]);
+    let t: f64 = 0.365;
+    assert!((total_area(&r) - (2.0 * 4.0 * t - t * t)).abs() < 1e-8, "{}", total_area(&r));
+    let j = &junctions(&p, STOREY)[0];
+    let role = |id| j.arms.iter().find(|x| x.wall == id).map(|x| (x.role, x.cause));
+    assert_eq!(role(a), Some((ArmRole::Through, Some(Cause::Exception))));
+    assert_eq!(role(b), Some((ArmRole::Separate, Some(Cause::Exception))));
+}
+
+#[test]
+fn through_exception_keeps_layers_interlocked() {
+    let mut p = project();
+    let a = add_wall(&mut p, WDVS, (-4.0, 0.0), (0.0, 0.0), WallAlignment::Exterior);
+    let b = add_wall(&mut p, WDVS, (0.0, 0.0), (0.0, -4.0), WallAlignment::Exterior);
+    set_wall(&mut p, b, |w| w.joins[0] = lot_model::JoinRule::Through);
+    let r = regions(&p);
+    assert_no_overlaps(&r);
+    // b läuft bis an die Außenkante von a (y = 0), a stößt an.
+    let (_, hi) = region(&r, b, 0).area.bounds().unwrap();
+    assert!(hi[1].abs() < 1e-6, "Putz von b endet bei y = {}", hi[1]);
+    let j = &junctions(&p, STOREY)[0];
+    let role = |id| j.arms.iter().find(|x| x.wall == id).map(|x| x.role);
+    assert_eq!((role(a), role(b)), (Some(ArmRole::Butts), Some(ArmRole::Through)));
+}
+
+#[test]
+fn junction_explains_which_layer_cuts_which() {
+    let mut p = project();
+    let outer = add_wall(&mut p, WDVS, (-4.0, 0.0), (4.0, 0.0), WallAlignment::Exterior);
+    let inner = add_wall(&mut p, INNEN, (0.0, -4.0), (0.0, -0.365), WallAlignment::Center);
+    let j = junction_at(&p, STOREY, Point2::new(0.05, -0.3), 0.05).expect("T-Stoß gefunden");
+    assert!(j.arms.iter().any(|a| a.wall == outer && a.end.is_none() && a.role == ArmRole::Through));
+    let c = contacts(&p, STOREY, &j);
+    // Kalksandstein der Innenwand schneidet den Innenputz der Außenwand.
+    assert!(c.iter().any(|c| c.cuts
+        && c.first.wall == inner
+        && c.first.material == "kalksandstein"
+        && c.second.wall == outer
+        && c.second.layer == 3));
+    // Kalksandstein stößt an Kalksandstein.
+    assert!(c.iter().any(|c| !c.cuts && c.first.material == "kalksandstein" && c.second.material == "kalksandstein"));
+}
+
+#[test]
+fn core_alignments_follow_the_structure_layers() {
+    let p = project();
+    let t = p.wall_type(WDVS).unwrap();
+    assert!((WallAlignment::CoreExterior.depth(t) - 0.175).abs() < 1e-12);
+    assert!((WallAlignment::CoreInterior.depth(t) - 0.35).abs() < 1e-12);
+    assert!((WallAlignment::CoreCenter.depth(t) - 0.2625).abs() < 1e-12);
+    assert_eq!(WallAlignment::CoreExterior.mirrored(), WallAlignment::CoreInterior);
 }

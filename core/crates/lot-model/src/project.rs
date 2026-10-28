@@ -525,6 +525,7 @@ impl Project {
         p.elements.insert(
             ElementId(3),
             Element::Wall(Wall {
+                joins: Default::default(),
                 phase: Default::default(),
                 storey: ElementId(1),
                 wall_type: ElementId(2),

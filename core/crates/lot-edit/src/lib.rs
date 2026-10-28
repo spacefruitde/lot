@@ -13,6 +13,7 @@ pub mod select;
 pub mod snap;
 pub mod tempdims;
 pub mod transform;
+pub mod walls;
 
 pub use command::{Command, CommandInfo};
 use geometry::{End, as_elements, column_outline, end_point, footprint, moved_elements, moved_endpoint, outline};
@@ -194,6 +195,8 @@ pub struct Overlay {
     pub frame: Option<(Vec<Point2>, bool)>,
     /// Kurzer Text am Zeiger, etwa „2 von 4: Wandkette (3 Wände)“.
     pub tip: Option<(Point2, String)>,
+    /// Der gewählte Anschluss: Punkt und Reichweite (ADR 0045).
+    pub junction: Option<(Point2, f64)>,
 }
 
 pub struct Editor {
@@ -205,6 +208,8 @@ pub struct Editor {
     pub wall_type: Option<ElementId>,
     pub alignment: WallAlignment,
     pub selection: Vec<ElementId>,
+    /// Gewählter Anschluss (Doppelklick an einem Wandknoten), statt eines Bauteils.
+    pub junction: Option<Point2>,
     chain_start: Option<Point2>,
     /// Endpunkt einer Bogenwand, deren Stich noch fehlt.
     arc_end: Option<Point2>,
@@ -266,6 +271,7 @@ impl Editor {
             wall_type: project.wall_types().next().map(|(id, _)| id),
             alignment: WallAlignment::Center,
             selection: Vec::new(),
+            junction: None,
             chain_start: None,
             arc_end: None,
             hover_tolerance: 0.1,
@@ -656,6 +662,16 @@ impl Editor {
             },
             Tool::Select => {
                 let project = doc.project();
+                // Doppelklick an einem Wandknoten wählt den Anschluss (ADR 0045).
+                if clicks >= 2
+                    && let Some(j) =
+                        lot_geom::junction_at(&project.variant_view(), self.storey, input.point, input.tolerance)
+                {
+                    self.drag = None;
+                    self.set_selection(Vec::new());
+                    self.junction = Some(j.point);
+                    return Response::redraw();
+                }
                 // Griff an einem Ende einer gewählten Wand?
                 for &id in &self.selection {
                     let Some(w) = project.wall(id) else { continue };
@@ -846,6 +862,7 @@ impl Editor {
                     self.references.clear();
                 } else if self.tool != Tool::Select {
                     self.tool = Tool::Select;
+                } else if self.junction.take().is_some() {
                 } else {
                     self.set_selection(Vec::new());
                 }
@@ -1077,8 +1094,18 @@ impl Editor {
             }
             Command::SetAlignment(a) => {
                 self.alignment = *a;
-                let a = *a;
-                self.change_selected(doc, "Bezugslinie ändern", |w| w.alignment = a)
+                let ops = walls::set_alignment_ops(doc.project(), &self.selection, *a);
+                if ops.is_empty() {
+                    return Response::redraw();
+                }
+                Response::from_result(doc.apply(Operation::Group { label: "Bezugslinie ändern".into(), ops }))
+            }
+            Command::SetJoinRule(wall, end, rule) => {
+                let ops = walls::set_join_ops(doc.project(), ElementId(*wall), *end, *rule);
+                if ops.is_empty() {
+                    return Response::redraw();
+                }
+                Response::from_result(doc.apply(Operation::Group { label: "Anschluss ändern".into(), ops }))
             }
             Command::SetPhase(phase) => {
                 let changes: Vec<(ElementId, Element)> = self
@@ -1344,13 +1371,10 @@ impl Editor {
             let mark = if Some(id) == self.wall_type { " ✓" } else { "" };
             list.push(CommandInfo::new(Command::SetWallType(id.0), format!("{}{mark}", t.name), "", "Wandaufbau"));
         }
-        for (a, title) in [
-            (WallAlignment::Center, "Bezugslinie Mitte"),
-            (WallAlignment::Exterior, "Bezugslinie Außenkante"),
-            (WallAlignment::Interior, "Bezugslinie Innenkante"),
-        ] {
+        for a in WallAlignment::ALL {
             let mark = if a == self.alignment { " ✓" } else { "" };
-            list.push(CommandInfo::new(Command::SetAlignment(a), format!("{title}{mark}"), "", "Bezugslinie"));
+            let title = format!("Bezugslinie {}{mark}", a.title());
+            list.push(CommandInfo::new(Command::SetAlignment(a), title, "", "Bezugslinie"));
         }
         for (id, s) in project.storeys() {
             let mark = if id == self.storey { " ✓" } else { "" };
@@ -1358,6 +1382,12 @@ impl Editor {
         }
         list.push(CommandInfo::new(Command::AddStorey, "Geschoss hinzufügen", "", "Geschoss"));
         list
+    }
+
+    /// Der gewählte Anschluss, wie er jetzt ist; `None`, wenn sich dort keine Wände mehr treffen.
+    pub fn selected_junction(&self, project: &Project) -> Option<lot_geom::Junction> {
+        let p = self.junction?;
+        lot_geom::junctions(&project.variant_view(), self.storey).into_iter().find(|j| j.point.distance(p) < 0.01)
     }
 
     /// Was über dem Plan zu zeichnen ist.
@@ -1372,6 +1402,15 @@ impl Editor {
             if let Some(w) = project_now.wall(*id) {
                 overlay.handles.extend([w.start, w.end]);
             }
+        }
+        if let Some(j) = self.selected_junction(project) {
+            let reach = j
+                .arms
+                .iter()
+                .filter_map(|a| project.wall(a.wall).and_then(|w| project.wall_type(w.wall_type)))
+                .map(|t| t.thickness())
+                .fold(0.1, f64::max);
+            overlay.junction = Some((j.point, reach));
         }
         for (i, d) in self.temp_dims_now(project).into_iter().enumerate() {
             let editing = self.dim_edit == Some(i);
@@ -1824,6 +1863,7 @@ impl Editor {
     /// Neue Auswahl; die alte kommt in den Verlauf (⌘←).
     fn set_selection(&mut self, new: Vec<ElementId>) {
         self.dim_edit = None;
+        self.junction = None;
         if new == self.selection {
             return;
         }
@@ -2231,6 +2271,7 @@ impl Editor {
 
     fn new_wall(&self, start: Point2, end: Point2) -> Option<Wall> {
         Some(Wall {
+            joins: Default::default(),
             phase: Default::default(),
             storey: self.storey,
             wall_type: self.wall_type?,
@@ -2699,22 +2740,7 @@ impl Editor {
     }
 
     fn flip_selection(&mut self, doc: &mut Document) -> Response {
-        let project = doc.project();
-        let mut ops = Vec::new();
-        for id in &self.selection {
-            let Some(w) = project.wall(*id) else { continue };
-            let mut n = w.clone();
-            std::mem::swap(&mut n.start, &mut n.end);
-            // Der Bogen bleibt, wo er ist: links und rechts tauschen auch hier.
-            n.sagitta = -w.sagitta;
-            ops.push(Operation::Replace { id: *id, old: Element::Wall(w.clone()), new: Element::Wall(n) });
-            // Öffnungen bleiben an ihrem Ort: Abstand nun vom anderen Ende.
-            for (oid, o) in project.openings_in(*id) {
-                let mut m = o.clone();
-                m.offset = w.length() - o.offset - o.width;
-                ops.push(Operation::Replace { id: oid, old: Element::Opening(o.clone()), new: Element::Opening(m) });
-            }
-        }
+        let ops = walls::flip_ops(doc.project(), &self.selection);
         if ops.is_empty() {
             return Response::default();
         }
