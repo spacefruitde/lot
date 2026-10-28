@@ -165,6 +165,52 @@ pub fn wall_tops() -> Vec<ChoiceItem> {
         .collect()
 }
 
+/// Typen-Bibliothek des Büros für die Sitzung; ohne eigene die eingebaute (ADR 0048).
+static LIBRARY: Mutex<Option<lot_edit::library::Library>> = Mutex::new(None);
+
+fn library() -> lot_edit::library::Library {
+    let lock = LIBRARY.lock().unwrap_or_else(|e| e.into_inner());
+    lock.clone().unwrap_or_else(lot_edit::library::Library::builtin)
+}
+
+/// Setzt die Bibliothek des Büros (Inhalt von `bibliothek.ron`), beim Start und nach dem Sichern.
+#[uniffi::export]
+pub fn install_office_library(text: String) -> Result<(), LotError> {
+    let lib = lot_edit::library::Library::parse(&text).map_err(LotError::Failed)?;
+    *LIBRARY.lock().unwrap_or_else(|e| e.into_inner()) = Some(lib);
+    Ok(())
+}
+
+/// Die eingebaute Bibliothek als Text, als Vorlage für eine eigene.
+#[uniffi::export]
+pub fn builtin_library_text() -> String {
+    lot_edit::library::Library::builtin().to_ron()
+}
+
+/// Ein Typ der Bibliothek im Vergleich zum Projekt.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct LibraryItemInfo {
+    pub index: u32,
+    pub kind_title: String,
+    pub name: String,
+    /// 0 neu, 1 gleich wie im Projekt, 2 weicht ab.
+    pub status: u32,
+    /// Was sich beim Ersetzen ändert, etwa „Schicht 2: Dämmung 16 cm → 18 cm“.
+    pub differences: Vec<String>,
+    /// Bauteile, die den gleichnamigen Typ im Projekt nutzen, etwa „14 Wände“.
+    pub uses_text: String,
+    /// Materialien, die der Bürostandard nicht kennt.
+    pub missing_materials: Vec<String>,
+}
+
+/// Name eines Materials aus dem Bürostandard, sonst sein Schlüssel.
+fn material_name(key: &str) -> String {
+    lot_plan::standard::OfficeStandard::default_standard()
+        .materials
+        .get(key)
+        .map_or(key.to_string(), |m| m.name.clone())
+}
+
 /// Ein Typ für die App.
 fn type_info(p: &lot_model::Project, id: ElementId) -> Option<TypeInfo> {
     use lot_edit::types;
@@ -654,6 +700,65 @@ impl LotDocument {
         let doc = self.lock();
         let p = doc.project();
         lot_edit::types::all(p).into_iter().filter_map(|(id, _)| type_info(p, id)).collect()
+    }
+
+    /// Der Typ eines Bauteils.
+    pub fn element_type(&self, element: u64) -> Option<u64> {
+        lot_edit::types::type_of(self.lock().project(), ElementId(element)).map(|t| t.0)
+    }
+
+    /// Die Typen der Büro-Bibliothek im Vergleich zu diesem Projekt.
+    pub fn library_items(&self) -> Vec<LibraryItemInfo> {
+        let doc = self.lock();
+        let p = doc.project();
+        let lib = library();
+        let items = lib.items();
+        let standard = lot_plan::standard::OfficeStandard::default_standard();
+        lot_edit::library::compare(p, &lib, &material_name)
+            .into_iter()
+            .map(|c| {
+                let layers: Vec<String> = match items.get(c.index).map(|i| &i.1) {
+                    Some(lot_model::Element::WallType(t)) => t.layers.iter().map(|l| l.material.clone()).collect(),
+                    Some(lot_model::Element::SlabType(t)) => t.layers.iter().map(|l| l.material.clone()).collect(),
+                    _ => Vec::new(),
+                };
+                let mut missing: Vec<String> =
+                    layers.into_iter().filter(|m| !standard.materials.contains_key(m)).collect();
+                missing.dedup();
+                let (one, many) = c.kind.element_names();
+                LibraryItemInfo {
+                    index: c.index as u32,
+                    kind_title: c.kind.title().into(),
+                    name: c.name,
+                    status: match c.status {
+                        lot_edit::library::Status::New => 0,
+                        lot_edit::library::Status::Same => 1,
+                        lot_edit::library::Status::Different => 2,
+                    },
+                    differences: c.differences,
+                    uses_text: format!("{} {}", c.uses, if c.uses == 1 { one } else { many }),
+                    missing_materials: missing,
+                }
+            })
+            .collect()
+    }
+
+    /// Holt einen Typ aus der Bibliothek: als neuen Typ oder als Ersatz für den
+    /// gleichnamigen, dessen Bauteile sich dann mit ändern. Gibt den Typ im Projekt zurück.
+    pub fn import_from_library(&self, index: u32, replace: bool) -> Result<u64, LotError> {
+        let mut doc = self.lock();
+        let mode = if replace { lot_edit::library::ImportMode::Replace } else { lot_edit::library::ImportMode::Add };
+        let (id, ops) =
+            lot_edit::library::import_ops(doc.project(), &library(), index as usize, mode).map_err(LotError::Failed)?;
+        doc.apply(lot_model::Operation::Group { label: "Aus der Bibliothek".into(), ops })
+            .map_err(LotError::from_display)?;
+        Ok(id.0)
+    }
+
+    /// Die Bibliothek mit diesem Typ des Projekts, als Text für `bibliothek.ron`.
+    pub fn library_with_type(&self, element: u64) -> Option<String> {
+        let doc = self.lock();
+        library().with_type(doc.project(), ElementId(element)).map(|l| l.to_ron())
     }
 
     /// Werte eines Bauteils, die sein Typ vorgibt, mit Herkunft (ADR 0048).

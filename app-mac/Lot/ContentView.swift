@@ -24,6 +24,10 @@ struct ContentView: View {
             .sheet(isPresented: $model.showReport) {
                 CheckReportView()
             }
+            .sheet(isPresented: $model.showTypes) {
+                TypesView()
+                    .environment(model)
+            }
             .toolbar { toolbar }
             .navigationTitle(model.title)
             .navigationSubtitle(subtitle)
@@ -66,6 +70,8 @@ struct ContentView: View {
             toolButton("Fenster", systemImage: "squareshape.split.2x2", tool: "window", command: "WindowTool", key: "WN")
             toolButton("Raum", systemImage: "square.dashed", tool: "space", command: "SpaceTool", key: "RM")
             commandMenu("Wandaufbau", systemImage: "square.stack.3d.up", group: "Wandaufbau")
+            Button { model.openTypes() } label: { Label("Typen", systemImage: "list.bullet.rectangle") }
+                .help("Typen-Übersicht und Bibliothek des Büros (⇧⌘T)")
             commandMenu("Geschoss", systemImage: "building.2", group: "Geschoss")
         }
         ToolbarItemGroup {

@@ -1443,7 +1443,7 @@ fn rough_sill_follows_floor_build_up_and_sill_connection() {
     ed.run(&mut doc, &Command::SetSillConnection(0.03));
     let o = opening(&doc, id);
     let ty = doc.project().opening_type(o.opening_type.unwrap()).unwrap();
-    assert_eq!((ty.props.mark.as_deref(), ty.name.as_str()), (Some("F1"), "Fenster"));
+    assert_eq!((ty.props.mark.as_deref(), ty.name.as_str()), (Some("F1"), "Fenster 1,26 × 1,385"));
     assert!((doc.project().rough_sill(&o).unwrap() - 1.03).abs() < 1e-9);
     assert!((doc.project().opening_span(&o).unwrap().0 - 0.87).abs() < 1e-9);
     // Die Rohbaubrüstung getippt: die BRH folgt.
@@ -1597,9 +1597,7 @@ fn opening_sizes_follow_their_type_unless_overridden() {
     use lot_model::Property;
     let (mut doc, mut ed, window) = house_with_window();
     let host = opening(&doc, window).host;
-    let second = doc
-        .insert(lot_model::Element::Opening(Opening { offset: 3.0, ..opening(&doc, window) }))
-        .unwrap();
+    let second = doc.insert(lot_model::Element::Opening(Opening { offset: 3.0, ..opening(&doc, window) })).unwrap();
     assert_eq!(opening(&doc, second).host, host);
     // Typ F1 mit Rohbaumaß 1,01 × 1,385 für beide Fenster.
     ed.selection = vec![window, second];
@@ -1639,4 +1637,36 @@ fn types_are_duplicated_replaced_and_deleted_with_a_replacement() {
     // Ein Schritt zurück bringt Typ und Wände zurück.
     assert!(doc.undo().unwrap());
     assert_eq!(types::uses(doc.project(), used).len(), n);
+}
+
+#[test]
+fn library_types_come_in_one_by_one_with_a_comparison() {
+    use library::{ImportMode, Library, Status};
+    let (mut doc, _ed) = house();
+    let lib = Library::builtin();
+    assert!(lib.wall_types.len() >= 5 && !lib.opening_types.is_empty());
+    let names = |k: &str| k.to_uppercase();
+    let list = library::compare(doc.project(), &lib, &names);
+    // Der Aufbau aus der Vorlage heißt gleich, hat im Projekt aber noch keine IFC-Klasse.
+    let wdvs = list.iter().find(|c| c.name == "Außenwand WDVS 36").unwrap();
+    assert_eq!(wdvs.status, Status::Different);
+    assert!(wdvs.differences.iter().any(|d| d.contains("IFC-Klasse")), "{:?}", wdvs.differences);
+    assert!(wdvs.uses > 0);
+    let klinker = list.iter().find(|c| c.name.contains("Klinker")).unwrap();
+    assert_eq!(klinker.status, Status::New);
+    // Neu holen, dann ersetzen: Die Wände behalten ihren Typ, der Typ ändert sich.
+    let (id, ops) = library::import_ops(doc.project(), &lib, klinker.index, ImportMode::Add).unwrap();
+    doc.apply(lot_model::Operation::Group { label: "Aus der Bibliothek".into(), ops }).unwrap();
+    assert_eq!(doc.project().wall_type(id).unwrap().layers.len(), 5);
+    let existing = wdvs.existing.unwrap();
+    let (same, ops) = library::import_ops(doc.project(), &lib, wdvs.index, ImportMode::Replace).unwrap();
+    doc.apply(lot_model::Operation::Group { label: "Aus der Bibliothek".into(), ops }).unwrap();
+    assert_eq!(same, existing);
+    assert_eq!(doc.project().wall_type(existing).unwrap().props.ifc_class.as_deref(), Some("IfcWall"));
+    let again = library::compare(doc.project(), &lib, &names);
+    assert_eq!(again[wdvs.index].status, Status::Same);
+    // Ein eigener Typ in die Bibliothek und zurück gelesen.
+    let mine = lib.with_type(doc.project(), id).unwrap();
+    let back = Library::parse(&mine.to_ron()).unwrap();
+    assert_eq!(back, mine);
 }

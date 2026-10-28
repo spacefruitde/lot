@@ -680,6 +680,32 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
      */
     func elementPhase(element: UInt64)  -> UInt32?
     
+    /**
+     * Werte eines Bauteils, die sein Typ vorgibt, mit Herkunft (ADR 0048).
+     */
+    func elementProperties(element: UInt64)  -> [PropertyInfo]
+    
+    /**
+     * Der Typ eines Bauteils.
+     */
+    func elementType(element: UInt64)  -> UInt64?
+    
+    /**
+     * Holt einen Typ aus der Bibliothek: als neuen Typ oder als Ersatz für den
+     * gleichnamigen, dessen Bauteile sich dann mit ändern. Gibt den Typ im Projekt zurück.
+     */
+    func importFromLibrary(index: UInt32, replace: Bool) throws  -> UInt64
+    
+    /**
+     * Die Typen der Büro-Bibliothek im Vergleich zu diesem Projekt.
+     */
+    func libraryItems()  -> [LibraryItemInfo]
+    
+    /**
+     * Die Bibliothek mit diesem Typ des Projekts, als Text für `bibliothek.ron`.
+     */
+    func libraryWithType(element: UInt64)  -> String?
+    
     func name()  -> String
     
     /**
@@ -731,10 +757,10 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func setSpace(element: UInt64, number: String, name: String, usage: UInt32, livingSpace: Bool) throws 
     
     /**
-     * Ändert Namen und Schichten eines Wandaufbaus in einem Schritt. Die
-     * Bezugslinien der Wände bleiben stehen (ADR 0045).
+     * Ändert Namen und Schichten eines Wand- oder Deckenaufbaus in einem
+     * Schritt. Die Bezugslinien der Wände bleiben stehen (ADR 0045).
      */
-    func setWallType(element: UInt64, name: String, layers: [LayerInfo]) throws 
+    func setTypeLayers(element: UInt64, name: String, layers: [LayerInfo]) throws 
     
     /**
      * Raumdaten der gewählten Elemente, die Räume sind.
@@ -746,12 +772,17 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
      */
     func storeyAreas()  -> [StoreyAreaInfo]
     
-    func undo() throws  -> Bool
+    /**
+     * Ein Typ mit Schichten, Nutzung und Werten.
+     */
+    func typeInfo(element: UInt64)  -> TypeInfo?
     
     /**
-     * Ein Wandaufbau mit seinen Schichten.
+     * Alle Typen des Projekts für die Typen-Übersicht.
      */
-    func wallType(element: UInt64)  -> WallTypeInfo?
+    func types()  -> [TypeInfo]
+    
+    func undo() throws  -> Bool
     
     /**
      * Die Wände unter den Elementen `ids`.
@@ -977,6 +1008,72 @@ open func elementPhase(element: UInt64) -> UInt32?  {
 })
 }
     
+    /**
+     * Werte eines Bauteils, die sein Typ vorgibt, mit Herkunft (ADR 0048).
+     */
+open func elementProperties(element: UInt64) -> [PropertyInfo]  {
+    return try!  FfiConverterSequenceTypePropertyInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_element_properties(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Der Typ eines Bauteils.
+     */
+open func elementType(element: UInt64) -> UInt64?  {
+    return try!  FfiConverterOptionUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_element_type(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Holt einen Typ aus der Bibliothek: als neuen Typ oder als Ersatz für den
+     * gleichnamigen, dessen Bauteile sich dann mit ändern. Gibt den Typ im Projekt zurück.
+     */
+open func importFromLibrary(index: UInt32, replace: Bool)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_import_from_library(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(index),
+        FfiConverterBool.lower(replace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Die Typen der Büro-Bibliothek im Vergleich zu diesem Projekt.
+     */
+open func libraryItems() -> [LibraryItemInfo]  {
+    return try!  FfiConverterSequenceTypeLibraryItemInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_library_items(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Die Bibliothek mit diesem Typ des Projekts, als Text für `bibliothek.ron`.
+     */
+open func libraryWithType(element: UInt64) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_library_with_type(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),uniffiCallStatus
+    )
+})
+}
+    
 open func name() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
@@ -1126,12 +1223,12 @@ open func setSpace(element: UInt64, number: String, name: String, usage: UInt32,
 }
     
     /**
-     * Ändert Namen und Schichten eines Wandaufbaus in einem Schritt. Die
-     * Bezugslinien der Wände bleiben stehen (ADR 0045).
+     * Ändert Namen und Schichten eines Wand- oder Deckenaufbaus in einem
+     * Schritt. Die Bezugslinien der Wände bleiben stehen (ADR 0045).
      */
-open func setWallType(element: UInt64, name: String, layers: [LayerInfo])throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
+open func setTypeLayers(element: UInt64, name: String, layers: [LayerInfo])throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
         uniffiCallStatus in
-    uniffi_lot_ffi_fn_method_lotdocument_set_wall_type(
+    uniffi_lot_ffi_fn_method_lotdocument_set_type_layers(
             self.uniffiCloneHandle(),
         FfiConverterUInt64.lower(element),
         FfiConverterString.lower(name),
@@ -1165,24 +1262,36 @@ open func storeyAreas() -> [StoreyAreaInfo]  {
 })
 }
     
-open func undo()throws  -> Bool  {
-    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
+    /**
+     * Ein Typ mit Schichten, Nutzung und Werten.
+     */
+open func typeInfo(element: UInt64) -> TypeInfo?  {
+    return try!  FfiConverterOptionTypeTypeInfo.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_lot_ffi_fn_method_lotdocument_undo(
-            self.uniffiCloneHandle(),uniffiCallStatus
+    uniffi_lot_ffi_fn_method_lotdocument_type_info(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),uniffiCallStatus
     )
 })
 }
     
     /**
-     * Ein Wandaufbau mit seinen Schichten.
+     * Alle Typen des Projekts für die Typen-Übersicht.
      */
-open func wallType(element: UInt64) -> WallTypeInfo?  {
-    return try!  FfiConverterOptionTypeWallTypeInfo.lift(try! rustCall() {
+open func types() -> [TypeInfo]  {
+    return try!  FfiConverterSequenceTypeTypeInfo.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_lot_ffi_fn_method_lotdocument_wall_type(
-            self.uniffiCloneHandle(),
-        FfiConverterUInt64.lower(element),uniffiCallStatus
+    uniffi_lot_ffi_fn_method_lotdocument_types(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+open func undo()throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_undo(
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
@@ -2418,6 +2527,107 @@ public func FfiConverterTypeLayerInfo_lower(_ value: LayerInfo) -> RustBuffer {
 
 
 /**
+ * Ein Typ der Bibliothek im Vergleich zum Projekt.
+ */
+public struct LibraryItemInfo: Equatable, Hashable {
+    public var index: UInt32
+    public var kindTitle: String
+    public var name: String
+    /**
+     * 0 neu, 1 gleich wie im Projekt, 2 weicht ab.
+     */
+    public var status: UInt32
+    /**
+     * Was sich beim Ersetzen ändert, etwa „Schicht 2: Dämmung 16 cm → 18 cm“.
+     */
+    public var differences: [String]
+    /**
+     * Bauteile, die den gleichnamigen Typ im Projekt nutzen, etwa „14 Wände“.
+     */
+    public var usesText: String
+    /**
+     * Materialien, die der Bürostandard nicht kennt.
+     */
+    public var missingMaterials: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(index: UInt32, kindTitle: String, name: String, 
+        /**
+         * 0 neu, 1 gleich wie im Projekt, 2 weicht ab.
+         */status: UInt32, 
+        /**
+         * Was sich beim Ersetzen ändert, etwa „Schicht 2: Dämmung 16 cm → 18 cm“.
+         */differences: [String], 
+        /**
+         * Bauteile, die den gleichnamigen Typ im Projekt nutzen, etwa „14 Wände“.
+         */usesText: String, 
+        /**
+         * Materialien, die der Bürostandard nicht kennt.
+         */missingMaterials: [String]) {
+        self.index = index
+        self.kindTitle = kindTitle
+        self.name = name
+        self.status = status
+        self.differences = differences
+        self.usesText = usesText
+        self.missingMaterials = missingMaterials
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension LibraryItemInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLibraryItemInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LibraryItemInfo {
+        return
+            try LibraryItemInfo(
+                index: FfiConverterUInt32.read(from: &buf), 
+                kindTitle: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                status: FfiConverterUInt32.read(from: &buf), 
+                differences: FfiConverterSequenceString.read(from: &buf), 
+                usesText: FfiConverterString.read(from: &buf), 
+                missingMaterials: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LibraryItemInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.index, into: &buf)
+        FfiConverterString.write(value.kindTitle, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterUInt32.write(value.status, into: &buf)
+        FfiConverterSequenceString.write(value.differences, into: &buf)
+        FfiConverterString.write(value.usesText, into: &buf)
+        FfiConverterSequenceString.write(value.missingMaterials, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLibraryItemInfo_lift(_ buf: RustBuffer) throws -> LibraryItemInfo {
+    return try FfiConverterTypeLibraryItemInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLibraryItemInfo_lower(_ value: LibraryItemInfo) -> RustBuffer {
+    return FfiConverterTypeLibraryItemInfo.lower(value)
+}
+
+
+/**
  * Eine Öffnung mit beiden Brüstungshöhen für den Inspektor (ADR 0047).
  */
 public struct OpeningInfo: Equatable, Hashable {
@@ -2618,6 +2828,123 @@ public func FfiConverterTypeParamValue_lift(_ buf: RustBuffer) throws -> ParamVa
 #endif
 public func FfiConverterTypeParamValue_lower(_ value: ParamValue) -> RustBuffer {
     return FfiConverterTypeParamValue.lower(value)
+}
+
+
+/**
+ * Ein Wert am Typ oder am Bauteil, mit Herkunft und den Befehlen dazu.
+ */
+public struct PropertyInfo: Equatable, Hashable {
+    /**
+     * Index in der Liste der Eigenschaften; für Befehle `property` verwenden.
+     */
+    public var key: UInt32
+    public var title: String
+    public var value: String
+    /**
+     * Am Bauteil: Der Wert kommt vom Typ. Am Typ immer `true`.
+     */
+    public var fromType: Bool
+    /**
+     * Der Typ legt den Wert fest; Bauteile dürfen nicht abweichen.
+     */
+    public var locked: Bool
+    /**
+     * Wert des Typs, für „vom Typ“ und den Vergleich.
+     */
+    public var typeValue: String
+    /**
+     * RON-Name der Eigenschaft für Befehle, etwa „FireRating“.
+     */
+    public var property: String
+    /**
+     * Ein Maß in Metern statt eines Texts.
+     */
+    public var isSize: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Index in der Liste der Eigenschaften; für Befehle `property` verwenden.
+         */key: UInt32, title: String, value: String, 
+        /**
+         * Am Bauteil: Der Wert kommt vom Typ. Am Typ immer `true`.
+         */fromType: Bool, 
+        /**
+         * Der Typ legt den Wert fest; Bauteile dürfen nicht abweichen.
+         */locked: Bool, 
+        /**
+         * Wert des Typs, für „vom Typ“ und den Vergleich.
+         */typeValue: String, 
+        /**
+         * RON-Name der Eigenschaft für Befehle, etwa „FireRating“.
+         */property: String, 
+        /**
+         * Ein Maß in Metern statt eines Texts.
+         */isSize: Bool) {
+        self.key = key
+        self.title = title
+        self.value = value
+        self.fromType = fromType
+        self.locked = locked
+        self.typeValue = typeValue
+        self.property = property
+        self.isSize = isSize
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PropertyInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePropertyInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PropertyInfo {
+        return
+            try PropertyInfo(
+                key: FfiConverterUInt32.read(from: &buf), 
+                title: FfiConverterString.read(from: &buf), 
+                value: FfiConverterString.read(from: &buf), 
+                fromType: FfiConverterBool.read(from: &buf), 
+                locked: FfiConverterBool.read(from: &buf), 
+                typeValue: FfiConverterString.read(from: &buf), 
+                property: FfiConverterString.read(from: &buf), 
+                isSize: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PropertyInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.key, into: &buf)
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterString.write(value.value, into: &buf)
+        FfiConverterBool.write(value.fromType, into: &buf)
+        FfiConverterBool.write(value.locked, into: &buf)
+        FfiConverterString.write(value.typeValue, into: &buf)
+        FfiConverterString.write(value.property, into: &buf)
+        FfiConverterBool.write(value.isSize, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePropertyInfo_lift(_ buf: RustBuffer) throws -> PropertyInfo {
+    return try FfiConverterTypePropertyInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePropertyInfo_lower(_ value: PropertyInfo) -> RustBuffer {
+    return FfiConverterTypePropertyInfo.lower(value)
 }
 
 
@@ -2900,6 +3227,105 @@ public func FfiConverterTypeStoreyAreaInfo_lower(_ value: StoreyAreaInfo) -> Rus
 
 
 /**
+ * Ein Typ: Wandaufbau, Deckenaufbau, Tür- oder Fenstertyp (ADR 0048).
+ */
+public struct TypeInfo: Equatable, Hashable {
+    public var element: UInt64
+    /**
+     * 0 Wandaufbau, 1 Deckenaufbau, 2 Tür- oder Fenstertyp.
+     */
+    public var kind: UInt32
+    public var kindTitle: String
+    public var name: String
+    /**
+     * Schichten von außen nach innen, bei Decken von oben nach unten; leer bei Tür- und Fenstertypen.
+     */
+    public var layers: [LayerInfo]
+    /**
+     * Wie viele Bauteile den Typ nutzen, und als Wort, etwa „14 Wände“.
+     */
+    public var uses: UInt32
+    public var usesText: String
+    public var properties: [PropertyInfo]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, 
+        /**
+         * 0 Wandaufbau, 1 Deckenaufbau, 2 Tür- oder Fenstertyp.
+         */kind: UInt32, kindTitle: String, name: String, 
+        /**
+         * Schichten von außen nach innen, bei Decken von oben nach unten; leer bei Tür- und Fenstertypen.
+         */layers: [LayerInfo], 
+        /**
+         * Wie viele Bauteile den Typ nutzen, und als Wort, etwa „14 Wände“.
+         */uses: UInt32, usesText: String, properties: [PropertyInfo]) {
+        self.element = element
+        self.kind = kind
+        self.kindTitle = kindTitle
+        self.name = name
+        self.layers = layers
+        self.uses = uses
+        self.usesText = usesText
+        self.properties = properties
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TypeInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTypeInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TypeInfo {
+        return
+            try TypeInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                kind: FfiConverterUInt32.read(from: &buf), 
+                kindTitle: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                layers: FfiConverterSequenceTypeLayerInfo.read(from: &buf), 
+                uses: FfiConverterUInt32.read(from: &buf), 
+                usesText: FfiConverterString.read(from: &buf), 
+                properties: FfiConverterSequenceTypePropertyInfo.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TypeInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterUInt32.write(value.kind, into: &buf)
+        FfiConverterString.write(value.kindTitle, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterSequenceTypeLayerInfo.write(value.layers, into: &buf)
+        FfiConverterUInt32.write(value.uses, into: &buf)
+        FfiConverterString.write(value.usesText, into: &buf)
+        FfiConverterSequenceTypePropertyInfo.write(value.properties, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTypeInfo_lift(_ buf: RustBuffer) throws -> TypeInfo {
+    return try FfiConverterTypeTypeInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTypeInfo_lower(_ value: TypeInfo) -> RustBuffer {
+    return FfiConverterTypeTypeInfo.lower(value)
+}
+
+
+/**
  * Eine Unterlage, deren Bild die App liefern muss (PDF-Seite oder Bild).
  */
 public struct UnderlayRef: Equatable, Hashable {
@@ -3040,7 +3466,7 @@ public func FfiConverterTypeViewState_lower(_ value: ViewState) -> RustBuffer {
 
 
 /**
- * Eine Wand für den Inspektor.
+ * Eine Wand für den Inspektor./// Eine Wand für den Inspektor.
  */
 public struct WallInfo: Equatable, Hashable {
     public var element: UInt64
@@ -3123,77 +3549,6 @@ public func FfiConverterTypeWallInfo_lift(_ buf: RustBuffer) throws -> WallInfo 
 #endif
 public func FfiConverterTypeWallInfo_lower(_ value: WallInfo) -> RustBuffer {
     return FfiConverterTypeWallInfo.lower(value)
-}
-
-
-/**
- * Ein Wandaufbau mit seinen Schichten von außen nach innen.
- */
-public struct WallTypeInfo: Equatable, Hashable {
-    public var element: UInt64
-    public var name: String
-    public var layers: [LayerInfo]
-    /**
-     * Wie viele Wände den Aufbau nutzen.
-     */
-    public var uses: UInt32
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(element: UInt64, name: String, layers: [LayerInfo], 
-        /**
-         * Wie viele Wände den Aufbau nutzen.
-         */uses: UInt32) {
-        self.element = element
-        self.name = name
-        self.layers = layers
-        self.uses = uses
-    }
-
-    
-
-    
-}
-
-#if compiler(>=6)
-extension WallTypeInfo: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeWallTypeInfo: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WallTypeInfo {
-        return
-            try WallTypeInfo(
-                element: FfiConverterUInt64.read(from: &buf), 
-                name: FfiConverterString.read(from: &buf), 
-                layers: FfiConverterSequenceTypeLayerInfo.read(from: &buf), 
-                uses: FfiConverterUInt32.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: WallTypeInfo, into buf: inout [UInt8]) {
-        FfiConverterUInt64.write(value.element, into: &buf)
-        FfiConverterString.write(value.name, into: &buf)
-        FfiConverterSequenceTypeLayerInfo.write(value.layers, into: &buf)
-        FfiConverterUInt32.write(value.uses, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeWallTypeInfo_lift(_ buf: RustBuffer) throws -> WallTypeInfo {
-    return try FfiConverterTypeWallTypeInfo.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeWallTypeInfo_lower(_ value: WallTypeInfo) -> RustBuffer {
-    return FfiConverterTypeWallTypeInfo.lower(value)
 }
 
 
@@ -3752,8 +4107,8 @@ fileprivate struct FfiConverterOptionTypeJunctionInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionTypeWallTypeInfo: FfiConverterRustBuffer {
-    typealias SwiftType = WallTypeInfo?
+fileprivate struct FfiConverterOptionTypeTypeInfo: FfiConverterRustBuffer {
+    typealias SwiftType = TypeInfo?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         guard let value = value else {
@@ -3761,13 +4116,13 @@ fileprivate struct FfiConverterOptionTypeWallTypeInfo: FfiConverterRustBuffer {
             return
         }
         writeInt(&buf, Int8(1))
-        FfiConverterTypeWallTypeInfo.write(value, into: &buf)
+        FfiConverterTypeTypeInfo.write(value, into: &buf)
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
-        case 1: return try FfiConverterTypeWallTypeInfo.read(from: &buf)
+        case 1: return try FfiConverterTypeTypeInfo.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -4001,6 +4356,31 @@ fileprivate struct FfiConverterSequenceTypeLayerInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeLibraryItemInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [LibraryItemInfo]
+
+    public static func write(_ value: [LibraryItemInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLibraryItemInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LibraryItemInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LibraryItemInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLibraryItemInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeOpeningInfo: FfiConverterRustBuffer {
     typealias SwiftType = [OpeningInfo]
 
@@ -4043,6 +4423,31 @@ fileprivate struct FfiConverterSequenceTypeParamValue: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeParamValue.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypePropertyInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [PropertyInfo]
+
+    public static func write(_ value: [PropertyInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePropertyInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PropertyInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PropertyInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePropertyInfo.read(from: &buf))
         }
         return seq
     }
@@ -4151,6 +4556,31 @@ fileprivate struct FfiConverterSequenceTypeStoreyAreaInfo: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeTypeInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [TypeInfo]
+
+    public static func write(_ value: [TypeInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTypeInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TypeInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TypeInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeTypeInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeUnderlayRef: FfiConverterRustBuffer {
     typealias SwiftType = [UnderlayRef]
 
@@ -4196,6 +4626,26 @@ fileprivate struct FfiConverterSequenceTypeWallInfo: FfiConverterRustBuffer {
         }
         return seq
     }
+}
+/**
+ * Die eingebaute Bibliothek als Text, als Vorlage für eine eigene.
+ */
+public func builtinLibraryText() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_builtin_library_text(uniffiCallStatus
+    )
+})
+}
+/**
+ * Setzt die Bibliothek des Büros (Inhalt von `bibliothek.ron`), beim Start und nach dem Sichern.
+ */
+public func installOfficeLibrary(text: String)throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_install_office_library(
+        FfiConverterString.lower(text),uniffiCallStatus
+    )
+}
 }
 /**
  * Setzt den Bürostandard für die Sitzung: der eingebaute mit den
@@ -4285,6 +4735,12 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_lot_ffi_checksum_func_builtin_library_text() != 33438) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_install_office_library() != 49795) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_func_install_office_standard() != 65201) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4336,6 +4792,21 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_element_phase() != 5178) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_element_properties() != 59489) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_element_type() != 25066) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_import_from_library() != 15931) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_library_items() != 8595) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_library_with_type() != 64702) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_lotdocument_name() != 35177) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4372,7 +4843,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_set_space() != 41848) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_lotdocument_set_wall_type() != 38831) {
+    if (uniffi_lot_ffi_checksum_method_lotdocument_set_type_layers() != 27120) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_spaces() != 30951) {
@@ -4381,10 +4852,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_storey_areas() != 34722) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_lotdocument_undo() != 9472) {
+    if (uniffi_lot_ffi_checksum_method_lotdocument_type_info() != 56920) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_lotdocument_wall_type() != 18116) {
+    if (uniffi_lot_ffi_checksum_method_lotdocument_types() != 20131) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_undo() != 9472) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_walls() != 16345) {

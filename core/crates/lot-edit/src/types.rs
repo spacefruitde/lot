@@ -170,7 +170,7 @@ fn replace(project: &Project, id: ElementId, change: impl FnOnce(&mut Element)) 
 }
 
 /// Öffnungen des Typs, die ein Maß vom Typ übernehmen, bekommen den neuen Wert.
-fn sync_sizes(project: &Project, type_id: ElementId, p: Property, size: f64) -> Vec<Operation> {
+pub(crate) fn sync_sizes(project: &Project, type_id: ElementId, p: Property, size: f64) -> Vec<Operation> {
     project
         .openings()
         .filter(|(_, o)| o.opening_type == Some(type_id) && !o.own.contains(&p))

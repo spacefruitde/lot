@@ -84,6 +84,8 @@ pub enum Command {
     AssignType(Option<u64>),
     /// Alle Bauteile eines Typs bekommen einen anderen.
     ReplaceType(u64, u64),
+    /// Für gewählte Öffnungen ohne Typ einen Typ aus ihrem Rohbaumaß anlegen.
+    CreateOpeningTypes,
     /// Oberkante der gewählten Wände: Index in `Top::TITLES` (Geschoss, Decke, Dach, fest).
     SetWallTop(u32),
     /// Ausnahme am Anschluss eines Wandendes: Wand, Ende, Regel (ADR 0045).

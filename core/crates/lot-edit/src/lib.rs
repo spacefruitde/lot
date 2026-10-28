@@ -8,6 +8,7 @@
 mod command;
 pub mod entry;
 pub mod geometry;
+pub mod library;
 pub mod modify;
 pub mod openings;
 pub mod select;
@@ -1202,6 +1203,9 @@ impl Editor {
                 Ok(ops) => self.apply_ops(doc, "Typ tauschen", ops),
                 Err(e) => Response { error: Some(e), ..Response::redraw() },
             },
+            Command::CreateOpeningTypes => {
+                self.apply_ops(doc, "Typ anlegen", openings::create_types_ops(doc.project(), &self.selection))
+            }
             Command::ReplaceType(old, new) => {
                 let users = types::uses(doc.project(), ElementId(*old));
                 match types::assign_ops(doc.project(), &users, Some(ElementId(*new))) {
