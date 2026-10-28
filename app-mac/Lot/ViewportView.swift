@@ -218,7 +218,11 @@ final class MetalViewportNSView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        model?.activate(pane: pane)
+        // Der erste Klick in die andere Hälfte macht sie nur aktiv; die gemeinsame Auswahl bleibt.
+        if let model, model.showSplit, model.activePane != pane {
+            model.activate(pane: pane)
+            return
+        }
         guard let viewport else { return }
         dragging = true
         if isPlan {

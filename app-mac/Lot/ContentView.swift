@@ -81,6 +81,22 @@ struct ContentView: View {
                 return true
             }
         }
+        .overlay {
+            // H und I: Rahmen und Zähler, nie im Druck (ADR 0050).
+            if let text = model.paneTemporary[index], !text.isEmpty {
+                ZStack(alignment: .top) {
+                    Rectangle().strokeBorder(Color.teal, lineWidth: 3)
+                    Text(text)
+                        .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.teal, in: RoundedRectangle(cornerRadius: 5))
+                        .foregroundStyle(.white)
+                        .padding(.top, 8)
+                }
+                .allowsHitTesting(false)
+            }
+        }
         .overlay(alignment: .topLeading) {
             if model.showSplit, let title = model.paneTitles[index] {
                 Text(title)
@@ -142,6 +158,10 @@ struct ContentView: View {
                 .help("Befehlspalette (⌘K)")
             Button { model.runChecks() } label: { Label("Prüfen", systemImage: "checkmark.seal") }
                 .help("Prüfbericht: Abstandsflächen, Barrierefreiheit, Rettungswege (⇧⌘P)")
+            Toggle(isOn: Binding(get: { model.viewState?.printView ?? false }, set: { model.setPrintView($0) })) {
+                Label("Druckbild", systemImage: "printer")
+            }
+            .help("Druckbild: nur, was gedruckt wird, ohne Hinweise und vorübergehend Ausgeblendetes (⌥⌘P)")
             Button { model.showSplit.toggle() } label: { Label("Nebeneinander", systemImage: "rectangle.split.2x1") }
                 .help("Zwei Ansichten nebeneinander, gemeinsame Auswahl")
             Button { showInspector.toggle() } label: { Label("Eigenschaften", systemImage: "sidebar.right") }
