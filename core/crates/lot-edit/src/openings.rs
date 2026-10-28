@@ -82,11 +82,20 @@ pub fn set_sill_connection_ops(project: &Project, ids: &[ElementId], value: f64)
             continue;
         }
         let letter = ["D", "N", "T", "F"][fill];
-        let used = |n: usize| project.opening_types().any(|(_, t)| t.mark == format!("{letter}{n}"));
+        let used = |n: usize| {
+            project.opening_types().any(|(_, t)| t.props.mark.as_deref() == Some(format!("{letter}{n}").as_str()))
+        };
         let number = (1..).find(|n| !used(*n)).unwrap_or(1);
         let id = ElementId(next);
         next += 1;
-        let ty = OpeningType { name: FILLS[fill].into(), mark: format!("{letter}{number}"), sill_connection: value };
+        let ty = OpeningType {
+            name: FILLS[fill].into(),
+            sill_connection: value,
+            width: None,
+            height: None,
+            props: lot_model::Properties { mark: Some(format!("{letter}{number}")), ..Default::default() },
+            locked: Vec::new(),
+        };
         ops.push(Operation::Insert { id, element: Element::OpeningType(ty) });
         for (oid, o) in untyped {
             let mut n = (*o).clone();

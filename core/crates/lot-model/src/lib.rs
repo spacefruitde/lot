@@ -26,8 +26,9 @@ pub use document::{Document, ModelError};
 pub use element::{
     BuildingClass, CircularArc, Column, ColumnProfile, DimRef, DimensionChain, Door, Element, ElementId, ElementKind,
     GridLine, Handing, JoinRule, Layer, LayerFunction, Opening, OpeningKind, OpeningType, Param, Phase, PhaseFilter,
-    PlacedView, PlanSheet, Point2, ProjectInfo, Recess, SectionKind, SectionView, Slab, SlabKind, SlabOpening,
-    SlabType, Space, SpaceUsage, Storey, Top, ViewContent, Wall, WallAlignment, WallEnd, WallSide, WallType,
+    PlacedView, PlanSheet, Point2, ProjectInfo, Properties, Property, Recess, SectionKind, SectionView, Slab, SlabKind,
+    SlabOpening, SlabType, Space, SpaceUsage, Storey, Top, ViewContent, Wall, WallAlignment, WallEnd, WallSide,
+    WallType,
 };
 pub use elevator::Elevator;
 pub use operation::Operation;

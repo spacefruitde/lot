@@ -14,6 +14,7 @@ pub mod select;
 pub mod snap;
 pub mod tempdims;
 pub mod transform;
+pub mod types;
 pub mod walls;
 
 pub use command::{Command, CommandInfo};
@@ -1155,6 +1156,58 @@ impl Editor {
                     return Response::redraw();
                 }
                 Response::from_result(doc.apply(Operation::Group { label: "Unterer Anschluss".into(), ops }))
+            }
+            Command::SetTypeProperty(t, p, v) => {
+                let v = Some(v.clone()).filter(|v| !v.trim().is_empty());
+                self.apply_ops(doc, "Typ ändern", types::set_type_property_ops(doc.project(), ElementId(*t), *p, v))
+            }
+            Command::SetTypeSize(t, p, v) => {
+                self.apply_ops(doc, "Typ ändern", types::set_type_size_ops(doc.project(), ElementId(*t), *p, *v))
+            }
+            Command::SetTypeLocked(t, p, lock) => {
+                let ops = types::set_locked_ops(doc.project(), ElementId(*t), *p, *lock);
+                self.apply_ops(doc, if *lock { "Im Typ festlegen" } else { "Im Typ freigeben" }, ops)
+            }
+            Command::SetElementProperty(p, v) => {
+                let v = Some(v.clone()).filter(|v| !v.trim().is_empty());
+                match types::set_element_property_ops(doc.project(), &self.selection, *p, v) {
+                    Ok(ops) => self.apply_ops(doc, "Eigenschaft ändern", ops),
+                    Err(e) => Response { error: Some(e), ..Response::redraw() },
+                }
+            }
+            Command::ResetToType(p) => {
+                self.apply_ops(doc, "Zurücksetzen", types::reset_ops(doc.project(), &self.selection, *p))
+            }
+            Command::ApplyToType(p) => {
+                let Some(&id) = self.selection.first() else { return Response::redraw() };
+                match types::apply_to_type_ops(doc.project(), id, *p) {
+                    Ok(ops) => self.apply_ops(doc, "In den Typ übernehmen", ops),
+                    Err(e) => Response { error: Some(e), ..Response::redraw() },
+                }
+            }
+            Command::DuplicateType(t) => match types::duplicate_ops(doc.project(), ElementId(*t)) {
+                Some((_, ops)) => self.apply_ops(doc, "Typ kopieren", ops),
+                None => Response::redraw(),
+            },
+            Command::RenameType(t, name) => {
+                self.apply_ops(doc, "Typ umbenennen", types::rename_ops(doc.project(), ElementId(*t), name))
+            }
+            Command::DeleteType(t, replacement) => {
+                match types::delete_ops(doc.project(), ElementId(*t), replacement.map(ElementId)) {
+                    Ok(ops) => self.apply_ops(doc, "Typ löschen", ops),
+                    Err(e) => Response { error: Some(e), ..Response::redraw() },
+                }
+            }
+            Command::AssignType(t) => match types::assign_ops(doc.project(), &self.selection, t.map(ElementId)) {
+                Ok(ops) => self.apply_ops(doc, "Typ tauschen", ops),
+                Err(e) => Response { error: Some(e), ..Response::redraw() },
+            },
+            Command::ReplaceType(old, new) => {
+                let users = types::uses(doc.project(), ElementId(*old));
+                match types::assign_ops(doc.project(), &users, Some(ElementId(*new))) {
+                    Ok(ops) => self.apply_ops(doc, "Typ tauschen", ops),
+                    Err(e) => Response { error: Some(e), ..Response::redraw() },
+                }
             }
             Command::SetWallTop(mode) => {
                 let ops = walls::set_top_ops(doc.project(), &self.selection, *mode as usize);
@@ -2357,6 +2410,7 @@ impl Editor {
 
     fn new_wall(&self, start: Point2, end: Point2) -> Option<Wall> {
         Some(Wall {
+            props: Default::default(),
             joins: Default::default(),
             phase: Default::default(),
             storey: self.storey,
@@ -2605,6 +2659,8 @@ impl Editor {
         };
         let offset = placement.offset;
         let opening = Opening {
+            own: Default::default(),
+            props: Default::default(),
             recess: None,
             phase: Default::default(),
             host,
@@ -2703,6 +2759,7 @@ impl Editor {
             .map(|(i, ring)| Operation::Insert {
                 id: ElementId(first + i as u64),
                 element: Element::Slab(Slab {
+                    props: Default::default(),
                     phase: Default::default(),
                     storey: self.storey,
                     slab_type,
@@ -2868,6 +2925,14 @@ impl Editor {
             self.selection.clear();
         }
         Response::from_result(result)
+    }
+
+    /// Operationen als ein Undo-Schritt; nichts zu tun ist kein Fehler.
+    fn apply_ops(&mut self, doc: &mut Document, label: &str, ops: Vec<Operation>) -> Response {
+        if ops.is_empty() {
+            return Response::redraw();
+        }
+        Response::from_result(doc.apply(Operation::Group { label: label.into(), ops }))
     }
 
     fn flip_selection(&mut self, doc: &mut Document) -> Response {

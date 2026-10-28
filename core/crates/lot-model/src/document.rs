@@ -89,23 +89,54 @@ impl Document {
 
     /// Setzt einen Parameter auf einen neuen Wert.
     pub fn set_param(&mut self, id: ElementId, param: Param, value: f64) -> Result<(), ModelError> {
+        match self.param_op(id, param, value)? {
+            Some(op) => self.apply(op),
+            None => Ok(()),
+        }
+    }
+
+    /// Die Operation für einen neuen Parameterwert; `None`, wenn er schon gilt.
+    /// Gibt ein Tür- oder Fenstertyp das Rohbaumaß vor, bestimmt die Öffnung
+    /// es danach selbst, wenn der Typ das zulässt (ADR 0048).
+    fn param_op(&self, id: ElementId, param: Param, value: f64) -> Result<Option<Operation>, ModelError> {
         let element = self.project.elements.get(&id).ok_or(ModelError::UnknownElement(id))?;
         let old = element.param(param).ok_or(ModelError::UnknownParam { id, param })?;
         if (old - value).abs() <= TOLERANCE {
-            return Ok(());
+            return Ok(None);
         }
-        self.apply(Operation::SetParam { id, param, old, new: value })
+        let size = match param {
+            Param::OpeningWidth => Some(crate::Property::Width),
+            Param::OpeningHeight => Some(crate::Property::Height),
+            _ => None,
+        };
+        if let (Some(property), Element::Opening(o)) = (size, element)
+            && let Some(t) = o.opening_type.and_then(|t| self.project.opening_type(t))
+            && t.size(property).is_some()
+        {
+            if t.locked.contains(&property) {
+                return Err(ModelError::Invalid(format!(
+                    "{} ist im Typ {} festgelegt; im Typ ändern oder einen anderen Typ wählen",
+                    property.title(),
+                    t.name
+                )));
+            }
+            let mut new = element.clone();
+            new.set_param(param, value);
+            if let Element::Opening(n) = &mut new
+                && !n.own.contains(&property)
+            {
+                n.own.push(property);
+            }
+            return Ok(Some(Operation::Replace { id, old: element.clone(), new }));
+        }
+        Ok(Some(Operation::SetParam { id, param, old, new: value }))
     }
 
     /// Mehrere Parameter als ein Undo-Schritt, etwa dieselbe Höhe für alle gewählten Wände.
     pub fn set_params(&mut self, label: &str, changes: &[(ElementId, Param, f64)]) -> Result<(), ModelError> {
         let mut ops = Vec::new();
         for &(id, param, value) in changes {
-            let element = self.project.elements.get(&id).ok_or(ModelError::UnknownElement(id))?;
-            let old = element.param(param).ok_or(ModelError::UnknownParam { id, param })?;
-            if (old - value).abs() > TOLERANCE {
-                ops.push(Operation::SetParam { id, param, old, new: value });
-            }
+            ops.extend(self.param_op(id, param, value)?);
         }
         match ops.len() {
             0 => Ok(()),
@@ -640,6 +671,8 @@ mod tests {
         let mut d = doc();
         let err = d
             .insert(Element::Opening(Opening {
+                own: Default::default(),
+                props: Default::default(),
                 recess: None,
                 opening_type: None,
                 phase: Default::default(),
@@ -705,6 +738,8 @@ mod tests {
     fn layer_offsets_follow_alignment() {
         let p = Project::sample();
         let t = crate::WallType {
+            locked: Default::default(),
+            props: Default::default(),
             name: "t".into(),
             layers: vec![
                 crate::Layer { material: "a".into(), thickness: 0.1, function: crate::LayerFunction::Insulation },
