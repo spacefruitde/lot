@@ -385,6 +385,11 @@ void uniffi_lot_ffi_fn_method_lotdocument_set_rough_sill(uint64_t ptr, uint64_t 
 void uniffi_lot_ffi_fn_method_lotdocument_set_space(uint64_t ptr, uint64_t element, RustBuffer number, RustBuffer name, uint32_t usage, int8_t living_space, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_WALL_TYPE
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_WALL_TYPE
+void uniffi_lot_ffi_fn_method_lotdocument_set_wall_type(uint64_t ptr, uint64_t element, RustBuffer name, RustBuffer layers, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SPACES
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SPACES
 RustBuffer uniffi_lot_ffi_fn_method_lotdocument_spaces(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
@@ -398,6 +403,11 @@ RustBuffer uniffi_lot_ffi_fn_method_lotdocument_storey_areas(uint64_t ptr, RustC
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_UNDO
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_UNDO
 int8_t uniffi_lot_ffi_fn_method_lotdocument_undo(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_WALL_TYPE
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_WALL_TYPE
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_wall_type(uint64_t ptr, uint64_t element, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_WALLS
@@ -558,6 +568,18 @@ void uniffi_lot_ffi_fn_method_viewport_zoom_to_fit(uint64_t ptr, RustCallStatus 
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_INSTALL_OFFICE_STANDARD
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_INSTALL_OFFICE_STANDARD
 void uniffi_lot_ffi_fn_func_install_office_standard(RustBuffer text, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_LAYER_FUNCTIONS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_LAYER_FUNCTIONS
+RustBuffer uniffi_lot_ffi_fn_func_layer_functions(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_MATERIALS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_MATERIALS
+RustBuffer uniffi_lot_ffi_fn_func_materials(RustCallStatus *_Nonnull out_status
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_OPENING_FILLS
@@ -850,6 +872,18 @@ uint16_t uniffi_lot_ffi_checksum_func_install_office_standard(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_LAYER_FUNCTIONS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_LAYER_FUNCTIONS
+uint16_t uniffi_lot_ffi_checksum_func_layer_functions(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_MATERIALS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_MATERIALS
+uint16_t uniffi_lot_ffi_checksum_func_materials(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_OPENING_FILLS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_OPENING_FILLS
 uint16_t uniffi_lot_ffi_checksum_func_opening_fills(void
@@ -1006,6 +1040,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_space(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_WALL_TYPE
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_WALL_TYPE
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_wall_type(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SPACES
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SPACES
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_spaces(void
@@ -1021,6 +1061,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_storey_areas(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_UNDO
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_UNDO
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_undo(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_WALL_TYPE
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_WALL_TYPE
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_wall_type(void
     
 );
 #endif

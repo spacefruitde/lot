@@ -52,6 +52,9 @@ struct InspectorView: View {
                 if !model.walls.isEmpty {
                     WallSection()
                 }
+                if let type = model.wallType {
+                    WallTypeSection(info: type)
+                }
                 if model.groups.count > 0 {
                     SelectionGroupsSection()
                 }
@@ -244,6 +247,96 @@ private struct WallSection: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// Wandaufbau der gewählten Wände (ADR 0045): Schichten von außen nach innen.
+/// Jede Änderung wirkt auf alle Wände mit diesem Aufbau; die Bezugslinien bleiben stehen.
+private struct WallTypeSection: View {
+    @Environment(AppModel.self) private var model
+    let info: WallTypeInfo
+    @State private var name = ""
+    @State private var thickness: [String] = []
+
+    var body: some View {
+        Section("Wandaufbau · wirkt auf \(info.uses) Wand\(info.uses == 1 ? "" : "e")") {
+            TextField("Name", text: $name)
+                .onSubmit { if name != info.name { model.setWallType(info, name: name) } }
+            ForEach(Array(info.layers.enumerated()), id: \.offset) { index, layer in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Picker("Material", selection: Binding(get: { layer.material }, set: { set(index) { $0.material = $1 }($0) })) {
+                            if !AppModel.materials.contains(where: { $0.command == layer.material }) {
+                                Text(layer.material).tag(layer.material)
+                            }
+                            ForEach(AppModel.materials, id: \.command) { Text($0.title).tag($0.command) }
+                        }
+                        .labelsHidden()
+                        TextField("", text: Binding(get: { index < thickness.count ? thickness[index] : "" }, set: { if index < thickness.count { thickness[index] = $0 } }))
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 56)
+                            .onSubmit {
+                                guard index < thickness.count, let v = Double(thickness[index].replacingOccurrences(of: ",", with: ".")) else { return }
+                                set(index) { $0.thickness = $1 }(v / 100)
+                            }
+                        Text("cm").foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Picker("Funktion", selection: Binding(get: { Int(layer.function) }, set: { set(index) { $0.function = UInt32($1) }($0) })) {
+                            ForEach(Array(AppModel.functions.enumerated()), id: \.offset) { Text($0.element).tag($0.offset) }
+                        }
+                        .labelsHidden()
+                        Spacer()
+                        Button { move(index, by: -1) } label: { Image(systemName: "arrow.up") }
+                            .disabled(index == 0)
+                        Button { move(index, by: 1) } label: { Image(systemName: "arrow.down") }
+                            .disabled(index == info.layers.count - 1)
+                        Button { remove(index) } label: { Image(systemName: "minus.circle") }
+                            .disabled(info.layers.count == 1)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            Button("Schicht hinzufügen") {
+                var layers = info.layers
+                layers.append(LayerInfo(material: "putz", thickness: 0.015, function: 4))
+                model.setWallType(info, layers: layers)
+            }
+            Text("Von außen (linke Seite in Zeichenrichtung) nach innen. Dicke \(cm(info.layers.reduce(0) { $0 + $1.thickness })) cm.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onAppear(perform: load)
+        .onChange(of: info) { load() }
+    }
+
+    private func load() {
+        name = info.name
+        thickness = info.layers.map { cm($0.thickness) }
+    }
+
+    private func cm(_ m: Double) -> String {
+        (m * 100).formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "de_DE")))
+    }
+
+    private func set<T>(_ index: Int, _ change: @escaping (inout LayerInfo, T) -> Void) -> (T) -> Void {
+        { value in
+            var layers = info.layers
+            change(&layers[index], value)
+            model.setWallType(info, layers: layers)
+        }
+    }
+
+    private func move(_ index: Int, by delta: Int) {
+        var layers = info.layers
+        layers.swapAt(index, index + delta)
+        model.setWallType(info, layers: layers)
+    }
+
+    private func remove(_ index: Int) {
+        var layers = info.layers
+        layers.remove(at: index)
+        model.setWallType(info, layers: layers)
     }
 }
 

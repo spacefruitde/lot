@@ -27,6 +27,11 @@ final class AppModel {
     private(set) var walls: [WallInfo] = []
     /// Gewählter Anschluss (Doppelklick an einem Wandknoten), ADR 0045.
     private(set) var junction: JunctionInfo?
+    /// Wandaufbau der gewählten Wände, wenn sie alle denselben haben.
+    private(set) var wallType: WallTypeInfo?
+    /// Materialien des Bürostandards und Schichtfunktionen für den Wandaufbau.
+    static let materials = Lot.materials()
+    static let functions = layerFunctions()
     /// Die sechs Lagen der Bezugslinie.
     static let alignments = wallAlignments()
     /// Arten der Oberkante: Geschoss, Decke, Dach, fest.
@@ -127,6 +132,8 @@ final class AppModel {
         doors = state.selection.isEmpty ? [] : document.doors(ids: state.selection)
         walls = state.selection.isEmpty ? [] : document.walls(ids: state.selection)
         openings = state.selection.isEmpty ? [] : document.openings(ids: state.selection)
+        let types = Set(walls.map(\.wallType))
+        wallType = types.count == 1 ? document.wallType(element: types.first!) : nil
         junction = viewport.junction()
         let phases = Set(state.selection.compactMap { document.elementPhase(element: $0) })
         selectionPhase = phases.isEmpty ? nil : (phases.count == 1 ? Int(phases.first!) : -1)
@@ -171,6 +178,21 @@ final class AppModel {
     func setRoughSill(_ value: Double, for element: UInt64) {
         do {
             try document.setRoughSill(element: element, value: value)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+        if let viewport {
+            stats.rebuildMs = viewport.refresh()
+        }
+        refresh()
+        updateViewState()
+        requestRedraw?()
+    }
+
+    /// Ändert Namen und Schichten eines Wandaufbaus in einem Undo-Schritt.
+    func setWallType(_ info: WallTypeInfo, name: String? = nil, layers: [LayerInfo]? = nil) {
+        do {
+            try document.setWallType(element: info.element, name: name ?? info.name, layers: layers ?? info.layers)
         } catch {
             errorMessage = Self.message(for: error)
         }

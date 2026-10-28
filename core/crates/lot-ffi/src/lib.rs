@@ -199,6 +199,53 @@ pub struct OpeningInfo {
     pub type_uses: u32,
 }
 
+/// Schichtfunktionen in der Reihenfolge von `LayerInfo::function`.
+const FUNCTIONS: [(lot_model::LayerFunction, &str); 5] = [
+    (lot_model::LayerFunction::Structure, "Tragschicht"),
+    (lot_model::LayerFunction::Insulation, "Dämmung"),
+    (lot_model::LayerFunction::AirGap, "Luftschicht"),
+    (lot_model::LayerFunction::Service, "Installationsebene"),
+    (lot_model::LayerFunction::Finish, "Putz oder Bekleidung"),
+];
+
+/// Die Schichtfunktionen zur Auswahl.
+#[uniffi::export]
+pub fn layer_functions() -> Vec<String> {
+    FUNCTIONS.iter().map(|(_, t)| (*t).into()).collect()
+}
+
+/// Die Materialien des Bürostandards: Titel ist der Name, `command` der Schlüssel.
+#[uniffi::export]
+pub fn materials() -> Vec<ChoiceItem> {
+    let mut list: Vec<ChoiceItem> = lot_plan::standard::OfficeStandard::default_standard()
+        .materials
+        .iter()
+        .map(|(key, m)| ChoiceItem { title: m.name.clone(), command: key.clone() })
+        .collect();
+    list.sort_by(|a, b| a.title.cmp(&b.title));
+    list
+}
+
+/// Eine Schicht eines Wandaufbaus.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct LayerInfo {
+    /// Schlüssel des Materials im Bürostandard.
+    pub material: String,
+    pub thickness: f64,
+    /// Index in [`layer_functions`].
+    pub function: u32,
+}
+
+/// Ein Wandaufbau mit seinen Schichten von außen nach innen.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct WallTypeInfo {
+    pub element: u64,
+    pub name: String,
+    pub layers: Vec<LayerInfo>,
+    /// Wie viele Wände den Aufbau nutzen.
+    pub uses: u32,
+}
+
 /// Eine Wand für den Inspektor.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct WallInfo {
@@ -207,6 +254,7 @@ pub struct WallInfo {
     pub alignment: u32,
     /// Index in [`wall_tops`].
     pub top: u32,
+    pub wall_type: u64,
     /// Oberkante über OKFF des Geschosses, wie sie sich ergibt.
     pub top_height: f64,
 }
@@ -498,6 +546,42 @@ impl LotDocument {
         notices
     }
 
+    /// Ein Wandaufbau mit seinen Schichten.
+    pub fn wall_type(&self, element: u64) -> Option<WallTypeInfo> {
+        let doc = self.lock();
+        let p = doc.project();
+        let t = p.wall_type(ElementId(element))?;
+        let layers = t
+            .layers
+            .iter()
+            .map(|l| LayerInfo {
+                material: l.material.clone(),
+                thickness: l.thickness,
+                function: FUNCTIONS.iter().position(|(f, _)| *f == l.function).unwrap_or(0) as u32,
+            })
+            .collect();
+        let uses = p.walls().filter(|(_, w)| w.wall_type.0 == element).count() as u32;
+        Some(WallTypeInfo { element, name: t.name.clone(), layers, uses })
+    }
+
+    /// Ändert Namen und Schichten eines Wandaufbaus in einem Schritt. Die
+    /// Bezugslinien der Wände bleiben stehen (ADR 0045).
+    pub fn set_wall_type(&self, element: u64, name: String, layers: Vec<LayerInfo>) -> Result<(), LotError> {
+        let mut doc = self.lock();
+        let new = lot_model::WallType {
+            name: name.trim().into(),
+            layers: layers
+                .into_iter()
+                .map(|l| lot_model::Layer {
+                    material: l.material,
+                    thickness: l.thickness,
+                    function: FUNCTIONS.get(l.function as usize).map_or(lot_model::LayerFunction::Finish, |f| f.0),
+                })
+                .collect(),
+        };
+        doc.replace(ElementId(element), lot_model::Element::WallType(new)).map_err(LotError::from_display)
+    }
+
     /// Die Wände unter den Elementen `ids`.
     pub fn walls(&self, ids: Vec<u64>) -> Vec<WallInfo> {
         let doc = self.lock();
@@ -507,7 +591,13 @@ impl LotDocument {
                 let alignment = lot_model::WallAlignment::ALL.iter().position(|a| *a == w.alignment)? as u32;
                 let p = doc.project();
                 let top_height = p.wall_extent(w)?.1 - p.storey(w.storey)?.elevation;
-                Some(WallInfo { element: *id, alignment, top: w.top.mode() as u32, top_height })
+                Some(WallInfo {
+                    element: *id,
+                    alignment,
+                    top: w.top.mode() as u32,
+                    top_height,
+                    wall_type: w.wall_type.0,
+                })
             })
             .collect()
     }
@@ -679,6 +769,32 @@ mod tests {
         let LotError::Failed(message) = doc.set_param(4, ParamKind::OpeningWidth, 21.5).unwrap_err();
         assert!(message.contains("ragt seitlich aus der Wand"), "{message}");
         assert_eq!(value(&doc, ParamKind::OpeningWidth), 1.5);
+    }
+
+    #[test]
+    fn wall_type_layers_change_in_one_step() {
+        let doc = LotDocument::new_sample();
+        let wall = doc.walls(vec![3]).pop().unwrap();
+        let mut info = doc.wall_type(wall.wall_type).unwrap();
+        assert_eq!(info.uses, 1);
+        let before = doc.lock().project().wall(ElementId(3)).unwrap().start;
+        info.layers[0].thickness = 0.02;
+        info.layers.insert(0, LayerInfo { material: "putz".into(), thickness: 0.01, function: 4 });
+        doc.set_wall_type(info.element, "Neu".into(), info.layers.clone()).unwrap();
+        let after = doc.wall_type(info.element).unwrap();
+        assert_eq!((after.name.as_str(), after.layers.len()), ("Neu", info.layers.len()));
+        // Die Bezugslinie bleibt stehen.
+        assert_eq!(doc.lock().project().wall(ElementId(3)).unwrap().start, before);
+        let LotError::Failed(message) = doc
+            .set_wall_type(
+                info.element,
+                "Neu".into(),
+                vec![LayerInfo { material: "putz".into(), thickness: 0.0, function: 4 }],
+            )
+            .unwrap_err();
+        assert!(message.contains("1 mm"), "{message}");
+        assert!(doc.undo().unwrap());
+        assert_eq!(doc.wall_type(info.element).unwrap().layers.len(), info.layers.len() - 1);
     }
 
     #[test]

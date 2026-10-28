@@ -731,6 +731,12 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func setSpace(element: UInt64, number: String, name: String, usage: UInt32, livingSpace: Bool) throws 
     
     /**
+     * Ändert Namen und Schichten eines Wandaufbaus in einem Schritt. Die
+     * Bezugslinien der Wände bleiben stehen (ADR 0045).
+     */
+    func setWallType(element: UInt64, name: String, layers: [LayerInfo]) throws 
+    
+    /**
      * Raumdaten der gewählten Elemente, die Räume sind.
      */
     func spaces(ids: [UInt64])  -> [SpaceInfo]
@@ -741,6 +747,11 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func storeyAreas()  -> [StoreyAreaInfo]
     
     func undo() throws  -> Bool
+    
+    /**
+     * Ein Wandaufbau mit seinen Schichten.
+     */
+    func wallType(element: UInt64)  -> WallTypeInfo?
     
     /**
      * Die Wände unter den Elementen `ids`.
@@ -1115,6 +1126,21 @@ open func setSpace(element: UInt64, number: String, name: String, usage: UInt32,
 }
     
     /**
+     * Ändert Namen und Schichten eines Wandaufbaus in einem Schritt. Die
+     * Bezugslinien der Wände bleiben stehen (ADR 0045).
+     */
+open func setWallType(element: UInt64, name: String, layers: [LayerInfo])throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_set_wall_type(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),
+        FfiConverterString.lower(name),
+        FfiConverterSequenceTypeLayerInfo.lower(layers),uniffiCallStatus
+    )
+}
+}
+    
+    /**
      * Raumdaten der gewählten Elemente, die Räume sind.
      */
 open func spaces(ids: [UInt64]) -> [SpaceInfo]  {
@@ -1144,6 +1170,19 @@ open func undo()throws  -> Bool  {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_lotdocument_undo(
             self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Ein Wandaufbau mit seinen Schichten.
+     */
+open func wallType(element: UInt64) -> WallTypeInfo?  {
+    return try!  FfiConverterOptionTypeWallTypeInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_wall_type(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),uniffiCallStatus
     )
 })
 }
@@ -2306,6 +2345,79 @@ public func FfiConverterTypeJunctionInfo_lower(_ value: JunctionInfo) -> RustBuf
 
 
 /**
+ * Eine Schicht eines Wandaufbaus.
+ */
+public struct LayerInfo: Equatable, Hashable {
+    /**
+     * Schlüssel des Materials im Bürostandard.
+     */
+    public var material: String
+    public var thickness: Double
+    /**
+     * Index in [`layer_functions`].
+     */
+    public var function: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Schlüssel des Materials im Bürostandard.
+         */material: String, thickness: Double, 
+        /**
+         * Index in [`layer_functions`].
+         */function: UInt32) {
+        self.material = material
+        self.thickness = thickness
+        self.function = function
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension LayerInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLayerInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LayerInfo {
+        return
+            try LayerInfo(
+                material: FfiConverterString.read(from: &buf), 
+                thickness: FfiConverterDouble.read(from: &buf), 
+                function: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LayerInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.material, into: &buf)
+        FfiConverterDouble.write(value.thickness, into: &buf)
+        FfiConverterUInt32.write(value.function, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLayerInfo_lift(_ buf: RustBuffer) throws -> LayerInfo {
+    return try FfiConverterTypeLayerInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLayerInfo_lower(_ value: LayerInfo) -> RustBuffer {
+    return FfiConverterTypeLayerInfo.lower(value)
+}
+
+
+/**
  * Eine Öffnung mit beiden Brüstungshöhen für den Inspektor (ADR 0047).
  */
 public struct OpeningInfo: Equatable, Hashable {
@@ -2940,6 +3052,7 @@ public struct WallInfo: Equatable, Hashable {
      * Index in [`wall_tops`].
      */
     public var top: UInt32
+    public var wallType: UInt64
     /**
      * Oberkante über OKFF des Geschosses, wie sie sich ergibt.
      */
@@ -2953,13 +3066,14 @@ public struct WallInfo: Equatable, Hashable {
          */alignment: UInt32, 
         /**
          * Index in [`wall_tops`].
-         */top: UInt32, 
+         */top: UInt32, wallType: UInt64, 
         /**
          * Oberkante über OKFF des Geschosses, wie sie sich ergibt.
          */topHeight: Double) {
         self.element = element
         self.alignment = alignment
         self.top = top
+        self.wallType = wallType
         self.topHeight = topHeight
     }
 
@@ -2982,6 +3096,7 @@ public struct FfiConverterTypeWallInfo: FfiConverterRustBuffer {
                 element: FfiConverterUInt64.read(from: &buf), 
                 alignment: FfiConverterUInt32.read(from: &buf), 
                 top: FfiConverterUInt32.read(from: &buf), 
+                wallType: FfiConverterUInt64.read(from: &buf), 
                 topHeight: FfiConverterDouble.read(from: &buf)
         )
     }
@@ -2990,6 +3105,7 @@ public struct FfiConverterTypeWallInfo: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.element, into: &buf)
         FfiConverterUInt32.write(value.alignment, into: &buf)
         FfiConverterUInt32.write(value.top, into: &buf)
+        FfiConverterUInt64.write(value.wallType, into: &buf)
         FfiConverterDouble.write(value.topHeight, into: &buf)
     }
 }
@@ -3007,6 +3123,77 @@ public func FfiConverterTypeWallInfo_lift(_ buf: RustBuffer) throws -> WallInfo 
 #endif
 public func FfiConverterTypeWallInfo_lower(_ value: WallInfo) -> RustBuffer {
     return FfiConverterTypeWallInfo.lower(value)
+}
+
+
+/**
+ * Ein Wandaufbau mit seinen Schichten von außen nach innen.
+ */
+public struct WallTypeInfo: Equatable, Hashable {
+    public var element: UInt64
+    public var name: String
+    public var layers: [LayerInfo]
+    /**
+     * Wie viele Wände den Aufbau nutzen.
+     */
+    public var uses: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, name: String, layers: [LayerInfo], 
+        /**
+         * Wie viele Wände den Aufbau nutzen.
+         */uses: UInt32) {
+        self.element = element
+        self.name = name
+        self.layers = layers
+        self.uses = uses
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension WallTypeInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWallTypeInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WallTypeInfo {
+        return
+            try WallTypeInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                layers: FfiConverterSequenceTypeLayerInfo.read(from: &buf), 
+                uses: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WallTypeInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterSequenceTypeLayerInfo.write(value.layers, into: &buf)
+        FfiConverterUInt32.write(value.uses, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWallTypeInfo_lift(_ buf: RustBuffer) throws -> WallTypeInfo {
+    return try FfiConverterTypeWallTypeInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWallTypeInfo_lower(_ value: WallTypeInfo) -> RustBuffer {
+    return FfiConverterTypeWallTypeInfo.lower(value)
 }
 
 
@@ -3565,6 +3752,30 @@ fileprivate struct FfiConverterOptionTypeJunctionInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeWallTypeInfo: FfiConverterRustBuffer {
+    typealias SwiftType = WallTypeInfo?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeWallTypeInfo.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeWallTypeInfo.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceUInt64: FfiConverterRustBuffer {
     typealias SwiftType = [UInt64]
 
@@ -3757,6 +3968,31 @@ fileprivate struct FfiConverterSequenceTypeJunctionArmInfo: FfiConverterRustBuff
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeJunctionArmInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLayerInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [LayerInfo]
+
+    public static func write(_ value: [LayerInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLayerInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LayerInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LayerInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLayerInfo.read(from: &buf))
         }
         return seq
     }
@@ -3974,6 +4210,26 @@ public func installOfficeStandard(text: String)throws   {try rustCallWithError(F
 }
 }
 /**
+ * Die Schichtfunktionen zur Auswahl.
+ */
+public func layerFunctions() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_layer_functions(uniffiCallStatus
+    )
+})
+}
+/**
+ * Die Materialien des Bürostandards: Titel ist der Name, `command` der Schlüssel.
+ */
+public func materials() -> [ChoiceItem]  {
+    return try!  FfiConverterSequenceTypeChoiceItem.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_materials(uniffiCallStatus
+    )
+})
+}
+/**
  * Füllungen einer Öffnung zur Auswahl (ADR 0047), in der Reihenfolge von `OpeningInfo::fill`.
  */
 public func openingFills() -> [ChoiceItem]  {
@@ -4030,6 +4286,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_lot_ffi_checksum_func_install_office_standard() != 65201) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_layer_functions() != 1756) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_materials() != 45833) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_func_opening_fills() != 62212) {
@@ -4110,6 +4372,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_set_space() != 41848) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_set_wall_type() != 38831) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_lotdocument_spaces() != 30951) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4117,6 +4382,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_undo() != 9472) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_wall_type() != 18116) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_walls() != 16345) {
