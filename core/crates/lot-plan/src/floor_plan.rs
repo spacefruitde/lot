@@ -256,7 +256,12 @@ pub(crate) fn draw_openings(
             let Some((o0, o1)) = project.opening_span(o) else { continue };
             let (a, b) = (o.offset, o.offset + o.width);
             if o0 > z_cut {
-                // Über der Schnittebene: Umriss gestrichelt.
+                // Über der Schnittebene: Umriss gestrichelt, bei Nischen nur so tief wie die Nische.
+                let (left, right) = match o.recess {
+                    Some(lot_model::Recess { side: WallSide::Left, depth }) => (left, left - depth),
+                    Some(lot_model::Recess { side: WallSide::Right, depth }) => (right + depth, right),
+                    None => (left, right),
+                };
                 let ring = vec![at(a, left), at(b, left), at(b, right), at(a, right), at(a, left)];
                 objects.push(line(ring, style.pens.hidden, true));
                 continue;

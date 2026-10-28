@@ -207,7 +207,17 @@ fn regions_at(project: &Project, storey: ElementId, z: f64, with_openings: bool)
         for (_, o) in project.openings_in(id) {
             let Some((o0, o1)) = project.opening_span(o) else { continue };
             if o0 <= z && z < o1 {
-                let hole = wall_section(wall, (o.offset, o.offset + o.width), (left_face + 0.01, right_face - 0.01));
+                // Eine Nische reicht nur von ihrer Seite so tief wie angegeben in die Wand.
+                let across = match o.recess {
+                    Some(lot_model::Recess { side: lot_model::WallSide::Left, depth }) => {
+                        (left_face + 0.01, left_face - depth)
+                    }
+                    Some(lot_model::Recess { side: lot_model::WallSide::Right, depth }) => {
+                        (right_face + depth, right_face - 0.01)
+                    }
+                    None => (left_face + 0.01, right_face - 0.01),
+                };
+                let hole = wall_section(wall, (o.offset, o.offset + o.width), across);
                 for r in regions.iter_mut() {
                     if r.function.is_some() {
                         r.area = r.area.difference(&hole);

@@ -2335,6 +2335,14 @@ public struct OpeningInfo: Equatable, Hashable {
      */
     public var typeName: String
     /**
+     * Tiefe einer Nische; fehlt bei Öffnungen durch die ganze Wand.
+     */
+    public var recessDepth: Double?
+    /**
+     * Die Nische liegt auf der linken Wandseite (in Zeichenrichtung).
+     */
+    public var recessLeft: Bool
+    /**
      * Wie viele Öffnungen den Typ nutzen.
      */
     public var typeUses: UInt32
@@ -2361,6 +2369,12 @@ public struct OpeningInfo: Equatable, Hashable {
          * Typ mit Kennzeichen, etwa „F1 · Fenster“; leer ohne Typ.
          */typeName: String, 
         /**
+         * Tiefe einer Nische; fehlt bei Öffnungen durch die ganze Wand.
+         */recessDepth: Double?, 
+        /**
+         * Die Nische liegt auf der linken Wandseite (in Zeichenrichtung).
+         */recessLeft: Bool, 
+        /**
          * Wie viele Öffnungen den Typ nutzen.
          */typeUses: UInt32) {
         self.element = element
@@ -2370,6 +2384,8 @@ public struct OpeningInfo: Equatable, Hashable {
         self.floorBuildUp = floorBuildUp
         self.sillConnection = sillConnection
         self.typeName = typeName
+        self.recessDepth = recessDepth
+        self.recessLeft = recessLeft
         self.typeUses = typeUses
     }
 
@@ -2396,6 +2412,8 @@ public struct FfiConverterTypeOpeningInfo: FfiConverterRustBuffer {
                 floorBuildUp: FfiConverterOptionDouble.read(from: &buf), 
                 sillConnection: FfiConverterDouble.read(from: &buf), 
                 typeName: FfiConverterString.read(from: &buf), 
+                recessDepth: FfiConverterOptionDouble.read(from: &buf), 
+                recessLeft: FfiConverterBool.read(from: &buf), 
                 typeUses: FfiConverterUInt32.read(from: &buf)
         )
     }
@@ -2408,6 +2426,8 @@ public struct FfiConverterTypeOpeningInfo: FfiConverterRustBuffer {
         FfiConverterOptionDouble.write(value.floorBuildUp, into: &buf)
         FfiConverterDouble.write(value.sillConnection, into: &buf)
         FfiConverterString.write(value.typeName, into: &buf)
+        FfiConverterOptionDouble.write(value.recessDepth, into: &buf)
+        FfiConverterBool.write(value.recessLeft, into: &buf)
         FfiConverterUInt32.write(value.typeUses, into: &buf)
     }
 }

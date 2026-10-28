@@ -430,6 +430,7 @@ fn opening_in_arc_is_cut_radially() {
     p.elements.insert(
         id,
         Element::Opening(lot_model::Opening {
+            recess: None,
             opening_type: None,
             phase: Default::default(),
             host: arc,
@@ -571,6 +572,7 @@ fn two_spaces() -> (Project, ElementId) {
     p.elements.insert(
         id,
         Element::Opening(lot_model::Opening {
+            recess: None,
             opening_type: None,
             phase: Default::default(),
             host: split,

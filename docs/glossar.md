@@ -38,6 +38,7 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Unterer Anschluss | `OpeningType::sill_connection` | | von der Rohbaubrüstung bis zur fertigen Brüstung (Fensterbank, Ausgleich) |
 | Tür- und Fenstertyp | `OpeningType` | IfcDoorType, IfcWindowType | füllt eine Öffnung, mit Kennzeichen wie F1 |
 | Rohbauöffnung | `Project::opening_span` | | Unter- und Oberkante der Öffnung im Rohbau |
+| Nische | `Recess` | | Öffnung, die nur von einer Seite so tief wie angegeben in die Wand reicht |
 | Sturz, Sturzhöhe | `head_height` | | |
 | Anschlag (Fenster, Tür) | `Rebate` | | Falz, an dem der Flügel anschlägt |
 | Anschlag DIN links, DIN rechts | `Handing` | | nach DIN 107: Bänder links oder rechts, gesehen von der Seite, zu der die Tür aufschlägt |

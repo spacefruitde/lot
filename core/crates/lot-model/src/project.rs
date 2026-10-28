@@ -642,6 +642,7 @@ impl Project {
         p.elements.insert(
             ElementId(4),
             Element::Opening(Opening {
+                recess: None,
                 opening_type: None,
                 phase: Default::default(),
                 host: ElementId(3),

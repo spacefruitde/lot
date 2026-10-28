@@ -283,11 +283,33 @@ private struct OpeningRows: View {
     let opening: OpeningInfo
     @State private var rough = ""
     @State private var connection = ""
+    @State private var recess = ""
 
     var body: some View {
         Picker("Füllung", selection: Binding(get: { Int(opening.fill) }, set: { model.run(AppModel.fills[$0].command) })) {
             ForEach(Array(AppModel.fills.enumerated()), id: \.offset) { index, item in
                 Text(item.title).tag(index)
+            }
+        }
+        if let depth = opening.recessDepth {
+            LabeledContent("Nischentiefe") {
+                HStack(spacing: 4) {
+                    TextField("", text: $recess)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 64)
+                        .onSubmit {
+                            if let v = number(recess) { model.run("SetRecess(\(opening.recessLeft ? "Left" : "Right"),\(v))") }
+                        }
+                    Text("m").foregroundStyle(.secondary)
+                }
+            }
+            .onAppear { recess = german(depth) }
+            .onChange(of: opening.recessDepth) { recess = german(opening.recessDepth ?? 0) }
+            Picker("Nische auf der", selection: Binding(get: { opening.recessLeft }, set: { left in
+                model.run("SetRecess(\(left ? "Left" : "Right"),\(depth))")
+            })) {
+                Text("linken Wandseite").tag(true)
+                Text("rechten Wandseite").tag(false)
             }
         }
         if opening.roughSill != nil {

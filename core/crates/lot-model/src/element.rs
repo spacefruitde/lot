@@ -668,9 +668,19 @@ pub struct Opening {
     /// Tür- oder Fenstertyp, der die Öffnung füllt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub opening_type: Option<ElementId>,
+    /// Nische statt Durchgang: nur so tief in die Wand.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recess: Option<Recess>,
     /// Bestand, Abbruch oder Neubau (2.05).
     #[serde(default, skip_serializing_if = "Phase::is_new")]
     pub phase: Phase,
+}
+
+/// Nische (ADR 0047): Die Öffnung reicht von der Seite `side` nur `depth` tief in die Wand.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Recess {
+    pub side: WallSide,
+    pub depth: f64,
 }
 
 /// Tür- oder Fenstertyp (IfcDoorType, IfcWindowType). Er füllt eine Öffnung,

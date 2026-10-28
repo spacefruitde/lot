@@ -153,6 +153,7 @@ fn delete_removes_wall_with_openings() {
     let (mut doc, mut ed) = house();
     let inner = wall_with(&doc, Point2::new(3.0, 0.0), Point2::new(3.0, 4.0));
     doc.insert(lot_model::Element::Opening(Opening {
+        recess: None,
         opening_type: None,
         phase: Default::default(),
         host: inner,
@@ -180,6 +181,7 @@ fn flip_keeps_openings_in_place() {
     let bottom = wall_with(&doc, Point2::new(6.0, 0.0), Point2::new(0.0, 0.0));
     let id = doc
         .insert(lot_model::Element::Opening(Opening {
+            recess: None,
             opening_type: None,
             phase: Default::default(),
             host: bottom,
@@ -1306,6 +1308,7 @@ fn flip_keeps_the_wall_and_swaps_its_layers() {
         doc.project().walls().find(|(_, w)| w.start.y.abs() < 1.0 && w.end.y.abs() < 1.0).map(|(id, _)| id).unwrap();
     let door = doc
         .insert(lot_model::Element::Opening(Opening {
+            recess: None,
             opening_type: None,
             phase: Default::default(),
             host: bottom,
@@ -1399,6 +1402,7 @@ fn house_with_window() -> (Document, Editor, ElementId) {
         doc.project().walls().find(|(_, w)| w.start.y.abs() < 1e-9 && w.end.y.abs() < 1e-9).map(|(id, _)| id).unwrap();
     let id = doc
         .insert(lot_model::Element::Opening(Opening {
+            recess: None,
             phase: Default::default(),
             host: bottom,
             offset: 1.0,
@@ -1459,6 +1463,93 @@ fn fill_changes_without_touching_the_opening() {
         (plain.offset, plain.width, plain.height, plain.sill_height),
         (before.offset, before.width, before.height, before.sill_height)
     );
-    ed.run(&mut doc, &Command::SetOpeningFill(1));
+    ed.run(&mut doc, &Command::SetOpeningFill(2));
     assert!(matches!(opening(&doc, id).kind, lot_model::OpeningKind::Door(_)));
+}
+
+#[test]
+fn a_niche_cuts_only_part_of_the_wall() {
+    let (mut doc, mut ed, id) = house_with_window();
+    let host = opening(&doc, id).host;
+    let area = |doc: &Document| -> f64 {
+        lot_geom::layer_regions(doc.project(), ed_storey(doc), 1.2)
+            .iter()
+            .filter(|r| r.element == host)
+            .map(|r| r.area.area())
+            .sum()
+    };
+    // Das Fenster geht durch die ganze Wand (36 cm).
+    let solid = area(&doc) + 1.26 * 0.36;
+    ed.selection = vec![id];
+    ed.run(&mut doc, &Command::SetOpeningFill(1));
+    let o = opening(&doc, id);
+    assert_eq!(o.recess.map(|r| r.depth), Some(0.1));
+    // Als Nische fehlen nur 1,26 × 0,10 m.
+    assert!((solid - area(&doc) - 1.26 * 0.1).abs() < 1e-6, "{} {}", solid, area(&doc));
+    ed.run(&mut doc, &Command::SetRecess(lot_model::WallSide::Right, 0.05));
+    assert!((solid - area(&doc) - 1.26 * 0.05).abs() < 1e-6);
+    // Zu tief: Die Nische würde die Wand durchstoßen.
+    let r = ed.run(&mut doc, &Command::SetRecess(lot_model::WallSide::Right, 0.5));
+    assert!(r.error.is_some());
+}
+
+fn ed_storey(doc: &Document) -> ElementId {
+    doc.project().storeys()[0].0
+}
+
+#[test]
+fn doors_are_placed_by_distance_or_centered() {
+    let (mut doc, mut ed) = house();
+    let bottom = doc
+        .project()
+        .walls()
+        .find(|(_, w)| w.start == Point2::new(6.0, 0.0) && w.end == Point2::new(0.0, 0.0))
+        .map(|(id, _)| id)
+        .unwrap();
+    ed.run(&mut doc, &Command::DoorTool);
+    // Anschläge: Innenfläche der Ostwand (s = 0,18) und Ostfläche der Mittelwand (s = 2,82).
+    ed.pointer_moved(doc.project(), input(4.52, 0.05));
+    let tip = ed.overlay(doc.project()).tip.map(|t| t.1);
+    assert_eq!(tip.as_deref(), Some("mittig"));
+    assert_eq!(ed.overlay(doc.project()).temp_dims.len(), 2);
+    ed.pointer_moved(doc.project(), input(5.0, 0.05));
+    for c in "0,30".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    ed.key(&mut doc, Key::Enter);
+    let first: Vec<Opening> = openings(&doc, bottom);
+    assert_eq!(first.len(), 1);
+    assert!((first[0].offset - 0.48).abs() < 1e-9, "{}", first[0].offset);
+    // ⇥: Abstand vom Anschlag dahinter; Leertaste dreht die Tür weiter.
+    ed.pointer_moved(doc.project(), input(4.0, 0.05));
+    ed.key(&mut doc, Key::Tab);
+    ed.key(&mut doc, Key::Char(' '));
+    for c in "0,10".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    let r = ed.key(&mut doc, Key::Enter);
+    assert!(r.error.is_none(), "{:?}", r.error);
+    let mut all = openings(&doc, bottom);
+    all.sort_by(|a, b| a.offset.total_cmp(&b.offset));
+    assert_eq!(all.len(), 2);
+    assert!((all[1].offset - (2.82 - 0.1 - 1.01)).abs() < 1e-9, "{}", all[1].offset);
+}
+
+#[test]
+fn space_turns_the_door_before_placing() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::DoorTool);
+    ed.pointer_moved(doc.project(), input(1.5, 0.05));
+    let kind = |ed: &Editor, doc: &Document| match ed.placed_opening(doc.project(), Point2::new(1.5, 0.05), 0.15) {
+        Some(Opening { kind: lot_model::OpeningKind::Door(d), .. }) => (d.opens_to, d.hinge_at_end()),
+        _ => panic!("keine Tür"),
+    };
+    let mut seen = vec![kind(&ed, &doc)];
+    for _ in 0..3 {
+        ed.key(&mut doc, Key::Char(' '));
+        seen.push(kind(&ed, &doc));
+    }
+    seen.sort_by_key(|(s, e)| (*s == lot_model::WallSide::Left, *e));
+    seen.dedup();
+    assert_eq!(seen.len(), 4, "alle vier Lagen");
 }

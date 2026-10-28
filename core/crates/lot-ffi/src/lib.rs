@@ -191,6 +191,10 @@ pub struct OpeningInfo {
     pub sill_connection: f64,
     /// Typ mit Kennzeichen, etwa „F1 · Fenster“; leer ohne Typ.
     pub type_name: String,
+    /// Tiefe einer Nische; fehlt bei Öffnungen durch die ganze Wand.
+    pub recess_depth: Option<f64>,
+    /// Die Nische liegt auf der linken Wandseite (in Zeichenrichtung).
+    pub recess_left: bool,
     /// Wie viele Öffnungen den Typ nutzen.
     pub type_uses: u32,
 }
@@ -445,7 +449,9 @@ impl LotDocument {
                 let ty = o.opening_type.and_then(|t| p.opening_type(t));
                 Some(OpeningInfo {
                     element: *id,
-                    fill: lot_edit::openings::fill_index(&o.kind) as u32,
+                    fill: lot_edit::openings::fill_index(o) as u32,
+                    recess_depth: o.recess.map(|r| r.depth),
+                    recess_left: o.recess.is_none_or(|r| r.side == lot_model::WallSide::Left),
                     sill: o.sill_height,
                     rough_sill: p.rough_sill(o),
                     floor_build_up: p.floor_build_up(o),
