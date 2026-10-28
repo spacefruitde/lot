@@ -1240,6 +1240,20 @@ impl Editor {
                 let ops = sheets::delete_sheet_ops(doc.project(), ElementId(*sheet));
                 self.apply_ops(doc, "Planblatt löschen", ops)
             }
+            Command::SetStoreyHeight(id, height) => {
+                if *height <= 0.0 {
+                    return Response {
+                        error: Some("Die Geschosshöhe muss größer als null sein".into()),
+                        ..Response::redraw()
+                    };
+                }
+                let ops = navigation::storey_height_ops(doc.project(), ElementId(*id), *height);
+                self.apply_ops(doc, "Geschosshöhe", ops)
+            }
+            Command::SetStoreyElevation(id, elevation) => {
+                let ops = navigation::storey_elevation_ops(doc.project(), ElementId(*id), *elevation);
+                self.apply_ops(doc, "Höhe des Geschosses", ops)
+            }
             Command::SetHome(view, sheet) => {
                 match sheets::set_home_ops(doc.project(), ElementId(*view), ElementId(*sheet)) {
                     Ok(ops) => self.apply_ops(doc, "Heimat wählen", ops),

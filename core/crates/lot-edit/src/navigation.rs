@@ -459,3 +459,52 @@ pub fn facade_direction(project: &Project, look: (f64, f64)) -> &'static str {
     let names = ["Nord", "Nordost", "Ost", "Südost", "Süd", "Südwest", "West", "Nordwest"];
     names[((bearing.rem_euclid(360.0) + 22.5) / 45.0) as usize % 8]
 }
+
+/// Geschosshöhe ändern: Die Geschosse darüber rücken um die Differenz mit,
+/// damit OKFF bis OKFF darüber stimmt.
+pub fn storey_height_ops(project: &Project, storey: ElementId, height: f64) -> Vec<lot_model::Operation> {
+    let Some(s) = project.storey(storey) else { return Vec::new() };
+    let delta = height - s.height;
+    if delta.abs() < 1e-9 {
+        return Vec::new();
+    }
+    let mut ops = vec![lot_model::Operation::SetParam {
+        id: storey,
+        param: lot_model::Param::StoreyHeight,
+        old: s.height,
+        new: height,
+    }];
+    ops.extend(shift_above(project, storey, delta));
+    ops
+}
+
+/// OKFF eines Geschosses ändern; die Geschosse darüber rücken mit.
+pub fn storey_elevation_ops(project: &Project, storey: ElementId, elevation: f64) -> Vec<lot_model::Operation> {
+    let Some(s) = project.storey(storey) else { return Vec::new() };
+    let delta = elevation - s.elevation;
+    if delta.abs() < 1e-9 {
+        return Vec::new();
+    }
+    let mut ops = vec![lot_model::Operation::SetParam {
+        id: storey,
+        param: lot_model::Param::StoreyElevation,
+        old: s.elevation,
+        new: elevation,
+    }];
+    ops.extend(shift_above(project, storey, delta));
+    ops
+}
+
+fn shift_above(project: &Project, storey: ElementId, delta: f64) -> Vec<lot_model::Operation> {
+    let storeys = project.storeys();
+    let Some(i) = storeys.iter().position(|(id, _)| *id == storey) else { return Vec::new() };
+    storeys[i + 1..]
+        .iter()
+        .map(|(id, s)| lot_model::Operation::SetParam {
+            id: *id,
+            param: lot_model::Param::StoreyElevation,
+            old: s.elevation,
+            new: s.elevation + delta,
+        })
+        .collect()
+}

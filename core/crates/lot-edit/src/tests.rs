@@ -1902,3 +1902,26 @@ fn storeys_step_up_and_down_and_history_goes_back_and_forth() {
     assert!(!views.contains(&ViewRef::Section(9)));
     assert!(views.contains(&plan));
 }
+
+#[test]
+fn storey_height_moves_the_storeys_above() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::AddStorey);
+    ed.run(&mut doc, &Command::AddStorey);
+    let storeys: Vec<(ElementId, f64, f64)> =
+        doc.project().storeys().into_iter().map(|(id, s)| (id, s.elevation, s.height)).collect();
+    let n = storeys.len();
+    let (low, high) = (storeys[n - 3], storeys[n - 1]);
+    ed.run(&mut doc, &Command::SetStoreyHeight(low.0.0, low.2 + 0.25));
+    let now = |doc: &Document, id: ElementId| doc.project().storey(id).map(|s| (s.elevation, s.height)).unwrap();
+    assert!((now(&doc, low.0).1 - (low.2 + 0.25)).abs() < 1e-9);
+    assert!((now(&doc, high.0).0 - (high.1 + 0.25)).abs() < 1e-9, "das obere rückt mit");
+    // OKFF ändern nimmt die darüber mit, nicht die darunter; ein Schritt zum Widerrufen.
+    let middle = now(&doc, storeys[n - 2].0).0;
+    ed.run(&mut doc, &Command::SetStoreyElevation(storeys[n - 2].0.0, middle + 1.0));
+    assert!((now(&doc, high.0).0 - (high.1 + 1.25)).abs() < 1e-9);
+    assert!((now(&doc, low.0).0 - low.1).abs() < 1e-9);
+    doc.undo().unwrap();
+    assert!((now(&doc, high.0).0 - (high.1 + 0.25)).abs() < 1e-9);
+    assert!(ed.run(&mut doc, &Command::SetStoreyHeight(low.0.0, 0.0)).error.is_some());
+}

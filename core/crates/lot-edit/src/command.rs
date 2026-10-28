@@ -143,6 +143,10 @@ pub enum Command {
     DeleteSheet(u64),
     /// Heimat eines Schnitts: das Blatt, auf das seine Marke verweist.
     SetHome(u64, u64),
+    /// Geschosshöhe; die Geschosse darüber rücken mit (Geschossleiste, ADR 0049).
+    SetStoreyHeight(u64, f64),
+    /// OKFF eines Geschosses; die Geschosse darüber rücken mit.
+    SetStoreyElevation(u64, f64),
 }
 
 impl Command {
