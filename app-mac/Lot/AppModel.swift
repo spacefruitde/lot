@@ -106,6 +106,11 @@ final class AppModel {
     /// Gewählte Bauteile, die die aktive Ansicht nicht zeigt, mit Gründen.
     private(set) var hiddenInfos: [HiddenInfo] = []
     static let details = detailLevels()
+    /// Gewählte Decken, Dächer und Treppen (ADR 0051).
+    private(set) var slabInfos: [SlabInfo] = []
+    private(set) var roofInfos: [RoofInfo] = []
+    private(set) var stairInfos: [StairInfo] = []
+    static let fallPurposes = Lot.fallPurposes()
     static let phases = phaseFilters()
 
     static let fileType = UTType(filenameExtension: "lot") ?? .data
@@ -329,6 +334,9 @@ final class AppModel {
         sections = state.selection.isEmpty ? [] : document.sections(ids: state.selection)
         placed = viewport.placedInfo()
         look = viewport.look()
+        slabInfos = state.selection.isEmpty ? [] : document.slabs(ids: state.selection)
+        roofInfos = state.selection.isEmpty ? [] : document.roofs(ids: state.selection)
+        stairInfos = state.selection.isEmpty ? [] : document.stairs(ids: state.selection)
         hiddenInfos = state.selection.isEmpty ? [] : viewport.hiddenReasons(ids: state.selection)
         if state.view == .sheet, let id = UInt64(state.shown.dropFirst("Sheet(".count).dropLast()) {
             sheet = document.sheetInfo(sheet: id)

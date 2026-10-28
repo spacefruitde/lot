@@ -1,6 +1,6 @@
 # 0051 Decken, Dächer und Treppen in der App
 
-Status: entschieden von Ben · 26.10.2026; Gefällewerte sind mein Vorschlag, Ben prüft
+Status: entschieden von Ben · 26.10.2026; umgesetzt am 28.10.2026 bis auf Gauben und die offenen Punkte unter „Folgen“; Gefällewerte sind mein Vorschlag, Ben prüft
 
 ## Kontext
 
@@ -27,3 +27,5 @@ Ben am 26.10.2026: „27 ok“, zum Gefälle „28 ok mach einen vorschlag“, z
 
 - Gauben bekommen vor dem Bauen einen kurzen eigenen Vergleich (Formen, Anschluss an das Hauptdach), weil Ben sie als Revit-Schwäche nennt.
 - Die DIN-18065-Werte für gewendelte und Spindeltreppen kommen als Daten mit Quelle; offene Werte gehen als Frage ins Prüfpaket.
+- Umgesetzt (28.10.2026): Decken folgen den Wänden (`Slab::follows_walls`, Nachführen über `Document::set_follow`), Gefälle als Schicht mit Abläufen und Notüberläufen, Prüfung nach `normen/gefaelle.ron`, Walm- und Flachdach, Dachkanten umschalten, Treppenwerkzeug für gerade, Halb- und Viertelpodest, viertel- und halbgewendelt (Verhältnismethode) und Spindeltreppe, DIN-18065-Ampel, Treppenloch und Umwehrung verbunden. Gauben-Vergleich in `pruefpakete/2026-10-28-bauteile/gauben.md`, gebaut wird nach Bens Antwort.
+- Offen: Gauben, Attika, Neigung am Griff, Gefälle zu mehreren Abläufen, Treppen mit Griffen bearbeiten, Geländer an gewendelten und Spindeltreppen, Podestregeln der DIN 18065.

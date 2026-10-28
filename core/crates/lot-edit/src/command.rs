@@ -165,6 +165,34 @@ pub enum Command {
     TempIsolate,
     /// Vorübergehend Ausgeblendetes und Isoliertes zurücksetzen.
     TempReset,
+    /// Treppe zeichnen (TP): Antritt, dann Richtung; Leertaste wechselt die Seite der Wendung (ADR 0051).
+    StairTool(crate::stairs::StairForm),
+    /// Dachkante umschalten (DK): Klick auf eine Kante wechselt Traufe und Giebel.
+    RoofEdgeTool,
+    /// Ablauf (AB) und Notüberlauf (NU) auf eine Decke mit Gefälle setzen.
+    DrainTool,
+    OverflowTool,
+    /// Walmdach über den Wänden des Geschosses: Traufen ringsum.
+    HipRoofFromWalls,
+    /// Flachdach über dem Geschoss, mit 2 % Gefälle in der Dämmung.
+    FlatRoofFromWalls,
+    /// Kante eines Dachs umschalten: Dach, Kante.
+    ToggleRoofEdge(u64, u32),
+    /// Neigung (Grad) und Überstand (m) einer Dachkante; `None` lässt den Wert.
+    SetRoofEdge(u64, u32, Option<f64>, Option<f64>),
+    /// Gewählte Decken folgen den Wänden oder nicht mehr.
+    SetSlabFollows(bool),
+    /// Umriss der gewählten Decken neu aus den Wänden übernehmen.
+    RefollowSlabs,
+    /// Gefälle der gewählten Decken für diese Verwendung; `None` entfernt es.
+    SetFallPurpose(Option<lot_model::FallPurpose>),
+    SetFallPercent(f64),
+    /// Fließrichtung in Grad gegen den Uhrzeigersinn von +x.
+    SetFallDirection(f64),
+    /// Schicht des Aufbaus, die das Gefälle bildet, von oben.
+    SetFallLayer(u32),
+    /// Abläufe und Notüberläufe der gewählten Decken entfernen.
+    ClearDrains,
 }
 
 impl Command {

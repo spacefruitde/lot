@@ -805,6 +805,12 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
      */
     func walls(ids: [UInt64])  -> [WallInfo]
     
+    func roofs(ids: [UInt64])  -> [RoofInfo]
+    
+    func slabs(ids: [UInt64])  -> [SlabInfo]
+    
+    func stairs(ids: [UInt64])  -> [StairInfo]
+    
     /**
      * Die Seitenleiste „Projekt“.
      */
@@ -1346,6 +1352,36 @@ open func walls(ids: [UInt64]) -> [WallInfo]  {
     return try!  FfiConverterSequenceTypeWallInfo.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_lotdocument_walls(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
+}
+    
+open func roofs(ids: [UInt64]) -> [RoofInfo]  {
+    return try!  FfiConverterSequenceTypeRoofInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_roofs(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
+}
+    
+open func slabs(ids: [UInt64]) -> [SlabInfo]  {
+    return try!  FfiConverterSequenceTypeSlabInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_slabs(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
+}
+    
+open func stairs(ids: [UInt64]) -> [StairInfo]  {
+    return try!  FfiConverterSequenceTypeStairInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_stairs(
             self.uniffiCloneHandle(),
         FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
     )
@@ -4017,6 +4053,147 @@ public func FfiConverterTypeReasonInfo_lower(_ value: ReasonInfo) -> RustBuffer 
 }
 
 
+public struct RoofEdgeInfo: Equatable, Hashable {
+    public var index: UInt32
+    /**
+     * Traufe, sonst Giebel.
+     */
+    public var eave: Bool
+    /**
+     * Neigung in Grad, bei Giebeln 0.
+     */
+    public var slope: Double
+    public var overhang: Double
+    /**
+     * Länge der Kante in m.
+     */
+    public var length: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(index: UInt32, 
+        /**
+         * Traufe, sonst Giebel.
+         */eave: Bool, 
+        /**
+         * Neigung in Grad, bei Giebeln 0.
+         */slope: Double, overhang: Double, 
+        /**
+         * Länge der Kante in m.
+         */length: Double) {
+        self.index = index
+        self.eave = eave
+        self.slope = slope
+        self.overhang = overhang
+        self.length = length
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RoofEdgeInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRoofEdgeInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RoofEdgeInfo {
+        return
+            try RoofEdgeInfo(
+                index: FfiConverterUInt32.read(from: &buf), 
+                eave: FfiConverterBool.read(from: &buf), 
+                slope: FfiConverterDouble.read(from: &buf), 
+                overhang: FfiConverterDouble.read(from: &buf), 
+                length: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RoofEdgeInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.index, into: &buf)
+        FfiConverterBool.write(value.eave, into: &buf)
+        FfiConverterDouble.write(value.slope, into: &buf)
+        FfiConverterDouble.write(value.overhang, into: &buf)
+        FfiConverterDouble.write(value.length, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRoofEdgeInfo_lift(_ buf: RustBuffer) throws -> RoofEdgeInfo {
+    return try FfiConverterTypeRoofEdgeInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRoofEdgeInfo_lower(_ value: RoofEdgeInfo) -> RustBuffer {
+    return FfiConverterTypeRoofEdgeInfo.lower(value)
+}
+
+
+/**
+ * Ein gewähltes Dach mit seinen Kanten.
+ */
+public struct RoofInfo: Equatable, Hashable {
+    public var element: UInt64
+    public var edges: [RoofEdgeInfo]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, edges: [RoofEdgeInfo]) {
+        self.element = element
+        self.edges = edges
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RoofInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRoofInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RoofInfo {
+        return
+            try RoofInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                edges: FfiConverterSequenceTypeRoofEdgeInfo.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RoofInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterSequenceTypeRoofEdgeInfo.write(value.edges, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRoofInfo_lift(_ buf: RustBuffer) throws -> RoofInfo {
+    return try FfiConverterTypeRoofInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRoofInfo_lower(_ value: RoofInfo) -> RustBuffer {
+    return FfiConverterTypeRoofInfo.lower(value)
+}
+
+
 /**
  * Eine Regel der Ansicht mit ihrer Wirkung.
  */
@@ -4317,6 +4494,127 @@ public func FfiConverterTypeSheetInfo_lower(_ value: SheetInfo) -> RustBuffer {
 
 
 /**
+ * Eine gewählte Decke: folgt sie den Wänden, und ihr Gefälle.
+ */
+public struct SlabInfo: Equatable, Hashable {
+    public var element: UInt64
+    /**
+     * „Decke“, „Bodenplatte“ oder „Flachdach“.
+     */
+    public var kind: String
+    public var follows: Bool
+    /**
+     * Soll folgen, kann aber nicht: eine Wand fehlt oder kam dazu.
+     */
+    public var broken: Bool
+    public var hasFall: Bool
+    /**
+     * Index in [`fall_purposes`].
+     */
+    public var purpose: UInt32
+    public var percent: Double
+    public var direction: Double
+    /**
+     * Schicht des Gefälles, von oben, und die Namen der Schichten.
+     */
+    public var layer: UInt32
+    public var layers: [String]
+    public var drains: UInt32
+    public var overflows: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, 
+        /**
+         * „Decke“, „Bodenplatte“ oder „Flachdach“.
+         */kind: String, follows: Bool, 
+        /**
+         * Soll folgen, kann aber nicht: eine Wand fehlt oder kam dazu.
+         */broken: Bool, hasFall: Bool, 
+        /**
+         * Index in [`fall_purposes`].
+         */purpose: UInt32, percent: Double, direction: Double, 
+        /**
+         * Schicht des Gefälles, von oben, und die Namen der Schichten.
+         */layer: UInt32, layers: [String], drains: UInt32, overflows: UInt32) {
+        self.element = element
+        self.kind = kind
+        self.follows = follows
+        self.broken = broken
+        self.hasFall = hasFall
+        self.purpose = purpose
+        self.percent = percent
+        self.direction = direction
+        self.layer = layer
+        self.layers = layers
+        self.drains = drains
+        self.overflows = overflows
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension SlabInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSlabInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SlabInfo {
+        return
+            try SlabInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                kind: FfiConverterString.read(from: &buf), 
+                follows: FfiConverterBool.read(from: &buf), 
+                broken: FfiConverterBool.read(from: &buf), 
+                hasFall: FfiConverterBool.read(from: &buf), 
+                purpose: FfiConverterUInt32.read(from: &buf), 
+                percent: FfiConverterDouble.read(from: &buf), 
+                direction: FfiConverterDouble.read(from: &buf), 
+                layer: FfiConverterUInt32.read(from: &buf), 
+                layers: FfiConverterSequenceString.read(from: &buf), 
+                drains: FfiConverterUInt32.read(from: &buf), 
+                overflows: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SlabInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterBool.write(value.follows, into: &buf)
+        FfiConverterBool.write(value.broken, into: &buf)
+        FfiConverterBool.write(value.hasFall, into: &buf)
+        FfiConverterUInt32.write(value.purpose, into: &buf)
+        FfiConverterDouble.write(value.percent, into: &buf)
+        FfiConverterDouble.write(value.direction, into: &buf)
+        FfiConverterUInt32.write(value.layer, into: &buf)
+        FfiConverterSequenceString.write(value.layers, into: &buf)
+        FfiConverterUInt32.write(value.drains, into: &buf)
+        FfiConverterUInt32.write(value.overflows, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSlabInfo_lift(_ buf: RustBuffer) throws -> SlabInfo {
+    return try FfiConverterTypeSlabInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSlabInfo_lower(_ value: SlabInfo) -> RustBuffer {
+    return FfiConverterTypeSlabInfo.lower(value)
+}
+
+
+/**
  * Raum mit Stempeltext und Flächen, für den Inspektor.
  */
 public struct SpaceInfo: Equatable, Hashable {
@@ -4468,6 +4766,73 @@ public func FfiConverterTypeSpaceUsageItem_lift(_ buf: RustBuffer) throws -> Spa
 #endif
 public func FfiConverterTypeSpaceUsageItem_lower(_ value: SpaceUsageItem) -> RustBuffer {
     return FfiConverterTypeSpaceUsageItem.lower(value)
+}
+
+
+/**
+ * Eine gewählte Treppe mit der Prüfung nach DIN 18065.
+ */
+public struct StairInfo: Equatable, Hashable {
+    public var element: UInt64
+    /**
+     * Etwa „16 Stg. 17,2/28,5“.
+     */
+    public var summary: String
+    public var problems: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, 
+        /**
+         * Etwa „16 Stg. 17,2/28,5“.
+         */summary: String, problems: [String]) {
+        self.element = element
+        self.summary = summary
+        self.problems = problems
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StairInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStairInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StairInfo {
+        return
+            try StairInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                summary: FfiConverterString.read(from: &buf), 
+                problems: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StairInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterString.write(value.summary, into: &buf)
+        FfiConverterSequenceString.write(value.problems, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStairInfo_lift(_ buf: RustBuffer) throws -> StairInfo {
+    return try FfiConverterTypeStairInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStairInfo_lower(_ value: StairInfo) -> RustBuffer {
+    return FfiConverterTypeStairInfo.lower(value)
 }
 
 
@@ -6133,6 +6498,56 @@ fileprivate struct FfiConverterSequenceTypeReasonInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeRoofEdgeInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [RoofEdgeInfo]
+
+    public static func write(_ value: [RoofEdgeInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRoofEdgeInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RoofEdgeInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RoofEdgeInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRoofEdgeInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeRoofInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [RoofInfo]
+
+    public static func write(_ value: [RoofInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRoofInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RoofInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RoofInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRoofInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeRuleInfo: FfiConverterRustBuffer {
     typealias SwiftType = [RuleInfo]
 
@@ -6208,6 +6623,31 @@ fileprivate struct FfiConverterSequenceTypeSelectionGroup: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeSlabInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [SlabInfo]
+
+    public static func write(_ value: [SlabInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSlabInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SlabInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SlabInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSlabInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeSpaceInfo: FfiConverterRustBuffer {
     typealias SwiftType = [SpaceInfo]
 
@@ -6250,6 +6690,31 @@ fileprivate struct FfiConverterSequenceTypeSpaceUsageItem: FfiConverterRustBuffe
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeSpaceUsageItem.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeStairInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [StairInfo]
+
+    public static func write(_ value: [StairInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeStairInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [StairInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [StairInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeStairInfo.read(from: &buf))
         }
         return seq
     }
@@ -6472,6 +6937,27 @@ public func wallTops() -> [ChoiceItem]  {
 })
 }
 /**
+ * RON der Verwendung nach Index, für `SetFallPurpose`.
+ */
+public func fallPurposeField(index: UInt32?) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_fall_purpose_field(
+        FfiConverterOptionUInt32.lower(index),uniffiCallStatus
+    )
+})
+}
+/**
+ * Verwendungen eines Gefälles: Flachdach, Balkon, Dusche.
+ */
+public func fallPurposes() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_fall_purposes(uniffiCallStatus
+    )
+})
+}
+/**
  * Blattformate für die Auswahl im Inspektor.
  */
 public func sheetFormats() -> [String]  {
@@ -6564,6 +7050,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_func_wall_tops() != 866) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_fall_purpose_field() != 52842) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_fall_purposes() != 56835) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_func_sheet_formats() != 34468) {
@@ -6681,6 +7173,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_walls() != 16345) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_roofs() != 15088) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_slabs() != 34987) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_stairs() != 58787) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_project_tree() != 33771) {

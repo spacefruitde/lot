@@ -207,5 +207,14 @@ pub fn check_project(project: &Project, geometry: &ModelGeometry) -> CheckReport
     if !f.is_empty() {
         sections.push(ReportSection { title: "Treppen".into(), basis: "DIN 18065:2020-08".into(), findings: f });
     }
+    // Gefälle von Flachdächern, Balkonen und Duschen (ADR 0051).
+    let f = crate::falls::check_falls(project);
+    if !f.is_empty() {
+        sections.push(ReportSection {
+            title: "Gefälle".into(),
+            basis: "Flachdachrichtlinie, DIN 18531, DIN 1986-100".into(),
+            findings: f,
+        });
+    }
     CheckReport { sections }
 }

@@ -12,18 +12,20 @@ mod annotation;
 mod document;
 mod element;
 mod elevator;
+mod fall;
 mod operation;
 mod plot;
 mod project;
 mod roof;
 mod stair;
+mod stair_winders;
 mod terrain;
 mod underlay;
 mod variant;
 mod view;
 
 pub use annotation::{Annotation, AnnotationShape, AnnotationView};
-pub use document::{Document, ModelError};
+pub use document::{Document, Follow, ModelError};
 pub use element::{
     BuildingClass, CircularArc, Column, ColumnProfile, DimRef, DimensionChain, Door, Element, ElementId, ElementKind,
     GridLine, Handing, JoinRule, Layer, LayerFunction, Opening, OpeningKind, OpeningType, Param, Phase, PhaseFilter,
@@ -32,11 +34,13 @@ pub use element::{
     WallType,
 };
 pub use elevator::Elevator;
+pub use fall::{Fall, FallPurpose};
 pub use operation::Operation;
 pub use plot::{Plot, PublicEdge, PublicKind};
 pub use project::{Project, rough_sill_changes};
 pub use roof::{Dormer, DormerWindow, EavePlane, Roof, RoofEdge, RoofFace, RoofWindow};
-pub use stair::{FlightLayout, Landing, Railing, RailingPath, Stair, StairFlight, StairLayout, Tread};
+pub use stair::{FlightLayout, Landing, Railing, RailingPath, Spiral, Stair, StairFlight, StairLayout, Step, Tread};
+pub use stair_winders::{MIN_INNER_GENERAL, MIN_INNER_SMALL_RESIDENTIAL};
 pub use terrain::{Terrain, TerrainPoint};
 pub use underlay::{ReferenceModel, Underlay, pdf_point_scale};
 pub use variant::{Variant, VariantSet};

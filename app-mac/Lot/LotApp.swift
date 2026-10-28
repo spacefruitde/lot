@@ -118,6 +118,19 @@ struct LotApp: App {
                 Button("Decke aus Wänden") { model.run("SlabFromWalls") }
                 Button("Deckendurchbruch zeichnen (DB)") { model.run("SlabOpeningTool") }
                 Button("Satteldach über dem Geschoss") { model.run("GableRoofFromWalls") }
+                Button("Walmdach über dem Geschoss") { model.run("HipRoofFromWalls") }
+                Button("Flachdach über dem Geschoss") { model.run("FlatRoofFromWalls") }
+                Button("Dachkante umschalten (DK)") { model.run("RoofEdgeTool") }
+                Button("Ablauf setzen (AB)") { model.run("DrainTool") }
+                Button("Notüberlauf setzen (NU)") { model.run("OverflowTool") }
+                Menu("Treppe zeichnen (TP)") {
+                    Button("Gerade") { model.run("StairTool(Straight)") }
+                    Button("Zweiläufig mit Halbpodest") { model.run("StairTool(HalfLanding)") }
+                    Button("L-Form mit Viertelpodest") { model.run("StairTool(QuarterLanding)") }
+                    Button("Viertelgewendelt") { model.run("StairTool(QuarterWinder)") }
+                    Button("Halbgewendelt") { model.run("StairTool(HalfWinder)") }
+                    Button("Spindeltreppe") { model.run("StairTool(Spiral)") }
+                }
                 Button("Linie zeichnen, 2D (LI)") { model.run("LineTool") }
                 Button("Text setzen, 2D (TX)") { model.run("TextTool") }
                 Button("Unterlage kalibrieren (KA)") { model.run("CalibrateUnderlayTool") }
