@@ -40,20 +40,80 @@ pub fn slab_area(project: &Project, id: ElementId, slab: &Slab) -> Area {
     Area::from_ring(&ring).difference(&Area::union_all(holes.iter()))
 }
 
+/// Höhen einer Decke über ±0,00: Oberkante, Ober- und Unterkante der
+/// Tragschicht (Rohdecke), Unterkante. Ohne Tragschicht gilt die ganze Decke.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FloorLevels {
+    pub top: f64,
+    pub structure_top: f64,
+    pub structure_bottom: f64,
+    pub bottom: f64,
+}
+
+pub fn floor_levels(project: &Project, slab: &Slab) -> Option<FloorLevels> {
+    let storey = project.storey(slab.storey)?;
+    let slab_type = project.slab_type(slab.slab_type)?;
+    let top = storey.elevation + slab.top_offset;
+    let bottom = top - slab_type.thickness();
+    let mut depth = 0.0;
+    let mut structure: Option<(f64, f64)> = None;
+    for l in &slab_type.layers {
+        if l.function == LayerFunction::Structure {
+            structure = Some((structure.map_or(top - depth, |s| s.0), top - depth - l.thickness));
+        }
+        depth += l.thickness;
+    }
+    let (structure_top, structure_bottom) = structure.unwrap_or((top, bottom));
+    Some(FloorLevels { top, structure_top, structure_bottom, bottom })
+}
+
 /// Körper je Schicht einer Decke, von oben nach unten: (Schicht, Material, Körper).
+///
+/// Schichten nach Bauablauf (ADR 0045): Die Rohdecke liegt auf den Wänden
+/// auf. Estrich und Trittschalldämmung darüber stoßen an den Innenputz der
+/// Wände, die auf der Decke stehen; der Deckenputz darunter endet am
+/// Innenputz der Wände, die bis unter die Decke reichen.
 pub fn slab_solids(project: &Project, id: ElementId, slab: &Slab) -> Vec<(usize, String, Manifold)> {
     let (Some(storey), Some(slab_type)) = (project.storey(slab.storey), project.slab_type(slab.slab_type)) else {
         return Vec::new();
     };
     let area = slab_area(project, id, slab);
+    let structure: Vec<usize> = slab_type
+        .layers
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| l.function == LayerFunction::Structure)
+        .map(|(k, _)| k)
+        .collect();
+    let (first, last) = (structure.first().copied(), structure.last().copied());
+    let walls_at = |storeys: &mut dyn Iterator<Item = ElementId>, z: f64| {
+        let regions: Vec<_> = storeys.flat_map(|s| solid_regions(project, s, z)).collect();
+        Area::union_all(regions.iter().map(|r| &r.area))
+    };
     let mut top = storey.elevation + slab.top_offset;
+    // Wände, die auf der Decke stehen, und Wände des Geschosses darunter, die bis unter sie reichen.
+    let standing = first.filter(|f| *f > 0).map(|_| walls_at(&mut std::iter::once(slab.storey), top + FLOOR_CUT));
+    let below = project
+        .storeys()
+        .into_iter()
+        .filter(|(_, s)| s.elevation < top - 1e-6)
+        .max_by(|a, b| a.1.elevation.total_cmp(&b.1.elevation))
+        .map(|(id, _)| id);
     slab_type
         .layers
         .iter()
         .enumerate()
         .map(|(k, layer)| {
             let bottom = top - layer.thickness;
-            let solid = crate::extrude(&area, bottom, top);
+            let layer_area = match (first, last) {
+                (Some(f), _) if k < f => standing.as_ref().map_or_else(|| area.clone(), |w| area.difference(w)),
+                (_, Some(l)) if k > l => match below {
+                    Some(b) => area.difference(&walls_at(&mut std::iter::once(b), (top + bottom) / 2.0)),
+                    None => area.clone(),
+                },
+                _ => area.clone(),
+            };
+            let solid = crate::extrude(&layer_area, bottom, top);
             top = bottom;
             (k, layer.material.clone(), solid)
         })

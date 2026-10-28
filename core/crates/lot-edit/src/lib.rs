@@ -1100,6 +1100,13 @@ impl Editor {
                 }
                 Response::from_result(doc.apply(Operation::Group { label: "Bezugslinie ändern".into(), ops }))
             }
+            Command::SetWallTop(mode) => {
+                let ops = walls::set_top_ops(doc.project(), &self.selection, *mode as usize);
+                if ops.is_empty() {
+                    return Response::redraw();
+                }
+                Response::from_result(doc.apply(Operation::Group { label: "Oberkante ändern".into(), ops }))
+            }
             Command::SetJoinRule(wall, end, rule) => {
                 let ops = walls::set_join_ops(doc.project(), ElementId(*wall), *end, *rule);
                 if ops.is_empty() {

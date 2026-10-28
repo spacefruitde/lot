@@ -802,3 +802,113 @@ fn core_alignments_follow_the_structure_layers() {
     assert!((WallAlignment::CoreCenter.depth(t) - 0.2625).abs() < 1e-12);
     assert_eq!(WallAlignment::CoreExterior.mirrored(), WallAlignment::CoreInterior);
 }
+
+#[test]
+fn layers_follow_the_construction_sequence() {
+    // EG und OG, Außenwände WDVS außen gezeichnet, eine Innenwand. Decke über EG:
+    // Estrich 6,5 cm, Trittschall 3,5 cm, Stahlbeton 20 cm, Deckenputz 1,5 cm (ADR 0045).
+    use LayerFunction::*;
+    let mut p = project();
+    let og = p.next_id();
+    p.elements.insert(og, Element::Storey(Storey { name: "OG".into(), elevation: 2.75, height: 2.75 }));
+    let ty = p.next_id();
+    p.elements.insert(
+        ty,
+        Element::SlabType(lot_model::SlabType {
+            name: "Geschossdecke".into(),
+            layers: vec![
+                layer("estrich", 0.065, Finish),
+                layer("trittschall", 0.035, Insulation),
+                layer("stahlbeton", 0.2, Structure),
+                layer("putz", 0.015, Finish),
+            ],
+        }),
+    );
+    let mut eg_inner = ElementId(0);
+    let mut og_inner = ElementId(0);
+    for storey in [STOREY, og] {
+        for (a, b) in
+            [((0.0, 0.0), (0.0, 6.0)), ((0.0, 6.0), (8.0, 6.0)), ((8.0, 6.0), (8.0, 0.0)), ((8.0, 0.0), (0.0, 0.0))]
+        {
+            let id = add_wall(&mut p, WDVS, a, b, WallAlignment::Exterior);
+            set_wall(&mut p, id, |w| w.storey = storey);
+        }
+        let id = add_wall(&mut p, INNEN, (4.0, 0.0), (4.0, 6.0), WallAlignment::Center);
+        set_wall(&mut p, id, |w| w.storey = storey);
+        if storey == STOREY { eg_inner = id } else { og_inner = id }
+    }
+    let outline: Vec<Point2> = slabs::slab_outlines(&p, og)[0].iter().map(|q| Point2::new(q[0], q[1])).collect();
+    let slab = p.next_id();
+    p.elements.insert(
+        slab,
+        Element::Slab(lot_model::Slab {
+            phase: Default::default(),
+            storey: og,
+            slab_type: ty,
+            outline,
+            top_offset: 0.0,
+            kind: lot_model::SlabKind::Floor,
+        }),
+    );
+    let g = build(&p).unwrap();
+    let bounds = |id: ElementId, layer: usize| {
+        g.elements.iter().find(|e| e.id == id && e.layer == layer).and_then(|e| e.mesh.bounds()).unwrap()
+    };
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    // Rohdecke von 2,45 bis 2,65; OKFF OG 2,75.
+    // Tragschicht und Innenputz der Innenwand im EG enden unter der Rohdecke.
+    assert!(close(bounds(eg_inner, 1).1[2], 2.45), "Tragschicht EG bis {:?}", bounds(eg_inner, 1));
+    assert!(close(bounds(eg_inner, 0).1[2], 2.45), "Innenputz EG bis {:?}", bounds(eg_inner, 0));
+    // Die Wand im OG steht auf der Rohdecke, ihr Putz beginnt dort auch.
+    assert!(close(bounds(og_inner, 1).0[2], 2.65), "Tragschicht OG ab {:?}", bounds(og_inner, 1));
+    assert!(close(bounds(og_inner, 0).0[2], 2.65), "Innenputz OG ab {:?}", bounds(og_inner, 0));
+    // Die Dämmung der Außenwand im EG läuft vor der Deckenstirn bis OKFF OG durch.
+    let outer = p.walls_on(STOREY).map(|(id, _)| id).next().unwrap();
+    assert!(close(bounds(outer, 1).1[2], 2.75));
+    // Estrich und Deckenputz liegen nicht im Mauerwerk der Innenwand (x = 3,8975 bis 4,1025).
+    for layer in [0, 1, 3] {
+        let m = &g.elements.iter().find(|e| e.id == slab && e.layer == layer).unwrap().mesh;
+        let at = |x: f64| m.positions.iter().any(|q| (q[0] - x).abs() < 1e-6);
+        assert!(at(3.8975) && at(4.1025), "Schicht {layer} der Decke endet nicht am Innenputz");
+        assert!(m.positions.iter().all(|q| !(q[0] > 3.9 && q[0] < 4.1)), "Schicht {layer} reicht in die Innenwand");
+    }
+    // Die Rohdecke liegt auf der Innenwand auf.
+    let m = &g.elements.iter().find(|e| e.id == slab && e.layer == 2).unwrap().mesh;
+    assert!(!m.positions.iter().any(|q| (q[0] - 3.8975).abs() < 1e-6));
+}
+
+#[test]
+fn wall_top_follows_the_slab_above() {
+    let mut p = project();
+    let og = p.next_id();
+    p.elements.insert(og, Element::Storey(Storey { name: "OG".into(), elevation: 2.75, height: 2.75 }));
+    let ty = p.next_id();
+    p.elements.insert(
+        ty,
+        Element::SlabType(lot_model::SlabType {
+            name: "Decke".into(),
+            layers: vec![layer("stahlbeton", 0.2, LayerFunction::Structure)],
+        }),
+    );
+    let slab = p.next_id();
+    p.elements.insert(
+        slab,
+        Element::Slab(lot_model::Slab {
+            phase: Default::default(),
+            storey: og,
+            slab_type: ty,
+            outline: vec![Point2::new(0.0, -1.0), Point2::new(4.0, -1.0), Point2::new(4.0, 1.0), Point2::new(0.0, 1.0)],
+            top_offset: -0.4,
+            kind: lot_model::SlabKind::Floor,
+        }),
+    );
+    let under = add_wall(&mut p, INNEN, (0.0, 0.0), (4.0, 0.0), WallAlignment::Exterior);
+    let beside = add_wall(&mut p, INNEN, (6.0, 0.0), (9.0, 0.0), WallAlignment::Center);
+    for id in [under, beside] {
+        set_wall(&mut p, id, |w| w.top = Top::Slab { offset: 0.0 });
+    }
+    let top = |id| p.wall_extent(p.wall(id).unwrap()).unwrap().1;
+    assert!((top(under) - 2.35).abs() < 1e-9, "{}", top(under));
+    // Ohne Decke darüber bis zum Geschoss.
+    assert!((top(beside) - 2.75).abs() < 1e-9);
+}

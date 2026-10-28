@@ -141,7 +141,7 @@ impl Project {
         let bottom = s.elevation + base_offset;
         let top = match top {
             Top::Height(h) => bottom + h,
-            Top::Storey { offset } => s.elevation + s.height + offset,
+            Top::Storey { offset } | Top::Slab { offset } => s.elevation + s.height + offset,
             Top::Roof { offset } => {
                 // Höchster Punkt der Dachunterseite; im 3D wird darunter genau geschnitten.
                 let highest = self
@@ -159,7 +159,29 @@ impl Project {
 
     /// Unter- und Oberkante einer Wand über ±0,00.
     pub fn wall_extent(&self, wall: &Wall) -> Option<(f64, f64)> {
-        self.vertical_extent(wall.storey, wall.base_offset, wall.top)
+        let (bottom, top) = self.vertical_extent(wall.storey, wall.base_offset, wall.top)?;
+        if let Top::Slab { offset } = wall.top {
+            // Gesucht wird über der Mitte des Kerns, der die Decke trägt.
+            let t = self.wall_type(wall.wall_type)?;
+            let (outer, inner) = t.core();
+            let across = wall.alignment.depth(t) - (outer + inner) / 2.0;
+            if let Some(slab) = self.slab_above(wall.point_at(wall.length() / 2.0, across), bottom) {
+                return Some((bottom, slab + offset));
+            }
+        }
+        Some((bottom, top))
+    }
+
+    /// Oberkante der niedrigsten Decke, die an der Stelle `p` höher als 10 cm über `z` liegt.
+    pub fn slab_above(&self, p: Point2, z: f64) -> Option<f64> {
+        self.elements
+            .values()
+            .filter_map(|e| match e {
+                Element::Slab(s) if contains(&s.outline, p) => Some(self.storey(s.storey)?.elevation + s.top_offset),
+                _ => None,
+            })
+            .filter(|top| *top > z + 0.1)
+            .min_by(f64::total_cmp)
     }
 
     pub fn roof(&self, id: ElementId) -> Option<&crate::Roof> {
@@ -566,4 +588,16 @@ fn ridge_samples(r: &crate::Roof) -> Vec<Point2> {
     let c = r.outline.iter().fold((0.0, 0.0), |acc, p| (acc.0 + p.x / n as f64, acc.1 + p.y / n as f64));
     points.push(Point2::new(c.0, c.1));
     points
+}
+
+/// Ob der Punkt im Polygon liegt (gerade-ungerade-Regel).
+fn contains(ring: &[Point2], p: Point2) -> bool {
+    let mut inside = false;
+    for (i, a) in ring.iter().enumerate() {
+        let b = ring[(i + 1) % ring.len()];
+        if (a.y > p.y) != (b.y > p.y) && p.x < a.x + (p.y - a.y) / (b.y - a.y) * (b.x - a.x) {
+            inside = !inside;
+        }
+    }
+    inside
 }

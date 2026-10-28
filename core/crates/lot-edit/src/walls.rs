@@ -4,7 +4,9 @@
 
 use std::collections::BTreeMap;
 
-use lot_model::{DimRef, Element, ElementId, JoinRule, OpeningKind, Operation, Point2, Project, Wall, WallAlignment};
+use lot_model::{
+    DimRef, Element, ElementId, JoinRule, OpeningKind, Operation, Point2, Project, Top, Wall, WallAlignment,
+};
 
 use crate::geometry::{JOIN_TOLERANCE, intersect};
 
@@ -220,4 +222,28 @@ pub fn set_join_ops(project: &Project, wall: ElementId, end: lot_model::WallEnd,
         return Vec::new();
     }
     vec![Operation::Replace { id: wall, old: Element::Wall(w.clone()), new: Element::Wall(n) }]
+}
+
+/// Neue Art der Oberkante für die Wände `ids`, als Index in [`Top::TITLES`]:
+/// Geschoss, Decke oder Dach ohne Versatz; eine feste Höhe behält die jetzige Höhe.
+pub fn set_top_ops(project: &Project, ids: &[ElementId], mode: usize) -> Vec<Operation> {
+    ids.iter()
+        .filter_map(|id| {
+            let w = project.wall(*id)?;
+            if w.top.mode() == mode {
+                return None;
+            }
+            let mut n = w.clone();
+            n.top = match mode {
+                0 => Top::Storey { offset: 0.0 },
+                1 => Top::Slab { offset: 0.0 },
+                2 => Top::Roof { offset: 0.0 },
+                _ => {
+                    let (bottom, top) = project.wall_extent(w)?;
+                    Top::Height(((top - bottom) * 1000.0).round() / 1000.0)
+                }
+            };
+            Some(Operation::Replace { id: *id, old: Element::Wall(w.clone()), new: Element::Wall(n) })
+        })
+        .collect()
 }

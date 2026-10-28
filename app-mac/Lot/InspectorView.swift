@@ -216,6 +216,18 @@ private struct WallSection: View {
                     Text(item.title).tag(index)
                 }
             }
+            let tops = Set(model.walls.map(\.top))
+            Picker("Oberkante", selection: Binding(get: { tops.count == 1 ? Int(tops.first!) : -1 }, set: { i in
+                if i >= 0 { model.run(AppModel.tops[i].command) }
+            })) {
+                if tops.count > 1 { Text("verschieden").tag(-1) }
+                ForEach(Array(AppModel.tops.enumerated()), id: \.offset) { index, item in
+                    Text(item.title).tag(index)
+                }
+            }
+            if model.walls.count == 1, let wall = model.walls.first {
+                LabeledContent("Oberkante über OKFF", value: wall.topHeight.formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "de_DE"))) + " m")
+            }
             LabeledContent("Innen und außen") {
                 Button("Umdrehen") { model.run("FlipWalls") }
             }
@@ -379,7 +391,7 @@ extension ParamKind {
         case .wallLength: "Länge"
         case .wallSagitta: "Stich (Bogen)"
         case .wallHeight: "Höhe"
-        case .wallTopOffset: "Oberkante über Geschoss"
+        case .wallTopOffset: "Versatz Oberkante"
         case .baseOffset: "Unterkante über OKFF"
         case .openingOffset: "Abstand vom Wandanfang"
         case .openingWidth: "Breite"

@@ -1372,3 +1372,17 @@ fn double_click_at_a_corner_selects_the_junction() {
     ed.key(&mut doc, Key::Escape);
     assert!(ed.junction.is_none());
 }
+
+#[test]
+fn wall_top_mode_keeps_the_height_when_fixed() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SelectAll);
+    let before: Vec<f64> = doc.project().walls().map(|(_, w)| doc.project().wall_extent(w).unwrap().1).collect();
+    ed.run(&mut doc, &Command::SetWallTop(3));
+    for ((_, w), b) in doc.project().walls().zip(&before) {
+        assert!(matches!(w.top, lot_model::Top::Height(_)));
+        assert!((doc.project().wall_extent(w).unwrap().1 - b).abs() < 1e-6);
+    }
+    ed.run(&mut doc, &Command::SetWallTop(1));
+    assert!(doc.project().walls().all(|(_, w)| w.top == lot_model::Top::Slab { offset: 0.0 }));
+}

@@ -23,6 +23,8 @@ final class AppModel {
     private(set) var junction: JunctionInfo?
     /// Die sechs Lagen der Bezugslinie.
     static let alignments = wallAlignments()
+    /// Arten der Oberkante: Geschoss, Decke, Dach, fest.
+    static let tops = wallTops()
     /// Gewählte 2D-Texte.
     private(set) var texts: [TextInfo] = []
     /// Bauzustand der Auswahl: 0 Bestand, 1 Abbruch, 2 Neubau; `nil` ohne Bauteile mit Bauzustand,

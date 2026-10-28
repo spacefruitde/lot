@@ -159,12 +159,9 @@ impl Element {
             (Element::Wall(w), Param::WallSagitta) => Some(w.sagitta),
             (Element::Wall(w), Param::WallHeight) => match w.top {
                 Top::Height(h) => Some(h),
-                Top::Storey { .. } | Top::Roof { .. } => None,
+                _ => None,
             },
-            (Element::Wall(w), Param::WallTopOffset) => match w.top {
-                Top::Storey { offset } => Some(offset),
-                Top::Height(_) | Top::Roof { .. } => None,
-            },
+            (Element::Wall(w), Param::WallTopOffset) => w.top.offset(),
             (Element::Wall(w), Param::BaseOffset) => Some(w.base_offset),
             (Element::Column(c), Param::BaseOffset) => Some(c.base_offset),
             (Element::Opening(o), Param::OpeningOffset) => Some(o.offset),
@@ -199,7 +196,13 @@ impl Element {
             (Element::Wall(w), Param::WallLength) => w.set_length(value),
             (Element::Wall(w), Param::WallSagitta) => w.sagitta = value,
             (Element::Wall(w), Param::WallHeight) => w.top = Top::Height(value),
-            (Element::Wall(w), Param::WallTopOffset) => w.top = Top::Storey { offset: value },
+            (Element::Wall(w), Param::WallTopOffset) => {
+                w.top = match w.top {
+                    Top::Slab { .. } => Top::Slab { offset: value },
+                    Top::Roof { .. } => Top::Roof { offset: value },
+                    _ => Top::Storey { offset: value },
+                }
+            }
             (Element::Wall(w), Param::BaseOffset) => w.base_offset = value,
             (Element::Column(c), Param::BaseOffset) => c.base_offset = value,
             (Element::Opening(o), Param::OpeningOffset) => o.offset = value,
@@ -395,6 +398,31 @@ pub enum Top {
     Storey { offset: f64 },
     /// Bis unter das Dach desselben Geschosses, plus Versatz (Giebelwände, Wände im Dachgeschoss).
     Roof { offset: f64 },
+    /// Bis an die Decke darüber, plus Versatz: Oberkante der nächsten Decke über
+    /// der Wand, wo immer sie liegt (ADR 0045). Ohne Decke wie `Storey`.
+    Slab { offset: f64 },
+}
+
+impl Top {
+    /// Art der Oberkante zur Auswahl, in der Reihenfolge von [`Top::TITLES`].
+    pub fn mode(self) -> usize {
+        match self {
+            Top::Storey { .. } => 0,
+            Top::Slab { .. } => 1,
+            Top::Roof { .. } => 2,
+            Top::Height(_) => 3,
+        }
+    }
+
+    pub const TITLES: [&'static str; 4] = ["Geschoss darüber", "Decke darüber", "Dach", "feste Höhe"];
+
+    /// Versatz der Oberkante; `None` bei fester Höhe.
+    pub fn offset(self) -> Option<f64> {
+        match self {
+            Top::Storey { offset } | Top::Slab { offset } | Top::Roof { offset } => Some(offset),
+            Top::Height(_) => None,
+        }
+    }
 }
 
 /// Wand (IfcWall). Die Bezugslinie läuft von `start` nach `end`.
@@ -1090,7 +1118,7 @@ pub enum Param {
     WallSagitta,
     /// Feste Höhe; nur bei Wänden mit `Top::Height`.
     WallHeight,
-    /// Versatz der Oberkante; nur bei Wänden, die am Geschoss hängen.
+    /// Versatz der Oberkante; bei Wänden bis zum Geschoss, zur Decke oder zum Dach.
     WallTopOffset,
     /// Unterkante über OKFF, für Wände und Stützen.
     BaseOffset,

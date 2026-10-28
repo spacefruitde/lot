@@ -155,12 +155,26 @@ pub fn wall_alignments() -> Vec<ChoiceItem> {
         .collect()
 }
 
+/// Die Arten der Oberkante einer Wand, in der Reihenfolge von `WallInfo::top`.
+#[uniffi::export]
+pub fn wall_tops() -> Vec<ChoiceItem> {
+    lot_model::Top::TITLES
+        .iter()
+        .enumerate()
+        .map(|(i, t)| ChoiceItem { title: (*t).into(), command: lot_edit::Command::SetWallTop(i as u32).id() })
+        .collect()
+}
+
 /// Eine Wand für den Inspektor.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct WallInfo {
     pub element: u64,
     /// Index in [`wall_alignments`].
     pub alignment: u32,
+    /// Index in [`wall_tops`].
+    pub top: u32,
+    /// Oberkante über OKFF des Geschosses, wie sie sich ergibt.
+    pub top_height: f64,
 }
 
 /// Flächen eines Geschosses in m².
@@ -394,7 +408,9 @@ impl LotDocument {
             .filter_map(|id| {
                 let w = doc.project().wall(ElementId(*id))?;
                 let alignment = lot_model::WallAlignment::ALL.iter().position(|a| *a == w.alignment)? as u32;
-                Some(WallInfo { element: *id, alignment })
+                let p = doc.project();
+                let top_height = p.wall_extent(w)?.1 - p.storey(w.storey)?.elevation;
+                Some(WallInfo { element: *id, alignment, top: w.top.mode() as u32, top_height })
             })
             .collect()
     }

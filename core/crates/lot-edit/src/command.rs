@@ -57,6 +57,8 @@ pub enum Command {
     DetectSpaces,
     SetWallType(u64),
     SetAlignment(WallAlignment),
+    /// Oberkante der gewählten Wände: Index in `Top::TITLES` (Geschoss, Decke, Dach, fest).
+    SetWallTop(u32),
     /// Ausnahme am Anschluss eines Wandendes: Wand, Ende, Regel (ADR 0045).
     SetJoinRule(u64, WallEnd, JoinRule),
     /// Bauzustand der gewählten Bauteile: Bestand, Abbruch oder Neubau.
