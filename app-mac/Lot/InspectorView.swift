@@ -52,8 +52,11 @@ struct InspectorView: View {
                 if !model.walls.isEmpty {
                     WallSection()
                 }
-                if let type = model.wallType {
-                    WallTypeSection(info: type)
+                if let type = model.selectedType {
+                    TypeSection(info: type)
+                }
+                if !model.properties.isEmpty {
+                    ElementPropertiesSection()
                 }
                 if model.groups.count > 0 {
                     SelectionGroupsSection()
@@ -250,64 +253,77 @@ private struct WallSection: View {
     }
 }
 
-/// Wandaufbau der gewählten Wände (ADR 0045): Schichten von außen nach innen.
-/// Jede Änderung wirkt auf alle Wände mit diesem Aufbau; die Bezugslinien bleiben stehen.
-private struct WallTypeSection: View {
+/// Typ der gewählten Bauteile (ADR 0048): tauschen, Typwerte direkt ändern
+/// („wirkt auf 14 Wände“), Werte festlegen, Schichten bearbeiten (ADR 0045).
+private struct TypeSection: View {
     @Environment(AppModel.self) private var model
-    let info: WallTypeInfo
+    let info: TypeInfo
     @State private var name = ""
     @State private var thickness: [String] = []
 
     var body: some View {
-        Section("Wandaufbau · wirkt auf \(info.uses) Wand\(info.uses == 1 ? "" : "e")") {
+        Section("\(info.kindTitle) · wirkt auf \(info.usesText)") {
+            Picker("Typ", selection: Binding(get: { info.element }, set: { model.run("AssignType(Some(\($0)))") })) {
+                ForEach(model.types.filter { $0.kind == info.kind }, id: \.element) { Text($0.name).tag($0.element) }
+            }
             TextField("Name", text: $name)
-                .onSubmit { if name != info.name { model.setWallType(info, name: name) } }
-            ForEach(Array(info.layers.enumerated()), id: \.offset) { index, layer in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Picker("Material", selection: Binding(get: { layer.material }, set: { set(index) { $0.material = $1 }($0) })) {
-                            if !AppModel.materials.contains(where: { $0.command == layer.material }) {
-                                Text(layer.material).tag(layer.material)
-                            }
-                            ForEach(AppModel.materials, id: \.command) { Text($0.title).tag($0.command) }
-                        }
-                        .labelsHidden()
-                        TextField("", text: Binding(get: { index < thickness.count ? thickness[index] : "" }, set: { if index < thickness.count { thickness[index] = $0 } }))
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 56)
-                            .onSubmit {
-                                guard index < thickness.count, let v = Double(thickness[index].replacingOccurrences(of: ",", with: ".")) else { return }
-                                set(index) { $0.thickness = $1 }(v / 100)
-                            }
-                        Text("cm").foregroundStyle(.secondary)
-                    }
-                    HStack {
-                        Picker("Funktion", selection: Binding(get: { Int(layer.function) }, set: { set(index) { $0.function = UInt32($1) }($0) })) {
-                            ForEach(Array(AppModel.functions.enumerated()), id: \.offset) { Text($0.element).tag($0.offset) }
-                        }
-                        .labelsHidden()
-                        Spacer()
-                        Button { move(index, by: -1) } label: { Image(systemName: "arrow.up") }
-                            .disabled(index == 0)
-                        Button { move(index, by: 1) } label: { Image(systemName: "arrow.down") }
-                            .disabled(index == info.layers.count - 1)
-                        Button { remove(index) } label: { Image(systemName: "minus.circle") }
-                            .disabled(info.layers.count == 1)
-                    }
-                    .buttonStyle(.borderless)
-                }
+                .onSubmit { if name != info.name { model.run("RenameType(\(info.element),\(ron(name)))") } }
+            // Eigene Kennungen je Abschnitt: Gleiche Kennungen in einer Form lassen Zeilen verschwinden.
+            ForEach(info.properties.map { ("typ-" + $0.property, $0) }, id: \.0) { TypeValueRow(type: info, property: $0.1) }
+            if !info.layers.isEmpty {
+                layerRows
             }
-            Button("Schicht hinzufügen") {
-                var layers = info.layers
-                layers.append(LayerInfo(material: "putz", thickness: 0.015, function: 4))
-                model.setWallType(info, layers: layers)
-            }
-            Text("Von außen (linke Seite in Zeichenrichtung) nach innen. Dicke \(cm(info.layers.reduce(0) { $0 + $1.thickness })) cm.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Button("Alle Typen …") { model.openTypes() }
+                .buttonStyle(.link)
         }
         .onAppear(perform: load)
         .onChange(of: info) { load() }
+    }
+
+    @ViewBuilder private var layerRows: some View {
+        ForEach(Array(info.layers.enumerated()).map { ("schicht-\($0.offset)", $0.offset, $0.element) }, id: \.0) { _, index, layer in
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Picker("Material", selection: Binding(get: { layer.material }, set: { set(index) { $0.material = $1 }($0) })) {
+                        if !AppModel.materials.contains(where: { $0.command == layer.material }) {
+                            Text(layer.material).tag(layer.material)
+                        }
+                        ForEach(AppModel.materials, id: \.command) { Text($0.title).tag($0.command) }
+                    }
+                    .labelsHidden()
+                    TextField("", text: Binding(get: { index < thickness.count ? thickness[index] : "" }, set: { if index < thickness.count { thickness[index] = $0 } }))
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 56)
+                        .onSubmit {
+                            guard index < thickness.count, let v = Double(thickness[index].replacingOccurrences(of: ",", with: ".")) else { return }
+                            set(index) { $0.thickness = $1 }(v / 100)
+                        }
+                    Text("cm").foregroundStyle(.secondary)
+                }
+                HStack {
+                    Picker("Funktion", selection: Binding(get: { Int(layer.function) }, set: { set(index) { $0.function = UInt32($1) }($0) })) {
+                        ForEach(Array(AppModel.functions.enumerated()), id: \.offset) { Text($0.element).tag($0.offset) }
+                    }
+                    .labelsHidden()
+                    Spacer()
+                    Button { move(index, by: -1) } label: { Image(systemName: "arrow.up") }
+                        .disabled(index == 0)
+                    Button { move(index, by: 1) } label: { Image(systemName: "arrow.down") }
+                        .disabled(index == info.layers.count - 1)
+                    Button { remove(index) } label: { Image(systemName: "minus.circle") }
+                        .disabled(info.layers.count == 1)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        Button("Schicht hinzufügen") {
+            var layers = info.layers
+            layers.append(LayerInfo(material: "putz", thickness: 0.015, function: 4))
+            model.setTypeLayers(info, layers: layers)
+        }
+        Text("\(info.kind == 0 ? "Von außen (linke Seite in Zeichenrichtung) nach innen" : "Von oben nach unten"). Dicke \(cm(info.layers.reduce(0) { $0 + $1.thickness })) cm.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
     }
 
     private func load() {
@@ -323,20 +339,123 @@ private struct WallTypeSection: View {
         { value in
             var layers = info.layers
             change(&layers[index], value)
-            model.setWallType(info, layers: layers)
+            model.setTypeLayers(info, layers: layers)
         }
     }
 
     private func move(_ index: Int, by delta: Int) {
         var layers = info.layers
         layers.swapAt(index, index + delta)
-        model.setWallType(info, layers: layers)
+        model.setTypeLayers(info, layers: layers)
     }
 
     private func remove(_ index: Int) {
         var layers = info.layers
         layers.remove(at: index)
-        model.setWallType(info, layers: layers)
+        model.setTypeLayers(info, layers: layers)
+    }
+}
+
+/// Ein Wert am Typ: direkt änderbar, wirkt auf alle Bauteile, die ihn übernehmen;
+/// das Schloss legt ihn fest, sodass kein Bauteil abweichen darf.
+private struct TypeValueRow: View {
+    @Environment(AppModel.self) private var model
+    let type: TypeInfo
+    let property: PropertyInfo
+    @State private var text = ""
+
+    var body: some View {
+        LabeledContent(property.title) {
+            HStack(spacing: 4) {
+                TextField(property.isSize ? "frei" : "", text: $text)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 110)
+                    .onSubmit(commit)
+                Button {
+                    model.run("SetTypeLocked(\(type.element),\(property.property),\(!property.locked))")
+                } label: {
+                    Image(systemName: property.locked ? "lock.fill" : "lock.open")
+                }
+                .buttonStyle(.borderless)
+                .help(property.locked ? "Im Typ festgelegt: Bauteile dürfen nicht abweichen" : "Bauteile dürfen abweichen")
+            }
+        }
+        .onAppear { text = shown }
+        .onChange(of: property.value) { text = shown }
+    }
+
+    /// Maße ohne „m“, damit sie sich tippen lassen.
+    private var shown: String {
+        property.isSize ? property.value.replacingOccurrences(of: " m", with: "") : property.value
+    }
+
+    private func commit() {
+        guard text != shown else { return }
+        if property.isSize {
+            let t = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+            let value = t.isEmpty ? "None" : (Double(t).map { "Some(\($0))" } ?? "")
+            guard !value.isEmpty else { text = shown; return }
+            model.run("SetTypeSize(\(type.element),\(property.property),\(value))")
+        } else {
+            model.run("SetTypeProperty(\(type.element),\(property.property),\(ron(text)))")
+        }
+    }
+}
+
+/// Werte, die der Typ vorgibt, am gewählten Bauteil: vom Typ oder abweichend,
+/// mit Zurücksetzen und „in den Typ übernehmen“ (ADR 0048).
+private struct ElementPropertiesSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section("Werte dieses Bauteils") {
+            ForEach(model.properties.map { ("bauteil-" + $0.property, $0) }, id: \.0) { ElementValueRow(property: $0.1) }
+            Text("Grau: vom Typ. Orange: weicht ab. Ein Wert gleich dem Typ gilt wieder vom Typ.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct ElementValueRow: View {
+    @Environment(AppModel.self) private var model
+    let property: PropertyInfo
+    @State private var text = ""
+
+    var body: some View {
+        LabeledContent(property.title) {
+            HStack(spacing: 4) {
+                if property.isSize || property.locked {
+                    Text(property.value.isEmpty ? "keins" : property.value)
+                        .foregroundStyle(property.fromType ? Color.secondary : Color.orange)
+                    if property.locked {
+                        Image(systemName: "lock.fill").foregroundStyle(.secondary)
+                            .help("Im Typ festgelegt")
+                    }
+                } else {
+                    TextField(property.typeValue.isEmpty ? "keins" : property.typeValue, text: $text)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(property.fromType ? Color.secondary : Color.orange)
+                        .frame(width: 110)
+                        .onSubmit {
+                            model.run("SetElementProperty(\(property.property),\(ron(text)))")
+                        }
+                }
+                if !property.fromType {
+                    Button { model.run("ResetToType(\(property.property))") } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                    }
+                    .help("Zurücksetzen: Wert vom Typ übernehmen")
+                    Button { model.run("ApplyToType(\(property.property))") } label: {
+                        Image(systemName: "arrow.up.doc")
+                    }
+                    .help("In den Typ übernehmen: gilt dann für alle")
+                }
+            }
+            .buttonStyle(.borderless)
+        }
+        .onAppear { text = property.fromType ? "" : property.value }
+        .onChange(of: property.value) { text = property.fromType ? "" : property.value }
     }
 }
 
@@ -379,6 +498,17 @@ private struct OpeningRows: View {
     @State private var recess = ""
 
     var body: some View {
+        if opening.typeName.isEmpty {
+            let types = model.types.filter { $0.kind == 2 }
+            if !types.isEmpty {
+                Picker("Typ", selection: Binding(get: { UInt64(0) }, set: { model.run("AssignType(Some(\($0)))") })) {
+                    Text("keiner").tag(UInt64(0))
+                    ForEach(types, id: \.element) { Text($0.name).tag($0.element) }
+                }
+            }
+            Button("Typ aus dieser Öffnung anlegen") { model.run("CreateOpeningTypes") }
+                .buttonStyle(.link)
+        }
         Picker("Füllung", selection: Binding(get: { Int(opening.fill) }, set: { model.run(AppModel.fills[$0].command) })) {
             ForEach(Array(AppModel.fills.enumerated()), id: \.offset) { index, item in
                 Text(item.title).tag(index)

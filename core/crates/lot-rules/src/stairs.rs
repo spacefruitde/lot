@@ -303,6 +303,8 @@ mod tests {
         p.elements.insert(
             ElementId(802),
             Element::SlabType(lot_model::SlabType {
+                locked: Default::default(),
+                props: Default::default(),
                 name: "Decke".into(),
                 layers: vec![lot_model::Layer {
                     material: "stahlbeton".into(),
@@ -314,6 +316,7 @@ mod tests {
         p.elements.insert(
             ElementId(803),
             Element::Slab(lot_model::Slab {
+                props: Default::default(),
                 phase: Default::default(),
                 storey: above,
                 slab_type: ElementId(802),

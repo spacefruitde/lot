@@ -165,6 +165,104 @@ pub fn wall_tops() -> Vec<ChoiceItem> {
         .collect()
 }
 
+/// Typen-Bibliothek des Büros für die Sitzung; ohne eigene die eingebaute (ADR 0048).
+static LIBRARY: Mutex<Option<lot_edit::library::Library>> = Mutex::new(None);
+
+fn library() -> lot_edit::library::Library {
+    let lock = LIBRARY.lock().unwrap_or_else(|e| e.into_inner());
+    lock.clone().unwrap_or_else(lot_edit::library::Library::builtin)
+}
+
+/// Setzt die Bibliothek des Büros (Inhalt von `bibliothek.ron`), beim Start und nach dem Sichern.
+#[uniffi::export]
+pub fn install_office_library(text: String) -> Result<(), LotError> {
+    let lib = lot_edit::library::Library::parse(&text).map_err(LotError::Failed)?;
+    *LIBRARY.lock().unwrap_or_else(|e| e.into_inner()) = Some(lib);
+    Ok(())
+}
+
+/// Die eingebaute Bibliothek als Text, als Vorlage für eine eigene.
+#[uniffi::export]
+pub fn builtin_library_text() -> String {
+    lot_edit::library::Library::builtin().to_ron()
+}
+
+/// Ein Typ der Bibliothek im Vergleich zum Projekt.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct LibraryItemInfo {
+    pub index: u32,
+    pub kind_title: String,
+    pub name: String,
+    /// 0 neu, 1 gleich wie im Projekt, 2 weicht ab.
+    pub status: u32,
+    /// Was sich beim Ersetzen ändert, etwa „Schicht 2: Dämmung 16 cm → 18 cm“.
+    pub differences: Vec<String>,
+    /// Bauteile, die den gleichnamigen Typ im Projekt nutzen, etwa „14 Wände“.
+    pub uses_text: String,
+    /// Materialien, die der Bürostandard nicht kennt.
+    pub missing_materials: Vec<String>,
+}
+
+/// Name eines Materials aus dem Bürostandard, sonst sein Schlüssel.
+fn material_name(key: &str) -> String {
+    lot_plan::standard::OfficeStandard::default_standard()
+        .materials
+        .get(key)
+        .map_or(key.to_string(), |m| m.name.clone())
+}
+
+/// Ein Typ für die App.
+fn type_info(p: &lot_model::Project, id: ElementId) -> Option<TypeInfo> {
+    use lot_edit::types;
+    let kind = types::kind_of(p, id)?;
+    let layers = match p.elements.get(&id)? {
+        lot_model::Element::WallType(t) => t.layers.as_slice(),
+        lot_model::Element::SlabType(t) => t.layers.as_slice(),
+        _ => &[],
+    };
+    let layers = layers
+        .iter()
+        .map(|l| LayerInfo {
+            material: l.material.clone(),
+            thickness: l.thickness,
+            function: FUNCTIONS.iter().position(|(f, _)| *f == l.function).unwrap_or(0) as u32,
+        })
+        .collect();
+    let uses = types::uses(p, id).len();
+    let (one, many) = kind.element_names();
+    let properties = kind
+        .properties()
+        .into_iter()
+        .map(|prop| {
+            let value = types::type_value(p, id, prop).unwrap_or_default();
+            PropertyInfo {
+                key: PROPERTIES.iter().position(|q| *q == prop).unwrap_or(0) as u32,
+                title: prop.title().into(),
+                value: value.clone(),
+                from_type: true,
+                locked: types::locked(p, id, prop),
+                type_value: value,
+                property: property_name(prop),
+                is_size: matches!(prop, lot_model::Property::Width | lot_model::Property::Height),
+            }
+        })
+        .collect();
+    Some(TypeInfo {
+        element: id.0,
+        kind: match kind {
+            types::TypeKind::Wall => 0,
+            types::TypeKind::Slab => 1,
+            types::TypeKind::Opening => 2,
+        },
+        kind_title: kind.title().into(),
+        name: types::name(p, id)?,
+        layers,
+        uses: uses as u32,
+        uses_text: format!("{uses} {}", if uses == 1 { one } else { many }),
+        properties,
+    })
+}
+
 /// Füllungen einer Öffnung zur Auswahl (ADR 0047), in der Reihenfolge von `OpeningInfo::fill`.
 #[uniffi::export]
 pub fn opening_fills() -> Vec<ChoiceItem> {
@@ -236,17 +334,57 @@ pub struct LayerInfo {
     pub function: u32,
 }
 
-/// Ein Wandaufbau mit seinen Schichten von außen nach innen.
+/// Werte, die ein Typ vorgeben kann (ADR 0048), in der Reihenfolge von `PropertyInfo::key`.
+const PROPERTIES: [lot_model::Property; 6] = [
+    lot_model::Property::Mark,
+    lot_model::Property::IfcClass,
+    lot_model::Property::FireRating,
+    lot_model::Property::AcousticRating,
+    lot_model::Property::Width,
+    lot_model::Property::Height,
+];
+
+/// Ein Wert am Typ oder am Bauteil, mit Herkunft und den Befehlen dazu.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
-pub struct WallTypeInfo {
-    pub element: u64,
-    pub name: String,
-    pub layers: Vec<LayerInfo>,
-    /// Wie viele Wände den Aufbau nutzen.
-    pub uses: u32,
+pub struct PropertyInfo {
+    /// Index in der Liste der Eigenschaften; für Befehle `property` verwenden.
+    pub key: u32,
+    pub title: String,
+    pub value: String,
+    /// Am Bauteil: Der Wert kommt vom Typ. Am Typ immer `true`.
+    pub from_type: bool,
+    /// Der Typ legt den Wert fest; Bauteile dürfen nicht abweichen.
+    pub locked: bool,
+    /// Wert des Typs, für „vom Typ“ und den Vergleich.
+    pub type_value: String,
+    /// RON-Name der Eigenschaft für Befehle, etwa „FireRating“.
+    pub property: String,
+    /// Ein Maß in Metern statt eines Texts.
+    pub is_size: bool,
 }
 
-/// Eine Wand für den Inspektor.
+/// Ein Typ: Wandaufbau, Deckenaufbau, Tür- oder Fenstertyp (ADR 0048).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct TypeInfo {
+    pub element: u64,
+    /// 0 Wandaufbau, 1 Deckenaufbau, 2 Tür- oder Fenstertyp.
+    pub kind: u32,
+    pub kind_title: String,
+    pub name: String,
+    /// Schichten von außen nach innen, bei Decken von oben nach unten; leer bei Tür- und Fenstertypen.
+    pub layers: Vec<LayerInfo>,
+    /// Wie viele Bauteile den Typ nutzen, und als Wort, etwa „14 Wände“.
+    pub uses: u32,
+    pub uses_text: String,
+    pub properties: Vec<PropertyInfo>,
+}
+
+/// Name einer Eigenschaft in Befehlen (RON), etwa „FireRating“.
+fn property_name(p: lot_model::Property) -> String {
+    format!("{p:?}")
+}
+
+/// Eine Wand für den Inspektor./// Eine Wand für den Inspektor.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct WallInfo {
     pub element: u64,
@@ -504,7 +642,12 @@ impl LotDocument {
                     rough_sill: p.rough_sill(o),
                     floor_build_up: p.floor_build_up(o),
                     sill_connection: p.sill_connection(o),
-                    type_name: ty.map(|t| format!("{} · {}", t.mark, t.name)).unwrap_or_default(),
+                    type_name: ty
+                        .map(|t| match &t.props.mark {
+                            Some(m) => format!("{m} · {}", t.name),
+                            None => t.name.clone(),
+                        })
+                        .unwrap_or_default(),
                     type_uses: o
                         .opening_type
                         .map_or(0, |t| p.openings().filter(|(_, x)| x.opening_type == Some(t)).count())
@@ -546,40 +689,125 @@ impl LotDocument {
         notices
     }
 
-    /// Ein Wandaufbau mit seinen Schichten.
-    pub fn wall_type(&self, element: u64) -> Option<WallTypeInfo> {
+    /// Ein Typ mit Schichten, Nutzung und Werten.
+    pub fn type_info(&self, element: u64) -> Option<TypeInfo> {
         let doc = self.lock();
-        let p = doc.project();
-        let t = p.wall_type(ElementId(element))?;
-        let layers = t
-            .layers
-            .iter()
-            .map(|l| LayerInfo {
-                material: l.material.clone(),
-                thickness: l.thickness,
-                function: FUNCTIONS.iter().position(|(f, _)| *f == l.function).unwrap_or(0) as u32,
-            })
-            .collect();
-        let uses = p.walls().filter(|(_, w)| w.wall_type.0 == element).count() as u32;
-        Some(WallTypeInfo { element, name: t.name.clone(), layers, uses })
+        type_info(doc.project(), ElementId(element))
     }
 
-    /// Ändert Namen und Schichten eines Wandaufbaus in einem Schritt. Die
-    /// Bezugslinien der Wände bleiben stehen (ADR 0045).
-    pub fn set_wall_type(&self, element: u64, name: String, layers: Vec<LayerInfo>) -> Result<(), LotError> {
+    /// Alle Typen des Projekts für die Typen-Übersicht.
+    pub fn types(&self) -> Vec<TypeInfo> {
+        let doc = self.lock();
+        let p = doc.project();
+        lot_edit::types::all(p).into_iter().filter_map(|(id, _)| type_info(p, id)).collect()
+    }
+
+    /// Der Typ eines Bauteils.
+    pub fn element_type(&self, element: u64) -> Option<u64> {
+        lot_edit::types::type_of(self.lock().project(), ElementId(element)).map(|t| t.0)
+    }
+
+    /// Die Typen der Büro-Bibliothek im Vergleich zu diesem Projekt.
+    pub fn library_items(&self) -> Vec<LibraryItemInfo> {
+        let doc = self.lock();
+        let p = doc.project();
+        let lib = library();
+        let items = lib.items();
+        let standard = lot_plan::standard::OfficeStandard::default_standard();
+        lot_edit::library::compare(p, &lib, &material_name)
+            .into_iter()
+            .map(|c| {
+                let layers: Vec<String> = match items.get(c.index).map(|i| &i.1) {
+                    Some(lot_model::Element::WallType(t)) => t.layers.iter().map(|l| l.material.clone()).collect(),
+                    Some(lot_model::Element::SlabType(t)) => t.layers.iter().map(|l| l.material.clone()).collect(),
+                    _ => Vec::new(),
+                };
+                let mut missing: Vec<String> =
+                    layers.into_iter().filter(|m| !standard.materials.contains_key(m)).collect();
+                missing.dedup();
+                let (one, many) = c.kind.element_names();
+                LibraryItemInfo {
+                    index: c.index as u32,
+                    kind_title: c.kind.title().into(),
+                    name: c.name,
+                    status: match c.status {
+                        lot_edit::library::Status::New => 0,
+                        lot_edit::library::Status::Same => 1,
+                        lot_edit::library::Status::Different => 2,
+                    },
+                    differences: c.differences,
+                    uses_text: format!("{} {}", c.uses, if c.uses == 1 { one } else { many }),
+                    missing_materials: missing,
+                }
+            })
+            .collect()
+    }
+
+    /// Holt einen Typ aus der Bibliothek: als neuen Typ oder als Ersatz für den
+    /// gleichnamigen, dessen Bauteile sich dann mit ändern. Gibt den Typ im Projekt zurück.
+    pub fn import_from_library(&self, index: u32, replace: bool) -> Result<u64, LotError> {
         let mut doc = self.lock();
-        let new = lot_model::WallType {
-            name: name.trim().into(),
-            layers: layers
-                .into_iter()
-                .map(|l| lot_model::Layer {
-                    material: l.material,
-                    thickness: l.thickness,
-                    function: FUNCTIONS.get(l.function as usize).map_or(lot_model::LayerFunction::Finish, |f| f.0),
-                })
-                .collect(),
+        let mode = if replace { lot_edit::library::ImportMode::Replace } else { lot_edit::library::ImportMode::Add };
+        let (id, ops) =
+            lot_edit::library::import_ops(doc.project(), &library(), index as usize, mode).map_err(LotError::Failed)?;
+        doc.apply(lot_model::Operation::Group { label: "Aus der Bibliothek".into(), ops })
+            .map_err(LotError::from_display)?;
+        Ok(id.0)
+    }
+
+    /// Die Bibliothek mit diesem Typ des Projekts, als Text für `bibliothek.ron`.
+    pub fn library_with_type(&self, element: u64) -> Option<String> {
+        let doc = self.lock();
+        library().with_type(doc.project(), ElementId(element)).map(|l| l.to_ron())
+    }
+
+    /// Werte eines Bauteils, die sein Typ vorgibt, mit Herkunft (ADR 0048).
+    pub fn element_properties(&self, element: u64) -> Vec<PropertyInfo> {
+        let doc = self.lock();
+        let p = doc.project();
+        let id = ElementId(element);
+        let Some(t) = lot_edit::types::type_of(p, id) else { return Vec::new() };
+        let Some(kind) = lot_edit::types::kind_of(p, t) else { return Vec::new() };
+        kind.properties()
+            .into_iter()
+            .map(|prop| {
+                let (value, origin) = lot_edit::types::value(p, id, prop);
+                PropertyInfo {
+                    key: PROPERTIES.iter().position(|q| *q == prop).unwrap_or(0) as u32,
+                    title: prop.title().into(),
+                    value: value.unwrap_or_default(),
+                    from_type: origin != lot_edit::types::Origin::Element,
+                    locked: lot_edit::types::locked(p, t, prop),
+                    type_value: lot_edit::types::type_value(p, t, prop).unwrap_or_default(),
+                    property: property_name(prop),
+                    is_size: matches!(prop, lot_model::Property::Width | lot_model::Property::Height),
+                }
+            })
+            .collect()
+    }
+
+    /// Ändert Namen und Schichten eines Wand- oder Deckenaufbaus in einem
+    /// Schritt. Die Bezugslinien der Wände bleiben stehen (ADR 0045).
+    pub fn set_type_layers(&self, element: u64, name: String, layers: Vec<LayerInfo>) -> Result<(), LotError> {
+        let mut doc = self.lock();
+        let layers: Vec<lot_model::Layer> = layers
+            .into_iter()
+            .map(|l| lot_model::Layer {
+                material: l.material,
+                thickness: l.thickness,
+                function: FUNCTIONS.get(l.function as usize).map_or(lot_model::LayerFunction::Finish, |f| f.0),
+            })
+            .collect();
+        let new = match doc.project().elements.get(&ElementId(element)) {
+            Some(lot_model::Element::WallType(t)) => {
+                lot_model::Element::WallType(lot_model::WallType { name: name.trim().into(), layers, ..t.clone() })
+            }
+            Some(lot_model::Element::SlabType(t)) => {
+                lot_model::Element::SlabType(lot_model::SlabType { name: name.trim().into(), layers, ..t.clone() })
+            }
+            _ => return Err(LotError::Failed("Das ist kein Wand- oder Deckenaufbau".into())),
         };
-        doc.replace(ElementId(element), lot_model::Element::WallType(new)).map_err(LotError::from_display)
+        doc.replace(ElementId(element), new).map_err(LotError::from_display)
     }
 
     /// Die Wände unter den Elementen `ids`.
@@ -775,18 +1003,18 @@ mod tests {
     fn wall_type_layers_change_in_one_step() {
         let doc = LotDocument::new_sample();
         let wall = doc.walls(vec![3]).pop().unwrap();
-        let mut info = doc.wall_type(wall.wall_type).unwrap();
+        let mut info = doc.type_info(wall.wall_type).unwrap();
         assert_eq!(info.uses, 1);
         let before = doc.lock().project().wall(ElementId(3)).unwrap().start;
         info.layers[0].thickness = 0.02;
         info.layers.insert(0, LayerInfo { material: "putz".into(), thickness: 0.01, function: 4 });
-        doc.set_wall_type(info.element, "Neu".into(), info.layers.clone()).unwrap();
-        let after = doc.wall_type(info.element).unwrap();
+        doc.set_type_layers(info.element, "Neu".into(), info.layers.clone()).unwrap();
+        let after = doc.type_info(info.element).unwrap();
         assert_eq!((after.name.as_str(), after.layers.len()), ("Neu", info.layers.len()));
         // Die Bezugslinie bleibt stehen.
         assert_eq!(doc.lock().project().wall(ElementId(3)).unwrap().start, before);
         let LotError::Failed(message) = doc
-            .set_wall_type(
+            .set_type_layers(
                 info.element,
                 "Neu".into(),
                 vec![LayerInfo { material: "putz".into(), thickness: 0.0, function: 4 }],
@@ -794,7 +1022,7 @@ mod tests {
             .unwrap_err();
         assert!(message.contains("1 mm"), "{message}");
         assert!(doc.undo().unwrap());
-        assert_eq!(doc.wall_type(info.element).unwrap().layers.len(), info.layers.len() - 1);
+        assert_eq!(doc.type_info(info.element).unwrap().layers.len(), info.layers.len() - 1);
     }
 
     #[test]
