@@ -722,6 +722,9 @@ fn slab_layers_stack_down_from_the_floor_level() {
             outline: vec![Point2::new(0.0, 0.0), Point2::new(4.0, 0.0), Point2::new(4.0, 3.0), Point2::new(0.0, 3.0)],
             top_offset: 0.0,
             kind: lot_model::SlabKind::Floor,
+            follows_walls: false,
+            boundary_walls: Vec::new(),
+            fall: None,
         }),
     );
     let g = build(&p).unwrap();
@@ -869,6 +872,9 @@ fn layers_follow_the_construction_sequence() {
             outline,
             top_offset: 0.0,
             kind: lot_model::SlabKind::Floor,
+            follows_walls: false,
+            boundary_walls: Vec::new(),
+            fall: None,
         }),
     );
     let g = build(&p).unwrap();
@@ -924,6 +930,9 @@ fn wall_top_follows_the_slab_above() {
             outline: vec![Point2::new(0.0, -1.0), Point2::new(4.0, -1.0), Point2::new(4.0, 1.0), Point2::new(0.0, 1.0)],
             top_offset: -0.4,
             kind: lot_model::SlabKind::Floor,
+            follows_walls: false,
+            boundary_walls: Vec::new(),
+            fall: None,
         }),
     );
     let under = add_wall(&mut p, INNEN, (0.0, 0.0), (4.0, 0.0), WallAlignment::Exterior);
@@ -935,4 +944,62 @@ fn wall_top_follows_the_slab_above() {
     assert!((top(under) - 2.35).abs() < 1e-9, "{}", top(under));
     // Ohne Decke darüber bis zum Geschoss.
     assert!((top(beside) - 2.75).abs() < 1e-9);
+}
+
+#[test]
+fn fall_layer_grows_against_the_flow_and_the_structure_stays() {
+    // Gefälle 2 % nach +x über 4 m (ADR 0051): der Estrich ist bei x = 4 so dick wie
+    // im Aufbau und bei x = 0 um 8 cm dicker; die Rohdecke bleibt eben.
+    let mut p = project();
+    let ty = p.next_id();
+    p.elements.insert(
+        ty,
+        Element::SlabType(lot_model::SlabType {
+            locked: Default::default(),
+            props: Default::default(),
+            name: "Balkon".into(),
+            layers: vec![
+                layer("estrich", 0.05, LayerFunction::Finish),
+                layer("stahlbeton", 0.2, LayerFunction::Structure),
+            ],
+        }),
+    );
+    let id = p.next_id();
+    p.elements.insert(
+        id,
+        Element::Slab(lot_model::Slab {
+            props: Default::default(),
+            phase: Default::default(),
+            storey: STOREY,
+            slab_type: ty,
+            outline: vec![Point2::new(0.0, 0.0), Point2::new(4.0, 0.0), Point2::new(4.0, 3.0), Point2::new(0.0, 3.0)],
+            top_offset: 0.0,
+            kind: lot_model::SlabKind::Floor,
+            follows_walls: false,
+            boundary_walls: Vec::new(),
+            fall: Some(Box::new(lot_model::Fall {
+                purpose: lot_model::FallPurpose::Balcony,
+                layer: 0,
+                percent: 2.0,
+                direction: 0.0,
+                drains: vec![Point2::new(3.8, 1.5)],
+                overflows: Vec::new(),
+            })),
+        }),
+    );
+    let g = build(&p).unwrap();
+    let layers: Vec<_> = g.elements.iter().filter(|e| e.id == id).collect();
+    let (lo, hi) = layers[0].mesh.bounds().unwrap();
+    assert!((hi[2] - 0.08).abs() < 1e-6 && (lo[2] + 0.05).abs() < 1e-6, "Estrich: {lo:?} {hi:?}");
+    // Am tiefsten Punkt (x = 4) liegt die Oberfläche auf ±0.
+    let top_at_low = layers[0]
+        .mesh
+        .positions
+        .iter()
+        .filter(|q| (q[0] - 4.0).abs() < 1e-6)
+        .map(|q| q[2])
+        .fold(f64::NEG_INFINITY, f64::max);
+    assert!(top_at_low.abs() < 1e-6, "{top_at_low}");
+    let (lo, hi) = layers[1].mesh.bounds().unwrap();
+    assert!((hi[2] + 0.05).abs() < 1e-9 && (lo[2] + 0.25).abs() < 1e-9);
 }

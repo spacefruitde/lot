@@ -262,6 +262,7 @@ mod tests {
         let storey = p.storeys()[0].0;
         let railing = Railing {
             phase: Default::default(),
+            around: None,
             storey,
             path: RailingPath::Flight { stair: ElementId(900), flight: 0, side: WallSide::Left },
             height: 0.9,

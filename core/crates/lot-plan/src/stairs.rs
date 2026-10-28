@@ -467,6 +467,7 @@ mod tests {
             ElementId(901),
             Element::Railing(Railing {
                 phase: Default::default(),
+                around: None,
                 storey: lower,
                 path: RailingPath::Flight { stair: ElementId(900), flight: 0, side: WallSide::Left },
                 height: 0.9,

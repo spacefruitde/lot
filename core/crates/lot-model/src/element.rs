@@ -1080,6 +1080,21 @@ pub struct Slab {
     /// Eigenschaften, die vom Deckenaufbau abweichen (ADR 0048).
     #[serde(default, skip_serializing_if = "no_props")]
     pub props: Properties,
+    /// Der Umriss folgt den Wänden darunter, an der Außenkante der Tragschicht
+    /// (ADR 0051); gelingt das nicht, bleibt der letzte Umriss.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub follows_walls: bool,
+    /// Die Wände, denen der Umriss folgt. Fehlt eine oder kommt eine dazu,
+    /// bleibt der Umriss und die Decke ist markiert, bis man ihn neu übernimmt.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub boundary_walls: Vec<ElementId>,
+    /// Gefälle einer Schicht (ADR 0051).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fall: Option<Box<crate::Fall>>,
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
 }
 
 /// Durchbruch in einer Decke (IfcOpeningElement), etwa für eine Treppe oder einen Schacht.
@@ -1092,6 +1107,10 @@ pub struct SlabOpening {
     /// Bestand, Abbruch oder Neubau (2.05).
     #[serde(default, skip_serializing_if = "Phase::is_new")]
     pub phase: Phase,
+    /// Treppenloch: folgt dieser Treppe, so groß wie die Durchgangshöhe es
+    /// verlangt (ADR 0051); ohne Treppe ein gewöhnlicher Durchbruch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stair: Option<ElementId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -1101,6 +1120,8 @@ pub enum SlabKind {
     Floor,
     /// Bodenplatte des untersten Geschosses
     Base,
+    /// Flachdach (IfcSlab.ROOF), meist mit Gefälle.
+    Roof,
 }
 
 /// Schnitt oder Ansicht (3.02): eine senkrechte Ebene durch die Linie von

@@ -7,14 +7,17 @@
 
 mod command;
 pub mod entry;
+pub mod follow;
 pub mod geometry;
 pub mod library;
 pub mod modify;
 pub mod navigation;
 pub mod openings;
+pub mod roofs;
 pub mod select;
 pub mod sheets;
 pub mod snap;
+pub mod stairs;
 pub mod tempdims;
 pub mod transform;
 pub mod types;
@@ -143,6 +146,13 @@ pub enum Tool {
     Section,
     /// Ansicht (AN): wie ein Schnitt, die Linie liegt vor der Fassade.
     Elevation,
+    /// Treppe (TP): Antritt, dann Richtung (ADR 0051).
+    Stair,
+    /// Dachkante (DK): Klick wechselt Traufe und Giebel.
+    RoofEdge,
+    /// Ablauf (AB) und Notüberlauf (NU) auf eine Decke mit Gefälle.
+    Drain,
+    Overflow,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -210,6 +220,10 @@ pub struct Overlay {
     /// Linien von Ansichten und des Schnitts, der gerade gezeichnet wird: Anfang,
     /// Ende und Spitze des Blickpfeils. Nur am Bildschirm, nie im Druck (ADR 0049).
     pub view_lines: Vec<[Point2; 3]>,
+    /// Ampel zur Beschriftung (`label`): erfüllt DIN 18065 oder nicht (ADR 0051).
+    pub verdict: Option<bool>,
+    /// Kanten gewählter Decken: Anfang, Ende, folgt einer Wand (ADR 0051).
+    pub edge_marks: Vec<(Point2, Point2, bool)>,
     /// Bezugspunkte mit ihrer Nummer.
     pub references: Vec<(Point2, String)>,
     /// Temporäre Maße am gewählten Bauteil: Anfang, Ende, Maßzahl, gerade in Bearbeitung.
@@ -295,6 +309,9 @@ pub struct Editor {
     pub temp: lot_plan::views::Temporary,
     /// Was die gezeigte Ansicht nicht zeigt; von der Ansicht gesetzt. Es lässt sich nicht anklicken.
     pub hidden: std::collections::BTreeSet<ElementId>,
+    /// Form der nächsten Treppe und ob sie nach links wendet (Leertaste).
+    pub stair_form: stairs::StairForm,
+    stair_left: bool,
 }
 
 /// Die vier Lagen einer Tür: Aufschlagseite und ob die Bänder am hinteren Ende sitzen.
@@ -347,6 +364,8 @@ impl Editor {
             section_look: WallSide::Left,
             temp: Default::default(),
             hidden: Default::default(),
+            stair_form: Default::default(),
+            stair_left: true,
         }
     }
 
@@ -378,7 +397,8 @@ impl Editor {
             | Tool::SlabOpening
             | Tool::Line
             | Tool::Section
-            | Tool::Elevation => {
+            | Tool::Elevation
+            | Tool::Stair => {
                 let mut snapped = self.update_snap(project, input, self.chain_start, &[]);
                 // Ein getippter Winkel hält die Richtung; der Zeiger gibt nur die Länge.
                 if let (Some(a), Some(s)) = (self.angle_lock, self.chain_start) {
@@ -410,7 +430,14 @@ impl Editor {
                 self.hover_tolerance = input.tolerance;
                 Response::redraw()
             }
-            Tool::Door | Tool::Window | Tool::Text | Tool::CalibrateUnderlay | Tool::AlignUnderlay => {
+            Tool::Door
+            | Tool::Window
+            | Tool::Text
+            | Tool::CalibrateUnderlay
+            | Tool::AlignUnderlay
+            | Tool::RoofEdge
+            | Tool::Drain
+            | Tool::Overflow => {
                 self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
                 self.hover_tolerance = input.tolerance;
                 Response::redraw()
@@ -536,6 +563,69 @@ impl Editor {
                     }
                     Some(_) => Response::redraw(),
                 }
+            }
+            Tool::Stair => {
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
+                self.pointer = None;
+                match self.chain_start {
+                    None => {
+                        self.chain_start = Some(p);
+                        Response::redraw()
+                    }
+                    Some(start) if start.distance(p) >= 0.1 => {
+                        self.end_chain();
+                        let project = doc.project();
+                        let Some(stair) =
+                            stairs::new_stair(project, self.storey, start, p, self.stair_form, self.stair_left)
+                        else {
+                            return Response::redraw();
+                        };
+                        let (id, ops) = stairs::create_ops(project, stair);
+                        let response =
+                            Response::from_result(doc.apply(Operation::Group { label: "Treppe".into(), ops }));
+                        if response.error.is_none() {
+                            self.set_selection(vec![id]);
+                        }
+                        response
+                    }
+                    Some(_) => Response::redraw(),
+                }
+            }
+            Tool::RoofEdge => match roofs::edge_at(doc.project(), self.storey, input.point, input.tolerance) {
+                Some((roof, edge)) => {
+                    let ops = roofs::toggle_edge_ops(doc.project(), roof, edge);
+                    self.apply_ops(doc, "Dachkante umschalten", ops)
+                }
+                None => Response { error: Some("Auf eine Kante eines Dachs klicken".into()), ..Response::redraw() },
+            },
+            Tool::Drain | Tool::Overflow => {
+                let overflow = self.tool == Tool::Overflow;
+                let p = self.snap(doc.project(), self.storey, input.point, input.tolerance, None, false, &[]).point;
+                let project = doc.project();
+                let found = project
+                    .slabs_on(self.storey)
+                    .find(|(_, s)| {
+                        lot_geom::Area::from_ring(&s.outline.iter().map(|q| [q.x, q.y]).collect::<Vec<_>>())
+                            .contains([p.x, p.y])
+                    })
+                    .map(|(id, s)| (id, s.clone()));
+                let Some((id, slab)) = found else {
+                    return Response {
+                        error: Some("Auf eine Decke oder ein Flachdach klicken".into()),
+                        ..Response::redraw()
+                    };
+                };
+                let mut new = slab.clone();
+                let fall = new.fall.get_or_insert_with(|| Box::new(default_fall(project, &slab, p)));
+                if overflow {
+                    fall.overflows.push(p);
+                } else {
+                    fall.drains.push(p);
+                }
+                let label = if overflow { "Notüberlauf setzen" } else { "Ablauf setzen" };
+                Response::from_result(replace_all(doc, label, vec![(id, Element::Slab(new))]))
             }
             Tool::Section | Tool::Elevation => {
                 let p = self
@@ -1140,6 +1230,10 @@ impl Editor {
                 if c == ' ' && self.tool == Tool::Select && self.chain_start.is_none() {
                     return self.flip_with_space(doc);
                 }
+                if c == ' ' && self.tool == Tool::Stair {
+                    self.stair_left = !self.stair_left;
+                    return Response::redraw();
+                }
                 if c == ' ' && matches!(self.tool, Tool::Section | Tool::Elevation) {
                     self.section_look = match self.section_look {
                         WallSide::Left => WallSide::Right,
@@ -1181,6 +1275,124 @@ impl Editor {
             Command::ArcWallTool => self.set_tool(Tool::ArcWall),
             Command::GridTool => self.set_tool(Tool::Grid),
             Command::SectionTool => self.set_tool(Tool::Section),
+            Command::StairTool(form) => {
+                let r = self.set_tool(Tool::Stair);
+                self.stair_form = *form;
+                r
+            }
+            Command::RoofEdgeTool => self.set_tool(Tool::RoofEdge),
+            Command::DrainTool => self.set_tool(Tool::Drain),
+            Command::OverflowTool => self.set_tool(Tool::Overflow),
+            Command::HipRoofFromWalls => match roofs::roof_ops(doc.project(), self.storey, roofs::RoofForm::Hip) {
+                Ok(ops) => self.apply_ops(doc, "Walmdach", ops),
+                Err(e) => Response { error: Some(e), ..Response::redraw() },
+            },
+            Command::FlatRoofFromWalls => match roofs::flat_roof_ops(doc.project(), self.storey) {
+                Ok((_, ops)) => self.apply_ops(doc, "Flachdach", ops),
+                Err(e) => Response { error: Some(e), ..Response::redraw() },
+            },
+            Command::ToggleRoofEdge(roof, edge) => {
+                let ops = roofs::toggle_edge_ops(doc.project(), ElementId(*roof), *edge as usize);
+                self.apply_ops(doc, "Dachkante umschalten", ops)
+            }
+            Command::SetRoofEdge(roof, edge, slope, overhang) => {
+                let ops = roofs::edge_ops(doc.project(), ElementId(*roof), *edge as usize, *slope, *overhang);
+                self.apply_ops(doc, "Dachkante ändern", ops)
+            }
+            Command::SetSlabFollows(on) => {
+                let project = doc.project();
+                let changes: Vec<(ElementId, Element)> = self
+                    .selection
+                    .iter()
+                    .filter_map(|id| match project.elements.get(id) {
+                        Some(Element::Slab(s)) if *on => follow::refollow(project, s).map(|n| (*id, Element::Slab(n))),
+                        Some(Element::Slab(s)) => {
+                            Some((*id, Element::Slab(lot_model::Slab { follows_walls: false, ..s.clone() })))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                if *on && changes.is_empty() {
+                    return Response {
+                        error: Some("Keine geschlossenen Wände unter der Decke".into()),
+                        ..Response::redraw()
+                    };
+                }
+                Response::from_result(replace_all(doc, "Decke folgt den Wänden", changes))
+            }
+            Command::RefollowSlabs => {
+                let project = doc.project();
+                let changes: Vec<(ElementId, Element)> = self
+                    .selection
+                    .iter()
+                    .filter_map(|id| match project.elements.get(id) {
+                        Some(Element::Slab(s)) => follow::refollow(project, s).map(|n| (*id, Element::Slab(n))),
+                        _ => None,
+                    })
+                    .collect();
+                if changes.is_empty() {
+                    return Response {
+                        error: Some("Keine geschlossenen Wände unter der Decke".into()),
+                        ..Response::redraw()
+                    };
+                }
+                Response::from_result(replace_all(doc, "Umriss aus den Wänden", changes))
+            }
+            Command::SetFallPurpose(purpose) => {
+                let project = doc.project().clone();
+                let changes = self.selected_slabs(&project, |s| match purpose {
+                    None => s.fall = None,
+                    Some(p) => {
+                        if s.fall.is_none() {
+                            let c = centroid(&s.outline);
+                            s.fall = Some(Box::new(default_fall(&project, s, c)));
+                        }
+                        if let Some(fall) = s.fall.as_mut() {
+                            fall.purpose = *p;
+                        }
+                    }
+                });
+                Response::from_result(replace_all(doc, "Gefälle", changes))
+            }
+            Command::SetFallPercent(v) => {
+                if *v <= 0.0 {
+                    return Response {
+                        error: Some("Das Gefälle muss größer als null sein".into()),
+                        ..Response::redraw()
+                    };
+                }
+                let changes = self.selected_slabs(&doc.project().clone(), |s| {
+                    if let Some(f) = s.fall.as_mut() {
+                        f.percent = *v;
+                    }
+                });
+                Response::from_result(replace_all(doc, "Gefälle", changes))
+            }
+            Command::SetFallDirection(v) => {
+                let changes = self.selected_slabs(&doc.project().clone(), |s| {
+                    if let Some(f) = s.fall.as_mut() {
+                        f.direction = v.rem_euclid(360.0);
+                    }
+                });
+                Response::from_result(replace_all(doc, "Gefälle", changes))
+            }
+            Command::SetFallLayer(v) => {
+                let changes = self.selected_slabs(&doc.project().clone(), |s| {
+                    if let Some(f) = s.fall.as_mut() {
+                        f.layer = *v as usize;
+                    }
+                });
+                Response::from_result(replace_all(doc, "Gefälle", changes))
+            }
+            Command::ClearDrains => {
+                let changes = self.selected_slabs(&doc.project().clone(), |s| {
+                    if let Some(f) = s.fall.as_mut() {
+                        f.drains.clear();
+                        f.overflows.clear();
+                    }
+                });
+                Response::from_result(replace_all(doc, "Abläufe entfernen", changes))
+            }
             Command::ElevationTool => self.set_tool(Tool::Elevation),
             Command::FlipSection => {
                 let changes = self.selected_sections(doc.project(), |v| {
@@ -1691,6 +1903,22 @@ impl Editor {
             info(Command::ArcWallTool, "Bogenwand zeichnen", "Werkzeug"),
             info(Command::GridTool, "Achse zeichnen", "Werkzeug"),
             info(Command::SectionTool, "Schnitt zeichnen", "Werkzeug"),
+            info(Command::StairTool(stairs::StairForm::Straight), "Treppe zeichnen, gerade", "Werkzeug"),
+            info(
+                Command::StairTool(stairs::StairForm::HalfLanding),
+                "Treppe zeichnen, zweiläufig mit Halbpodest",
+                "Werkzeug",
+            ),
+            info(
+                Command::StairTool(stairs::StairForm::QuarterLanding),
+                "Treppe zeichnen, L-Form mit Viertelpodest",
+                "Werkzeug",
+            ),
+            info(Command::RoofEdgeTool, "Dachkante umschalten (Traufe, Giebel)", "Werkzeug"),
+            info(Command::HipRoofFromWalls, "Walmdach über dem Geschoss", "Werkzeug"),
+            info(Command::FlatRoofFromWalls, "Flachdach über dem Geschoss", "Werkzeug"),
+            info(Command::DrainTool, "Ablauf setzen", "Werkzeug"),
+            info(Command::OverflowTool, "Notüberlauf setzen", "Werkzeug"),
             info(Command::ElevationTool, "Ansicht zeichnen", "Werkzeug"),
             info(Command::AddSheet, "Neues Planblatt", "Planblätter"),
             info(Command::TempHide, "Auswahl vorübergehend ausblenden (H)", "Ansicht"),
@@ -1814,6 +2042,60 @@ impl Editor {
                 let far = |p: Point2| Point2::new(p.x + n.0 * v.depth, p.y + n.1 * v.depth);
                 overlay.guides.extend([(far(v.start), far(v.end)), (v.start, far(v.start)), (v.end, far(v.end))]);
             }
+        }
+        // Kanten gewählter Decken: folgt einer Wand oder frei (ADR 0051).
+        for id in &self.selection {
+            if let Some(Element::Slab(s)) = project_now.elements.get(id) {
+                let walls = follow::edge_walls(project_now, s);
+                let broken = follow::broken(project_now, s);
+                let n = s.outline.len();
+                for (i, w) in walls.iter().enumerate() {
+                    overlay.edge_marks.push((
+                        s.outline[i],
+                        s.outline[(i + 1) % n],
+                        w.is_some() && s.follows_walls && !broken,
+                    ));
+                }
+            }
+        }
+        if self.tool == Tool::Stair {
+            overlay.snap = self.pointer;
+            if let (Some(start), Some(p)) = (self.chain_start, self.pointer)
+                && let Some(stair) =
+                    stairs::new_stair(project_now, self.storey, start, p.point, self.stair_form, self.stair_left)
+                && let Some(layout) = project_now.stair_layout(&stair)
+            {
+                for f in &layout.flights {
+                    for t in layout.treads(f) {
+                        overlay.ghosts.push(t.outline.iter().map(|q| [q.x, q.y]).collect());
+                    }
+                    let [(a, _), (b, _)] = layout.flight_side(f, WallSide::Left, 0.0);
+                    let [(c, _), (d, _)] = layout.flight_side(f, WallSide::Right, 0.0);
+                    overlay.ghosts.push(vec![[a.x, a.y], [b.x, b.y], [d.x, d.y], [c.x, c.y]]);
+                }
+                for (outline, _) in &layout.landings {
+                    overlay.ghosts.push(outline.iter().map(|q| [q.x, q.y]).collect());
+                }
+                if let Some((text, problems)) = stairs::verdict(project_now, &stair) {
+                    let detail =
+                        problems.first().map(|p| format!(" · {p}")).unwrap_or_else(|| " · DIN 18065 erfüllt".into());
+                    overlay.label = Some((p.point, format!("{text}{detail}")));
+                    overlay.verdict = Some(problems.is_empty());
+                }
+            }
+        }
+        if self.tool == Tool::RoofEdge
+            && let Some(p) = self.pointer
+            && let Some((roof, edge)) = roofs::edge_at(project_now, self.storey, p.point, self.hover_tolerance.max(0.1))
+            && let Some(Element::Roof(r)) = project_now.elements.get(&roof)
+        {
+            let n = r.outline.len();
+            overlay.guides.push((r.outline[edge], r.outline[(edge + 1) % n]));
+            let kind = match r.edges.get(edge) {
+                Some(lot_model::RoofEdge::Eave { .. }) => "Traufe: Klick macht einen Giebel",
+                _ => "Giebel: Klick macht eine Traufe",
+            };
+            overlay.tip = Some((p.point, kind.into()));
         }
         if matches!(self.tool, Tool::Section | Tool::Elevation) {
             overlay.snap = self.pointer;
@@ -2205,6 +2487,20 @@ impl Editor {
                 "Stich ziehen und klicken oder tippen, ⏎ übernimmt. Esc: Endpunkt neu.".into()
             }
             (Tool::ArcWall, Some(_), _) => "Bogenwand: Endpunkt klicken oder Sehne tippen.".into(),
+            (Tool::Stair, None, _) => format!(
+                "Treppe {}: Antritt klicken (Mitte der ersten Stufe). Esc: zurück zum Auswählen.",
+                self.stair_form.title()
+            ),
+            (Tool::Stair, Some(_), _) => {
+                let side = if self.stair_left { "links" } else { "rechts" };
+                match self.stair_form {
+                    stairs::StairForm::Straight => "Treppe: Richtung klicken. Steigungen und Auftritt rechnet Lot nach DIN 18065.".into(),
+                    _ => format!("Treppe: Richtung klicken. Sie wendet nach {side}, Leertaste wechselt die Seite."),
+                }
+            }
+            (Tool::RoofEdge, _, _) => "Dachkante: auf eine Kante klicken, Traufe und Giebel wechseln. Esc: zurück.".into(),
+            (Tool::Drain, _, _) => "Ablauf: in die Decke oder das Flachdach klicken. Esc: zurück.".into(),
+            (Tool::Overflow, _, _) => "Notüberlauf: an den Rand der Decke oder des Flachdachs klicken. Esc: zurück.".into(),
             (Tool::Section, None, _) => "Schnitt: Anfangspunkt der Schnittlinie klicken. Esc: zurück zum Auswählen.".into(),
             (Tool::Section, Some(_), _) => {
                 "Schnitt: Endpunkt klicken. Leertaste dreht die Blickrichtung, ⇧: nur rechte Winkel.".into()
@@ -2732,6 +3028,21 @@ impl Editor {
             .collect()
     }
 
+    /// Die gewählten Decken, geändert mit `change`.
+    fn selected_slabs(&self, project: &Project, change: impl Fn(&mut lot_model::Slab)) -> Vec<(ElementId, Element)> {
+        self.selection
+            .iter()
+            .filter_map(|id| match project.elements.get(id) {
+                Some(Element::Slab(s)) => {
+                    let mut n = s.clone();
+                    change(&mut n);
+                    Some((*id, Element::Slab(n)))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Länge der Enden einer Schnittmarke in Metern: 8 mm auf dem Papier (wie im Grundriss gezeichnet).
     fn mark_length(&self) -> f64 {
         8.0 * self.scale / 1000.0
@@ -3121,15 +3432,21 @@ impl Editor {
             .enumerate()
             .map(|(i, ring)| Operation::Insert {
                 id: ElementId(first + i as u64),
-                element: Element::Slab(Slab {
-                    props: Default::default(),
-                    phase: Default::default(),
-                    storey: self.storey,
-                    slab_type,
-                    outline: ring.into_iter().map(|p| Point2::new(p[0], p[1])).collect(),
-                    top_offset: 0.0,
-                    kind,
-                }),
+                element: Element::Slab(follow::with_boundary(
+                    project,
+                    Slab {
+                        props: Default::default(),
+                        phase: Default::default(),
+                        storey: self.storey,
+                        slab_type,
+                        outline: ring.into_iter().map(|p| Point2::new(p[0], p[1])).collect(),
+                        top_offset: 0.0,
+                        kind,
+                        follows_walls: true,
+                        boundary_walls: Vec::new(),
+                        fall: None,
+                    },
+                )),
             })
             .collect();
         Response::from_result(doc.apply(Operation::Group { label: "Decke aus Wänden".into(), ops }))
@@ -3152,7 +3469,7 @@ impl Editor {
             };
         };
         let outline = vec![a, Point2::new(b.x, a.y), b, Point2::new(a.x, b.y)];
-        let opening = lot_model::SlabOpening { phase: Default::default(), host, outline };
+        let opening = lot_model::SlabOpening { phase: Default::default(), host, outline, stair: None };
         Response::from_result(doc.insert(Element::SlabOpening(opening)).map(|_| ()))
     }
 
@@ -3277,6 +3594,17 @@ impl Editor {
             if let Some(Element::SectionView(_)) = project.elements.get(id) {
                 ops.extend(sheets::forget_section_ops(project, *id));
             }
+            // Geländer an den Läufen gehen mit der Treppe; Loch und Umwehrung führt das Nachführen nach.
+            if let Some(Element::Stair(_)) = project.elements.get(id) {
+                for (rid, e) in &project.elements {
+                    if let Element::Railing(r) = e
+                        && matches!(r.path, lot_model::RailingPath::Flight { stair, .. } if stair == *id)
+                        && !self.selection.contains(rid)
+                    {
+                        ops.push(Operation::Delete { id: *rid, element: e.clone() });
+                    }
+                }
+            }
             for (oid, _) in project.openings_in(*id) {
                 ops.push(Operation::Delete { id: oid, element: project.elements[&oid].clone() });
             }
@@ -3321,6 +3649,10 @@ pub fn shortcuts() -> Vec<(&'static str, Command)> {
         ("H", Command::TempHide),
         ("I", Command::TempIsolate),
         ("SC", Command::SectionTool),
+        ("TP", Command::StairTool(stairs::StairForm::Straight)),
+        ("DK", Command::RoofEdgeTool),
+        ("AB", Command::DrainTool),
+        ("NU", Command::OverflowTool),
         ("AN", Command::ElevationTool),
         ("CL", Command::ColumnTool),
         ("RM", Command::SpaceTool),
@@ -3364,6 +3696,10 @@ fn command_title(command: &Command) -> &'static str {
         Command::TempHide => "Ausblenden",
         Command::TempIsolate => "Isolieren",
         Command::SectionTool => "Schnitt",
+        Command::StairTool(_) => "Treppe",
+        Command::RoofEdgeTool => "Dachkante",
+        Command::DrainTool => "Ablauf",
+        Command::OverflowTool => "Notüberlauf",
         Command::ElevationTool => "Ansicht",
         Command::ColumnTool => "Stütze",
         Command::SpaceTool => "Raum",
@@ -3482,4 +3818,30 @@ mod tests;
 fn view_line(start: Point2, end: Point2, look: (f64, f64), mark: f64) -> [Point2; 3] {
     let mid = Point2::new((start.x + end.x) / 2.0, (start.y + end.y) / 2.0);
     [start, end, Point2::new(mid.x + look.0 * mark, mid.y + look.1 * mark)]
+}
+
+fn centroid(points: &[Point2]) -> Point2 {
+    let n = points.len().max(1) as f64;
+    Point2::new(points.iter().map(|p| p.x).sum::<f64>() / n, points.iter().map(|p| p.y).sum::<f64>() / n)
+}
+
+/// Gefälle ab Werk für eine Decke (ADR 0051): 2 %, beim Flachdach in der
+/// Dämmung, sonst in der obersten Schicht, zum Punkt `toward` hin.
+fn default_fall(project: &Project, slab: &lot_model::Slab, toward: Point2) -> lot_model::Fall {
+    use lot_model::{FallPurpose, LayerFunction};
+    let purpose = if slab.kind == lot_model::SlabKind::Roof { FallPurpose::Roof } else { FallPurpose::Balcony };
+    let layer = project
+        .slab_type(slab.slab_type)
+        .and_then(|t| {
+            if purpose == FallPurpose::Roof {
+                t.layers.iter().position(|l| l.function == LayerFunction::Insulation)
+            } else {
+                t.layers.iter().position(|l| l.material.contains("estrich"))
+            }
+        })
+        .unwrap_or(0);
+    let c = centroid(&slab.outline);
+    let (dx, dy) = (toward.x - c.x, toward.y - c.y);
+    let direction = if dx.hypot(dy) < 1e-6 { 270.0 } else { dy.atan2(dx).to_degrees().round().rem_euclid(360.0) };
+    lot_model::Fall { purpose, layer, percent: 2.0, direction, drains: Vec::new(), overflows: Vec::new() }
 }

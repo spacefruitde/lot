@@ -2042,3 +2042,217 @@ fn view_fields_parse_as_the_app_writes_them() {
         assert_eq!(ViewField::parse(text), Some(field), "{text}");
     }
 }
+
+// Decken, Dächer, Treppen (ADR 0051)
+
+fn following() -> (Document, Editor) {
+    let (mut doc, mut ed) = house();
+    doc.set_follow(follow::follow_ops);
+    ed.run(&mut doc, &Command::AddStorey);
+    ed.run(&mut doc, &Command::SlabFromWalls);
+    (doc, ed)
+}
+
+fn upper_slab(doc: &Document, ed: &Editor) -> (ElementId, lot_model::Slab) {
+    doc.project().slabs_on(ed.storey).next().map(|(id, s)| (id, s.clone())).expect("Decke")
+}
+
+#[test]
+fn slab_follows_moved_walls_in_one_undo_step() {
+    let (mut doc, mut ed) = following();
+    let (id, slab) = upper_slab(&doc, &ed);
+    assert!(slab.follows_walls);
+    let width = |s: &lot_model::Slab| {
+        let xs: Vec<f64> = s.outline.iter().map(|p| p.x).collect();
+        xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max) - xs.iter().cloned().fold(f64::INFINITY, f64::min)
+    };
+    let before = width(&slab);
+    // Je Kante die Wand darunter.
+    assert!(follow::edge_walls(doc.project(), &slab).iter().all(|w| w.is_some()));
+    // Die rechte Außenwand 1 m nach außen: die Decke folgt.
+    let storey_below = doc.project().storeys()[0].0;
+    ed.run(&mut doc, &Command::SetStorey(storey_below.0));
+    let right = wall_with(&doc, Point2::new(6.0, 4.0), Point2::new(6.0, 0.0));
+    ed.run(&mut doc, &Command::SetSelection(vec![right.0]));
+    let moved = geometry::moved_elements(doc.project(), &[right], (1.0, 0.0));
+    let ops: Vec<Operation> = moved
+        .into_iter()
+        .map(|(eid, new)| Operation::Replace { id: eid, old: doc.project().elements[&eid].clone(), new })
+        .collect();
+    doc.apply(Operation::Group { label: "Verschieben".into(), ops }).unwrap();
+    let after = match doc.project().elements.get(&id) {
+        Some(lot_model::Element::Slab(s)) => width(s),
+        _ => 0.0,
+    };
+    assert!((after - before - 1.0).abs() < 1e-6, "{before} -> {after}");
+    // Ein Schritt zurück nimmt Wand und Decke zurück.
+    doc.undo().unwrap();
+    let back = match doc.project().elements.get(&id) {
+        Some(lot_model::Element::Slab(s)) => width(s),
+        _ => 0.0,
+    };
+    assert!((back - before).abs() < 1e-6);
+}
+
+#[test]
+fn slab_stays_when_walls_open_up_and_says_so() {
+    let (mut doc, ed) = following();
+    let (id, slab) = upper_slab(&doc, &ed);
+    let left = wall_with(&doc, Point2::new(0.0, 0.0), Point2::new(0.0, 4.0));
+    doc.delete(left).unwrap();
+    let now = match doc.project().elements.get(&id) {
+        Some(lot_model::Element::Slab(s)) => s.clone(),
+        _ => panic!("Decke gelöscht"),
+    };
+    assert_eq!(now.outline, slab.outline, "der letzte Umriss bleibt");
+    assert!(follow::broken(doc.project(), &now));
+}
+
+fn big_house() -> (Document, Editor, ElementId) {
+    let (mut doc, mut ed) = setup();
+    doc.set_follow(follow::follow_ops);
+    ed.run(&mut doc, &Command::WallTool);
+    for (x, y) in [(0.0, 0.0), (0.0, 6.0), (10.0, 6.0), (10.0, 0.0), (0.0, 0.0)] {
+        click(&mut doc, &mut ed, x, y);
+    }
+    ed.key(&mut doc, Key::Escape);
+    let lower = ed.storey;
+    ed.run(&mut doc, &Command::AddStorey);
+    ed.run(&mut doc, &Command::SlabFromWalls);
+    ed.run(&mut doc, &Command::SetStorey(lower.0));
+    ed.run(&mut doc, &Command::SelectTool);
+    (doc, ed, lower)
+}
+
+fn openings_with_stair(doc: &Document) -> Vec<lot_model::SlabOpening> {
+    doc.project()
+        .elements
+        .values()
+        .filter_map(|e| match e {
+            lot_model::Element::SlabOpening(o) if o.stair.is_some() => Some(o.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn stair_tool_proposes_din_values_cuts_the_hole_and_sets_railings() {
+    let (mut doc, mut ed, _) = big_house();
+    let (risers, tread) = stairs::propose(2.75, lot_model::BuildingClass::General, true);
+    assert_eq!(risers, 16);
+    assert!((tread - 0.285).abs() < 1e-9, "{tread}");
+    ed.run(&mut doc, &Command::StairTool(stairs::StairForm::Straight));
+    click(&mut doc, &mut ed, 1.0, 2.0);
+    ed.pointer_moved(doc.project(), input(8.0, 2.0));
+    // Die Ampel steht am Zeiger.
+    let overlay = ed.overlay(doc.project());
+    assert_eq!(overlay.verdict, Some(true), "{:?}", overlay.label);
+    assert!(overlay.label.as_ref().unwrap().1.starts_with("16 Stg. 17,2/28,5"));
+    click(&mut doc, &mut ed, 8.0, 2.0);
+    let stair_id = ed.selection[0];
+    assert!(doc.project().stair(stair_id).is_some());
+    // Loch in der Decke darüber: ab der Stufe, über der weniger als 2 m frei wären, bis zum Austritt.
+    let holes = openings_with_stair(&doc);
+    assert_eq!(holes.len(), 1);
+    let xs: Vec<f64> = holes[0].outline.iter().map(|p| p.x).collect();
+    let (x0, x1) =
+        (xs.iter().cloned().fold(f64::INFINITY, f64::min), xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max));
+    assert!(x0 > 1.0 && x0 < 3.0, "Loch beginnt bei {x0}");
+    assert!((x1 - (1.0 + 15.0 * 0.285)).abs() < 0.02, "Loch endet am Austritt: {x1}");
+    // Geländer an beiden freien Seiten und eine Umwehrung um das Loch oben.
+    let railings: Vec<lot_model::Railing> = doc
+        .project()
+        .elements
+        .values()
+        .filter_map(|e| match e {
+            lot_model::Element::Railing(r) => Some(r.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(railings.iter().filter(|r| matches!(r.path, lot_model::RailingPath::Flight { .. })).count(), 2);
+    let guard = railings.iter().find(|r| r.around.is_some()).expect("Umwehrung");
+    let lot_model::RailingPath::Points(points) = &guard.path else { panic!() };
+    assert_eq!(points.len(), 4, "drei Seiten, ohne den Austritt: {points:?}");
+    // Die Treppe 0,5 m verschieben: Loch und Umwehrung folgen, in einem Schritt.
+    let mut moved = doc.project().stair(stair_id).unwrap().clone();
+    moved.start.x += 0.5;
+    doc.replace(stair_id, lot_model::Element::Stair(moved)).unwrap();
+    let x0_after = openings_with_stair(&doc)[0].outline.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    assert!((x0_after - x0 - 0.5).abs() < 1e-6);
+    doc.undo().unwrap();
+    let x0_back = openings_with_stair(&doc)[0].outline.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    assert!((x0_back - x0).abs() < 1e-6);
+    // Treppe löschen: Geländer, Loch und Umwehrung gehen mit.
+    ed.run(&mut doc, &Command::SetSelection(vec![stair_id.0]));
+    let r = ed.run(&mut doc, &Command::DeleteSelection);
+    assert!(r.error.is_none(), "{:?}", r.error);
+    assert!(openings_with_stair(&doc).is_empty());
+    assert!(!doc.project().elements.values().any(|e| matches!(e, lot_model::Element::Railing(_))));
+}
+
+#[test]
+fn half_landing_stair_turns_to_the_chosen_side() {
+    let (mut doc, mut ed, _) = big_house();
+    ed.run(&mut doc, &Command::StairTool(stairs::StairForm::HalfLanding));
+    click(&mut doc, &mut ed, 2.0, 1.0);
+    ed.key(&mut doc, Key::Char(' '));
+    click(&mut doc, &mut ed, 2.0, 5.0);
+    let stair = doc.project().stair(ed.selection[0]).unwrap().clone();
+    assert_eq!(stair.flights.len(), 2);
+    assert_eq!(stair.flights[0].landing, lot_model::Landing::BackRight, "Leertaste wechselt nach rechts");
+    assert_eq!(stair.flights[0].risers + stair.flights[1].risers, 16);
+}
+
+#[test]
+fn roof_edges_toggle_and_hip_roof_has_eaves_all_around() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::HipRoofFromWalls);
+    let (roof_id, roof) = doc.project().roofs_on(ed.storey).next().map(|(id, r)| (id, r.clone())).unwrap();
+    assert!(roof.edges.iter().all(|e| matches!(e, lot_model::RoofEdge::Eave { .. })));
+    // Mit dem Werkzeug eine Kante anklicken: aus der Traufe wird ein Giebel, und zurück.
+    ed.run(&mut doc, &Command::RoofEdgeTool);
+    let a = roof.outline[0];
+    let b = roof.outline[1];
+    let mid = Point2::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+    click(&mut doc, &mut ed, mid.x, mid.y);
+    let edge = |doc: &Document| match doc.project().elements.get(&roof_id) {
+        Some(lot_model::Element::Roof(r)) => r.edges[0],
+        _ => panic!(),
+    };
+    assert!(matches!(edge(&doc), lot_model::RoofEdge::Verge { .. }));
+    click(&mut doc, &mut ed, mid.x, mid.y);
+    assert!(matches!(edge(&doc), lot_model::RoofEdge::Eave { slope, .. } if (slope - roofs::SLOPE).abs() < 1e-9));
+    ed.run(&mut doc, &Command::SetRoofEdge(roof_id.0, 0, Some(30.0), Some(0.8)));
+    assert!(matches!(edge(&doc), lot_model::RoofEdge::Eave { slope, overhang } if slope == 30.0 && overhang == 0.8));
+}
+
+#[test]
+fn flat_roof_gets_a_storey_fall_and_drains() {
+    let (mut doc, mut ed) = house();
+    doc.set_follow(follow::follow_ops);
+    let storeys_before = doc.project().storeys().len();
+    let r = ed.run(&mut doc, &Command::FlatRoofFromWalls);
+    assert!(r.error.is_none(), "{:?}", r.error);
+    assert_eq!(doc.project().storeys().len(), storeys_before + 1, "Geschoss Dach angelegt");
+    let top = doc.project().storeys().last().unwrap().0;
+    let (slab_id, slab) = doc.project().slabs_on(top).next().map(|(id, s)| (id, s.clone())).unwrap();
+    assert_eq!(slab.kind, lot_model::SlabKind::Roof);
+    assert!(slab.follows_walls);
+    let fall = slab.fall.clone().unwrap();
+    assert_eq!((fall.percent, fall.purpose), (2.0, lot_model::FallPurpose::Roof));
+    let t = doc.project().slab_type(slab.slab_type).unwrap();
+    assert_eq!(t.layers[fall.layer].function, lot_model::LayerFunction::Insulation);
+    // Ablauf und Notüberlauf mit dem Werkzeug; der Prüfbericht ist dann ruhig.
+    ed.run(&mut doc, &Command::SetStorey(top.0));
+    ed.run(&mut doc, &Command::DrainTool);
+    click(&mut doc, &mut ed, 5.5, 2.0);
+    ed.run(&mut doc, &Command::OverflowTool);
+    click(&mut doc, &mut ed, 5.9, 3.0);
+    let findings = lot_rules::falls::check_falls(doc.project());
+    assert!(findings.iter().all(|f| f.status == lot_rules::Status::Ok), "{findings:?}");
+    // Gefälle im Inspektor ändern.
+    ed.run(&mut doc, &Command::SetSelection(vec![slab_id.0]));
+    ed.run(&mut doc, &Command::SetFallPercent(1.5));
+    let findings = lot_rules::falls::check_falls(doc.project());
+    assert!(findings[0].text.contains("Sonderkonstruktion"));
+}

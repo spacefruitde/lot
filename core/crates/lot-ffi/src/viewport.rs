@@ -958,6 +958,10 @@ impl Viewport {
                         Tool::PickDirection => "direction",
                         Tool::Section => "section",
                         Tool::Elevation => "elevation",
+                        Tool::Stair => "stair",
+                        Tool::RoofEdge => "roofEdge",
+                        Tool::Drain => "drain",
+                        Tool::Overflow => "overflow",
                     }
                     .to_string(),
                 )
@@ -1769,13 +1773,35 @@ fn plan_overlay(s: &mut State) {
             width_px: 1.5,
         });
     }
-    if let Some((at, text)) = overlay.label {
-        items.push(OverlayItem::Text {
-            at: paper([at.x, at.y]),
-            text,
-            height_px: 12.0,
-            color: linear([0.05, 0.25, 0.6], 1.0),
+    // Kanten gewählter Decken: blau, wo sie einer Wand folgen, orange, wo sie frei sind (ADR 0051).
+    for (a, b, followed) in overlay.edge_marks {
+        let color = if followed { blue } else { linear([0.95, 0.45, 0.05], 1.0) };
+        items.push(OverlayItem::Path {
+            points: vec![paper([a.x, a.y]), paper([b.x, b.y])],
+            closed: false,
+            color,
+            width_px: 4.0,
+            dash_px: if followed { None } else { Some((6.0, 4.0)) },
         });
+    }
+    if let Some((at, text)) = overlay.label {
+        match overlay.verdict {
+            // Ampel nach DIN 18065 am Zeiger.
+            Some(ok) => items.push(OverlayItem::Label {
+                at: paper([at.x, at.y]),
+                offset_px: [14.0, 10.0],
+                text,
+                height_px: 10.0,
+                color: linear([1.0, 1.0, 1.0], 1.0),
+                background: if ok { linear([0.15, 0.6, 0.25], 1.0) } else { linear([0.85, 0.2, 0.15], 1.0) },
+            }),
+            None => items.push(OverlayItem::Text {
+                at: paper([at.x, at.y]),
+                text,
+                height_px: 12.0,
+                color: linear([0.05, 0.25, 0.6], 1.0),
+            }),
+        }
     }
     // Temporäre Maße: dünne Linie mit Endstrichen, die Zahl zum Anklicken auf einem Feld.
     let dim_color = linear([0.10, 0.35, 0.80], 1.0);

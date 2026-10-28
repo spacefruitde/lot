@@ -173,5 +173,17 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Darstellung einer Ansicht | `views::Look` | | jede Einstellung mit Herkunft, Regeln, ausgeblendete Bauteile |
 | Vorübergehend ausblenden, isolieren | `views::Temporary` | | H und I, nur am Bildschirm, nie im Druck |
 | Druckbild | `print_view` | | zeigt am Bildschirm nur, was gedruckt wird |
+| Decke folgt den Wänden | `Slab::follows_walls`, `Slab::boundary_walls` | | Umriss an der Außenkante der Tragschicht; fehlt eine Wand, bleibt er und die Decke ist markiert (ADR 0051) |
+| Nachführen | `Document::set_follow`, `follow::follow_ops` | | nach jeder Änderung abhängige Elemente anpassen, im selben Schritt beim Widerrufen |
+| Gefälle | `Fall` | | Eigenschaft einer Schicht: Richtung, Prozent, Abläufe, Notüberläufe |
+| Verwendung des Gefälles | `FallPurpose` | | Flachdach, Balkon/Loggia/Terrasse, bodengleiche Dusche; bestimmt den Mindestwert |
+| Ablauf, Notüberlauf | `Fall::drains`, `Fall::overflows` | | DIN 1986-100 |
+| Flachdach | `SlabKind::Roof` | IfcSlab.ROOF | Decke der Art Flachdach im Geschoss darüber |
+| Walmdach | `RoofForm::Hip` | | Traufen ringsum |
+| Dachkante | `RoofEdge` | | Traufe (mit Neigung) oder Giebel (Ortgang) |
+| Treppenloch | `SlabOpening::stair` | | Durchbruch, der seiner Treppe folgt, so groß wie die Durchgangshöhe verlangt |
+| Umwehrung | `Railing::around` | | Geländer um ein Treppenloch, ohne die Seite des Austritts |
+| Treppenform | `stairs::StairForm` | | gerade, zweiläufig mit Halbpodest, L-Form mit Viertelpodest |
+| Ampel (DIN 18065) | `stairs::verdict` | | Prüfung beim Zeichnen, grün oder rot am Zeiger |
 | Maßstabsleiste | `scale_bar` | | |
 | Nordpfeil | `north_arrow` | | Richtung aus `ProjectInfo::north` |

@@ -483,7 +483,9 @@ impl LotDocument {
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn with(doc: Document, attachments: lot_io::project_file::Attachments) -> Arc<Self> {
+    fn with(mut doc: Document, attachments: lot_io::project_file::Attachments) -> Arc<Self> {
+        // Decken folgen den Wänden, Treppenlöcher ihrer Treppe (ADR 0051).
+        doc.set_follow(lot_edit::follow::follow_ops);
         let sills = Mutex::new(doc.project().rough_sills());
         Arc::new(Self { inner: Mutex::new(doc), attachments: Mutex::new(attachments), sills })
     }

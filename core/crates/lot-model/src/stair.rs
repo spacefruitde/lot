@@ -243,6 +243,9 @@ pub struct Railing {
     /// Bestand, Abbruch oder Neubau (2.05).
     #[serde(default, skip_serializing_if = "crate::Phase::is_new")]
     pub phase: crate::Phase,
+    /// Umwehrung eines Treppenlochs: folgt seinem Rand, ohne die Seite des Austritts (ADR 0051).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub around: Option<ElementId>,
 }
 
 /// Verlauf eines Geländers.

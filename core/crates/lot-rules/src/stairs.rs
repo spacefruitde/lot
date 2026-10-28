@@ -28,16 +28,17 @@ pub struct StairCheck {
 }
 
 /// Grenzwerte einer Zeile der Tabelle 1, in m.
-struct Limits {
-    width: f64,
-    rise: (f64, f64),
-    tread: (f64, f64),
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Limits {
+    pub width: f64,
+    pub rise: (f64, f64),
+    pub tread: (f64, f64),
 }
 
 /// DIN 18065:2020-08, Tabelle 1: nutzbare Laufbreite, Steigung und Auftritt
 /// je Gebäudeart und Treppenart. Steigung ab 14 cm und Auftritt bis 37 cm gelten
 /// für alle Zeilen.
-fn limits(building: BuildingClass, necessary: bool) -> Limits {
+pub fn limits(building: BuildingClass, necessary: bool) -> Limits {
     match (building, necessary) {
         (BuildingClass::SmallResidential, true) => Limits { width: 0.80, rise: (0.14, 0.20), tread: (0.23, 0.37) },
         (BuildingClass::General, true) => Limits { width: 1.00, rise: (0.14, 0.19), tread: (0.26, 0.37) },
@@ -46,7 +47,7 @@ fn limits(building: BuildingClass, necessary: bool) -> Limits {
 }
 
 /// Schrittmaßregel nach DIN 18065:2020-08: 59 cm ≤ 2s + a ≤ 65 cm.
-const STEP_RANGE: (f64, f64) = (0.59, 0.65);
+pub const STEP_RANGE: (f64, f64) = (0.59, 0.65);
 /// Lichte Treppendurchgangshöhe nach DIN 18065:2020-08: mindestens 2,00 m.
 const MIN_HEADROOM: f64 = 2.00;
 
@@ -327,6 +328,9 @@ mod tests {
                     Point2::new(-1.0, 4.0),
                 ],
                 kind: lot_model::SlabKind::Floor,
+                follows_walls: false,
+                boundary_walls: Vec::new(),
+                fall: None,
                 top_offset: 0.0,
             }),
         );
