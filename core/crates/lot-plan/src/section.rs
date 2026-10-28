@@ -102,6 +102,82 @@ fn building_extent(meshes: &[(&lot_geom::ElementGeometry, Vec<[f64; 3]>)], depth
     lo[0].is_finite().then_some((lo, hi))
 }
 
+/// Was man im Schnitt von einem Element sieht, für die App (ADR 0049): bei
+/// Schnitten die geschnittenen Flächen, sonst die Dreiecke hinter der
+/// Schnittebene innerhalb der Blicktiefe, in (u, v) Metern.
+fn element_view(view: &SectionView, frame: Frame, e: &lot_geom::ElementGeometry) -> (Area, Vec<[[f64; 3]; 3]>) {
+    let uvw: Vec<[f64; 3]> = e.mesh.positions.iter().map(|p| frame.uvw(*p)).collect();
+    let cut = if view.kind == SectionKind::Section { slice(&e.mesh, &uvw) } else { Area::empty() };
+    let seen = e
+        .mesh
+        .triangles
+        .iter()
+        .map(|t| t.map(|i| uvw[i as usize]))
+        .filter(|t| t.iter().any(|p| p[2] > 0.0) && t.iter().any(|p| p[2] < view.depth))
+        .collect();
+    (cut, seen)
+}
+
+/// Umrisse der Elemente `ids` im Schnitt, in (u, v) Metern, zum Hervorheben
+/// der Auswahl in der App (ADR 0049).
+pub fn section_outlines(geometry: &ModelGeometry, view: &SectionView, ids: &[ElementId]) -> Vec<Vec<[f64; 2]>> {
+    let frame = Frame::new(view);
+    let mut by_element: HashMap<ElementId, Vec<Area>> = HashMap::new();
+    for e in geometry.elements.iter().filter(|e| ids.contains(&e.id)) {
+        let (cut, seen) = element_view(view, frame, e);
+        let area = if cut.is_empty() {
+            let tris: Vec<Area> =
+                seen.iter().filter(|t| signed2(t) > 1e-9).map(|t| Area::from_ring(&t.map(|p| [p[0], p[1]]))).collect();
+            Area::union_all(tris.iter())
+        } else {
+            cut
+        };
+        by_element.entry(e.id).or_default().push(area);
+    }
+    by_element.values().flat_map(|areas| Area::union_all(areas.iter()).rings()).collect()
+}
+
+/// Doppelte Fläche eines Dreiecks in (u, v), vorzeichenlos.
+fn signed2(t: &[[f64; 3]; 3]) -> f64 {
+    ((t[1][0] - t[0][0]) * (t[2][1] - t[0][1]) - (t[2][0] - t[0][0]) * (t[1][1] - t[0][1])).abs()
+}
+
+/// Das Element, das man an (u, v) im Schnitt sieht: ein geschnittenes zuerst,
+/// sonst das vorderste dahinter in der Blicktiefe. Das Erdreich zählt nicht.
+pub fn section_pick(geometry: &ModelGeometry, view: &SectionView, at: [f64; 2]) -> Option<ElementId> {
+    let frame = Frame::new(view);
+    let mut best: Option<(f64, ElementId)> = None;
+    for e in geometry.elements.iter().filter(|e| e.material != lot_geom::terrain::TERRAIN_MATERIAL) {
+        let (cut, seen) = element_view(view, frame, e);
+        if cut.contains(at) {
+            return Some(e.id);
+        }
+        for t in seen {
+            if let Some(w) = depth_at(&t, at)
+                && (0.0..=view.depth).contains(&w)
+                && best.is_none_or(|(b, _)| w < b)
+            {
+                best = Some((w, e.id));
+            }
+        }
+    }
+    best.map(|(_, id)| id)
+}
+
+/// Tiefe w des Dreiecks am Punkt (u, v), wenn er darin liegt.
+fn depth_at(t: &[[f64; 3]; 3], p: [f64; 2]) -> Option<f64> {
+    let (a, b, c) = (t[0], t[1], t[2]);
+    let det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
+    if det.abs() < 1e-12 {
+        return None;
+    }
+    let l1 = ((b[1] - c[1]) * (p[0] - c[0]) + (c[0] - b[0]) * (p[1] - c[1])) / det;
+    let l2 = ((c[1] - a[1]) * (p[0] - c[0]) + (a[0] - c[0]) * (p[1] - c[1])) / det;
+    let l3 = 1.0 - l1 - l2;
+    let eps = -1e-9;
+    (l1 >= eps && l2 >= eps && l3 >= eps).then(|| l1 * a[2] + l2 * b[2] + l3 * c[2])
+}
+
 /// Platz links neben dem Bild für die Höhenkoten und die Wandhöhe, in Metern.
 const MARK_SPACE: f64 = 4.5;
 /// Abstand der Höhenkoten links vom Bild, in Metern.
@@ -967,6 +1043,20 @@ mod tests {
     }
 
     #[test]
+    fn pick_and_outline_in_a_section_find_the_cut_wall() {
+        let p = lot_model::Project::sample();
+        let g = lot_geom::build(&p).unwrap();
+        let wall = p.walls().next().unwrap().0;
+        // Quer bei x = 1, Blick nach Westen: u = y + 2, die Wand liegt bei u 1,85 bis 2,15.
+        let v = view((1.0, -2.0), (1.0, 2.0), SectionKind::Section);
+        assert_eq!(section_pick(&g, &v, [2.0, 1.0]), Some(wall));
+        assert_eq!(section_pick(&g, &v, [0.5, 1.0]), None);
+        let rings = section_outlines(&g, &v, &[wall]);
+        let area = Area::from_rings(&rings).area();
+        assert!((area - 0.3 * 2.6).abs() < 1e-3, "{area}");
+    }
+
+    #[test]
     fn section_cuts_the_wall_across() {
         // Beispielwand 5 m lang, 30 cm dick, 2,60 m hoch; Schnitt quer bei x = 1, Blick nach Westen.
         let p = lot_model::Project::sample();
@@ -1002,6 +1092,10 @@ mod tests {
         );
         p.elements.remove(&ElementId(4)); // ohne Fenster, damit nichts durchscheint
         let g = lot_geom::build(&p).unwrap();
+        // Angeklickt wird die vordere Wand, nicht die verdeckte dahinter.
+        let front = p.walls().find(|(_, w)| w.start.y == 0.0).unwrap().0;
+        let v = view((-1.0, -3.0), (6.0, -3.0), SectionKind::Elevation);
+        assert_eq!(section_pick(&g, &v, [3.0, 1.0]), Some(front));
         // Ansicht von Süden: Linie bei y = -3 nach Osten, Blick nach Norden.
         let v = view((-1.0, -3.0), (6.0, -3.0), SectionKind::Elevation);
         let viewport = Viewport { scale: 100.0, origin: PaperPoint::new(0.0, 0.0) };

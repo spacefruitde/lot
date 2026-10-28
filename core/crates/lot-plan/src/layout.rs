@@ -30,6 +30,8 @@ const ROW: f64 = 13.0;
 
 /// Eine Ansicht, an ihren Platz auf dem Blatt geschoben.
 struct Drawing {
+    /// Stelle in `PlanSheet::views`.
+    index: usize,
     objects: Vec<PlanObject>,
     title: String,
     scale: f64,
@@ -55,7 +57,7 @@ impl Drawing {
 
 fn drawings(project: &Project, geometry: &ModelGeometry, sheet: &PlanSheet, standard: &OfficeStandard) -> Vec<Drawing> {
     let mut out = Vec::new();
-    for placed in &sheet.views {
+    for (index, placed) in sheet.views.iter().enumerate() {
         let viewport = Viewport { scale: placed.scale, origin: PaperPoint::new(0.0, 0.0) };
         let (mut objects, title) = match placed.content {
             ViewContent::FloorPlan { storey } => {
@@ -86,6 +88,7 @@ fn drawings(project: &Project, geometry: &ModelGeometry, sheet: &PlanSheet, stan
             o.translate(dx, dy);
         }
         out.push(Drawing {
+            index,
             objects,
             title,
             scale: placed.scale,
@@ -125,6 +128,24 @@ pub fn plan_sheet(project: &Project, geometry: &ModelGeometry, sheet: &PlanSheet
     }
     title_block(&mut out, project, sheet, standard);
     out
+}
+
+/// Umriss jeder Ansicht auf dem Blatt mit Titel, in Blatt-mm, nach ihrer
+/// Stelle in `PlanSheet::views`; leere Ansichten fehlen. Zum Anklicken und
+/// Verschieben in der App (ADR 0049).
+pub fn placed_extents(
+    project: &Project,
+    geometry: &ModelGeometry,
+    sheet: &PlanSheet,
+    standard: &OfficeStandard,
+) -> Vec<(usize, PaperPoint, PaperPoint)> {
+    drawings(project, geometry, sheet, standard)
+        .iter()
+        .map(|d| {
+            let (lo, hi) = d.extent();
+            (d.index, lo, hi)
+        })
+        .collect()
 }
 
 /// Was am Blatt nicht stimmt: Ansichten über den Rand, auf dem Schriftfeld
@@ -289,6 +310,20 @@ mod tests {
         assert!(problems.iter().any(|m| m.contains("Schriftfeld")), "{problems:?}");
         let problems = layout_problems(&p, &g, &sheet(&p, &[(150.0, 200.0), (160.0, 200.0)]), standard);
         assert!(problems.iter().any(|m| m.contains("überdecken")), "{problems:?}");
+    }
+
+    #[test]
+    fn placed_extents_follow_the_order_on_the_sheet() {
+        let p = Project::sample();
+        let g = lot_geom::build(&p).unwrap();
+        let standard = OfficeStandard::default_standard();
+        let extents = placed_extents(&p, &g, &sheet(&p, &[(150.0, 200.0), (300.0, 100.0)]), standard);
+        assert_eq!(extents.len(), 2);
+        for (i, (x, y)) in [(150.0, 200.0), (300.0, 100.0)].into_iter().enumerate() {
+            let (index, lo, hi) = extents[i];
+            assert_eq!(index, i);
+            assert!(lo.x < x && x < hi.x && lo.y < y && y < hi.y, "{i}: {lo:?} {hi:?}");
+        }
     }
 
     #[test]
