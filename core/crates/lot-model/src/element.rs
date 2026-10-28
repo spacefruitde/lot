@@ -31,6 +31,7 @@ pub enum Element {
     WallType(WallType),
     Wall(Wall),
     Opening(Opening),
+    OpeningType(OpeningType),
     Column(Column),
     Space(Space),
     DimensionChain(DimensionChain),
@@ -62,6 +63,7 @@ pub enum ElementKind {
     WallType,
     Wall,
     Opening,
+    OpeningType,
     Column,
     Space,
     DimensionChain,
@@ -93,6 +95,7 @@ impl Element {
             Element::WallType(_) => ElementKind::WallType,
             Element::Wall(_) => ElementKind::Wall,
             Element::Opening(_) => ElementKind::Opening,
+            Element::OpeningType(_) => ElementKind::OpeningType,
             Element::Column(_) => ElementKind::Column,
             Element::Space(_) => ElementKind::Space,
             Element::DimensionChain(_) => ElementKind::DimensionChain,
@@ -159,12 +162,9 @@ impl Element {
             (Element::Wall(w), Param::WallSagitta) => Some(w.sagitta),
             (Element::Wall(w), Param::WallHeight) => match w.top {
                 Top::Height(h) => Some(h),
-                Top::Storey { .. } | Top::Roof { .. } => None,
+                _ => None,
             },
-            (Element::Wall(w), Param::WallTopOffset) => match w.top {
-                Top::Storey { offset } => Some(offset),
-                Top::Height(_) | Top::Roof { .. } => None,
-            },
+            (Element::Wall(w), Param::WallTopOffset) => w.top.offset(),
             (Element::Wall(w), Param::BaseOffset) => Some(w.base_offset),
             (Element::Column(c), Param::BaseOffset) => Some(c.base_offset),
             (Element::Opening(o), Param::OpeningOffset) => Some(o.offset),
@@ -199,7 +199,13 @@ impl Element {
             (Element::Wall(w), Param::WallLength) => w.set_length(value),
             (Element::Wall(w), Param::WallSagitta) => w.sagitta = value,
             (Element::Wall(w), Param::WallHeight) => w.top = Top::Height(value),
-            (Element::Wall(w), Param::WallTopOffset) => w.top = Top::Storey { offset: value },
+            (Element::Wall(w), Param::WallTopOffset) => {
+                w.top = match w.top {
+                    Top::Slab { .. } => Top::Slab { offset: value },
+                    Top::Roof { .. } => Top::Roof { offset: value },
+                    _ => Top::Storey { offset: value },
+                }
+            }
             (Element::Wall(w), Param::BaseOffset) => w.base_offset = value,
             (Element::Column(c), Param::BaseOffset) => c.base_offset = value,
             (Element::Opening(o), Param::OpeningOffset) => o.offset = value,
@@ -264,6 +270,20 @@ impl WallType {
     pub fn thickness(&self) -> f64 {
         self.layers.iter().map(|l| l.thickness).sum()
     }
+
+    /// Kern: von der ersten bis zur letzten Tragschicht, als Abstand von der
+    /// Außenfläche (außen, innen). Ohne Tragschicht der ganze Aufbau.
+    pub fn core(&self) -> (f64, f64) {
+        let mut depth = 0.0;
+        let mut core: Option<(f64, f64)> = None;
+        for l in &self.layers {
+            if l.function == LayerFunction::Structure {
+                core = Some((core.map_or(depth, |c| c.0), depth + l.thickness));
+            }
+            depth += l.thickness;
+        }
+        core.unwrap_or((0.0, depth))
+    }
 }
 
 /// Schicht eines Wandaufbaus (IfcMaterialLayer).
@@ -306,7 +326,9 @@ impl LayerFunction {
     }
 }
 
-/// Lage der Bezugslinie einer Wand im Aufbau.
+/// Lage der Bezugslinie einer Wand im Aufbau. Sie ist eine Lesart, keine
+/// Geometrie (ADR 0045): Ein Wechsel verschiebt die Wand nicht, sondern die
+/// Bezugslinie innerhalb der Wand.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum WallAlignment {
     /// Mitte des Gesamtaufbaus
@@ -316,6 +338,58 @@ pub enum WallAlignment {
     Exterior,
     /// Innenkante (rechte Seite in Zeichenrichtung)
     Interior,
+    /// Mitte des Kerns (von der ersten bis zur letzten Tragschicht)
+    CoreCenter,
+    /// Außenkante des Kerns
+    CoreExterior,
+    /// Innenkante des Kerns
+    CoreInterior,
+}
+
+impl WallAlignment {
+    pub const ALL: [WallAlignment; 6] = [
+        WallAlignment::Center,
+        WallAlignment::Exterior,
+        WallAlignment::Interior,
+        WallAlignment::CoreCenter,
+        WallAlignment::CoreExterior,
+        WallAlignment::CoreInterior,
+    ];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            WallAlignment::Center => "Mitte",
+            WallAlignment::Exterior => "Außenfläche",
+            WallAlignment::Interior => "Innenfläche",
+            WallAlignment::CoreCenter => "Kernmitte",
+            WallAlignment::CoreExterior => "Kern außen",
+            WallAlignment::CoreInterior => "Kern innen",
+        }
+    }
+
+    /// Abstand der Bezugslinie von der Außenfläche des Aufbaus.
+    pub fn depth(self, wall_type: &WallType) -> f64 {
+        let (outer, inner) = wall_type.core();
+        match self {
+            WallAlignment::Center => wall_type.thickness() / 2.0,
+            WallAlignment::Exterior => 0.0,
+            WallAlignment::Interior => wall_type.thickness(),
+            WallAlignment::CoreCenter => (outer + inner) / 2.0,
+            WallAlignment::CoreExterior => outer,
+            WallAlignment::CoreInterior => inner,
+        }
+    }
+
+    /// Dieselbe Lage von der anderen Seite gelesen: außen wird innen.
+    pub fn mirrored(self) -> Self {
+        match self {
+            WallAlignment::Exterior => WallAlignment::Interior,
+            WallAlignment::Interior => WallAlignment::Exterior,
+            WallAlignment::CoreExterior => WallAlignment::CoreInterior,
+            WallAlignment::CoreInterior => WallAlignment::CoreExterior,
+            a => a,
+        }
+    }
 }
 
 /// Oberkante eines Bauteils.
@@ -327,6 +401,31 @@ pub enum Top {
     Storey { offset: f64 },
     /// Bis unter das Dach desselben Geschosses, plus Versatz (Giebelwände, Wände im Dachgeschoss).
     Roof { offset: f64 },
+    /// Bis an die Decke darüber, plus Versatz: Oberkante der nächsten Decke über
+    /// der Wand, wo immer sie liegt (ADR 0045). Ohne Decke wie `Storey`.
+    Slab { offset: f64 },
+}
+
+impl Top {
+    /// Art der Oberkante zur Auswahl, in der Reihenfolge von [`Top::TITLES`].
+    pub fn mode(self) -> usize {
+        match self {
+            Top::Storey { .. } => 0,
+            Top::Slab { .. } => 1,
+            Top::Roof { .. } => 2,
+            Top::Height(_) => 3,
+        }
+    }
+
+    pub const TITLES: [&'static str; 4] = ["Geschoss darüber", "Decke darüber", "Dach", "feste Höhe"];
+
+    /// Versatz der Oberkante; `None` bei fester Höhe.
+    pub fn offset(self) -> Option<f64> {
+        match self {
+            Top::Storey { offset } | Top::Slab { offset } | Top::Roof { offset } => Some(offset),
+            Top::Height(_) => None,
+        }
+    }
 }
 
 /// Wand (IfcWall). Die Bezugslinie läuft von `start` nach `end`.
@@ -349,6 +448,51 @@ pub struct Wall {
     /// Bestand, Abbruch oder Neubau (2.05).
     #[serde(default, skip_serializing_if = "Phase::is_new")]
     pub phase: Phase,
+    /// Ausnahmen am Anschluss für Anfang und Ende (ADR 0045).
+    #[serde(default, skip_serializing_if = "JoinRule::both_auto")]
+    pub joins: [JoinRule; 2],
+}
+
+/// Ausnahme am Anschluss eines Wandendes (ADR 0045). Ohne Ausnahme greifen die
+/// Schichten nach ihrem Rang ineinander.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum JoinRule {
+    #[default]
+    Auto,
+    /// An einer Ecke aus zwei Wänden läuft diese Wand durch, die andere stößt an.
+    Through,
+    /// Nicht verbinden: Die Wand stößt stumpf an, Schichten greifen nicht ineinander.
+    Butt,
+}
+
+impl JoinRule {
+    fn both_auto(rules: &[JoinRule; 2]) -> bool {
+        rules.iter().all(|r| *r == JoinRule::Auto)
+    }
+}
+
+impl WallEnd {
+    pub fn index(self) -> usize {
+        match self {
+            WallEnd::Start => 0,
+            WallEnd::End => 1,
+        }
+    }
+
+    pub fn other(self) -> Self {
+        match self {
+            WallEnd::Start => WallEnd::End,
+            WallEnd::End => WallEnd::Start,
+        }
+    }
+}
+
+impl Phase {
+    /// Ob Wände dieser Bauzustände sich verbinden: Bestand und Abbruch waren
+    /// ein Gebäude, Neubau stößt nur an (ADR 0045).
+    pub fn joins_with(self, other: Phase) -> bool {
+        (self == Phase::New) == (other == Phase::New)
+    }
 }
 
 fn is_zero(v: &f64) -> bool {
@@ -492,12 +636,7 @@ impl Wall {
     /// Lage der Schichten quer zur Bezugslinie, als (links, rechts) je Schicht,
     /// von außen nach innen. Positive Werte liegen links der Bezugslinie.
     pub fn layer_offsets(&self, wall_type: &WallType) -> Vec<(f64, f64)> {
-        let total = wall_type.thickness();
-        let mut left = match self.alignment {
-            WallAlignment::Center => total / 2.0,
-            WallAlignment::Exterior => 0.0,
-            WallAlignment::Interior => total,
-        };
+        let mut left = self.alignment.depth(wall_type);
         wall_type
             .layers
             .iter()
@@ -521,13 +660,41 @@ pub struct Opening {
     pub offset: f64,
     pub width: f64,
     pub height: f64,
-    /// Brüstungshöhe über Unterkante Wand.
+    /// Fertige Brüstungshöhe (BRH) über OKFF des Geschosses; führend (ADR 0047).
+    /// Die Rohbaubrüstung ergibt sich daraus (`Project::rough_sill`).
     pub sill_height: f64,
     #[serde(default, skip_serializing_if = "OpeningKind::is_plain")]
     pub kind: OpeningKind,
+    /// Tür- oder Fenstertyp, der die Öffnung füllt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opening_type: Option<ElementId>,
+    /// Nische statt Durchgang: nur so tief in die Wand.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recess: Option<Recess>,
     /// Bestand, Abbruch oder Neubau (2.05).
     #[serde(default, skip_serializing_if = "Phase::is_new")]
     pub phase: Phase,
+}
+
+/// Nische (ADR 0047): Die Öffnung reicht von der Seite `side` nur `depth` tief in die Wand.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Recess {
+    pub side: WallSide,
+    pub depth: f64,
+}
+
+/// Tür- oder Fenstertyp (IfcDoorType, IfcWindowType). Er füllt eine Öffnung,
+/// die Öffnung behält ihr Rohbaumaß (ADR 0047).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OpeningType {
+    pub name: String,
+    /// Kennzeichen in Plänen und Listen, etwa „F1“.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mark: String,
+    /// Unterer Anschluss: von der Rohbaubrüstung bis zur fertigen Brüstung
+    /// (Fensterbank, Ausgleich), in Metern.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sill_connection: f64,
 }
 
 /// Was in einer Öffnung sitzt.
@@ -982,7 +1149,7 @@ pub enum Param {
     WallSagitta,
     /// Feste Höhe; nur bei Wänden mit `Top::Height`.
     WallHeight,
-    /// Versatz der Oberkante; nur bei Wänden, die am Geschoss hängen.
+    /// Versatz der Oberkante; bei Wänden bis zum Geschoss, zur Decke oder zum Dach.
     WallTopOffset,
     /// Unterkante über OKFF, für Wände und Stützen.
     BaseOffset,
@@ -1007,6 +1174,7 @@ mod tests {
 
     fn arc_wall(sagitta: f64) -> Wall {
         Wall {
+            joins: Default::default(),
             phase: Default::default(),
             storey: ElementId(1),
             wall_type: ElementId(2),

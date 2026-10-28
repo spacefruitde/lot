@@ -274,9 +274,26 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                 if overlaps {
                     return Err(invalid("Die Öffnung überschneidet sich mit einer anderen in derselben Wand"));
                 }
-                let (bottom, top) = project.wall_extent(wall).unwrap_or((0.0, 0.0));
-                if o.sill_height < 0.0 || o.sill_height + o.height > top - bottom + TOLERANCE {
+                let (_, top) = project.wall_extent(wall).unwrap_or((0.0, 0.0));
+                let (_, z1) = project.opening_span(o).unwrap_or((0.0, 0.0));
+                if o.sill_height < 0.0 || z1 > top + TOLERANCE {
                     return Err(invalid("Die Öffnung ragt oben oder unten aus der Wand"));
+                }
+                if let Some(r) = o.recess {
+                    let thickness = project.wall_type(wall.wall_type).map_or(0.0, |t| t.thickness());
+                    if r.depth < MIN_LENGTH || r.depth > thickness - MIN_LENGTH {
+                        return Err(invalid(
+                            "Eine Nische muss mindestens 1 cm tief sein und darf die Wand nicht durchstoßen",
+                        ));
+                    }
+                }
+                if o.opening_type.is_some_and(|t| project.opening_type(t).is_none()) {
+                    return Err(invalid("Den Tür- oder Fenstertyp der Öffnung gibt es nicht"));
+                }
+            }
+            Element::OpeningType(t) => {
+                if !(0.0..1.0).contains(&t.sill_connection) {
+                    return Err(invalid(format!("{}: Der untere Anschluss muss zwischen 0 und 1 m liegen", t.name)));
                 }
             }
             Element::SlabType(t) => {
@@ -623,6 +640,8 @@ mod tests {
         let mut d = doc();
         let err = d
             .insert(Element::Opening(Opening {
+                recess: None,
+                opening_type: None,
                 phase: Default::default(),
                 host: ElementId(2),
                 offset: 0.0,

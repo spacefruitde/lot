@@ -7,7 +7,15 @@ struct InspectorView: View {
 
     var body: some View {
         Form {
-            if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty {
+            if !model.notices.isEmpty {
+                Section("Hinweis") {
+                    ForEach(model.notices, id: \.self) { Text($0).foregroundStyle(.orange) }
+                    Button("Gelesen") { model.notices.removeAll() }
+                }
+            }
+            if let junction = model.junction {
+                JunctionSection(junction: junction)
+            } else if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty {
                 Section {
                     Text("Nichts gewählt. Eine Wand oder einen Raumstempel anklicken zeigt die Eigenschaften.")
                         .foregroundStyle(.secondary)
@@ -41,6 +49,12 @@ struct InspectorView: View {
                         .labelsHidden()
                     }
                 }
+                if !model.walls.isEmpty {
+                    WallSection()
+                }
+                if let type = model.wallType {
+                    WallTypeSection(info: type)
+                }
                 if model.groups.count > 0 {
                     SelectionGroupsSection()
                 }
@@ -48,6 +62,9 @@ struct InspectorView: View {
                     ForEach(groups, id: \.0) { element, parameters in
                         Section(model.label(for: element)) {
                             ForEach(parameters, id: \.kind) { ParameterRow(parameter: $0) }
+                            if let opening = model.openings.first(where: { $0.element == element }) {
+                                OpeningRows(opening: opening)
+                            }
                             if let door = model.doors.first(where: { $0.element == element }) {
                                 DoorRows(door: door)
                             }
@@ -79,6 +96,7 @@ struct InspectorView: View {
                     Text("Kürzel wie Revit: WA Wand, DR Tür, WN Fenster, RM Raum, GR Achse, CL Stütze, DI Bemaßen, LI Linie, TX Text, SA Gleiche wählen, Esc Auswählen, ⌘K Befehle")
                     Text("Auswählen: Klick, Ziehen ergibt einen Rahmen (nach links auch Angeschnittenes), ⌥ ein Lasso, ⇧ fügt hinzu, ⇥ blättert unter dem Zeiger, ⌘← vorige Auswahl")
                     Text("Bearbeiten: Ziehen verschiebt die Auswahl, mit ⌥ als Kopie, Pfeile 1 cm (⇧ 10 cm), Leertaste dreht um")
+                    Text("Wände: Bezugslinie im Inspektor wechseln, die Wand bleibt liegen; Doppelklick auf eine Ecke zeigt den Anschluss mit Ausnahmen")
                     Text("Ändern: MV verschieben, CO kopieren, RO drehen, MM spiegeln, AR Reihe, OF versetzen, AL ausrichten, TR stutzen, SL teilen; ⏎ wiederholt")
                     Text("Fangen: Name am Zeiger, ⇥ nächster Fangpunkt, Q Bezugspunkt mit Spurlinien (Länge tippen setzt den Punkt), SE SM SI SP SN SO für einen Klick, ZR Zeichenrichtung von einer Kante, WR Wandrechteck")
                     Text("Zeichnen: klicken oder tippen, etwa 3,65 · <30 · 3,65<30 · @1,20;0,80 · 2*1,25+0,115, dann ⏎; ⇧ rechtwinklig")
@@ -191,6 +209,248 @@ private struct TextSection: View {
     private func commit() {
         guard text != info.text, !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         model.setText(info, text: text)
+    }
+}
+
+/// Bezugslinie und Umdrehen der gewählten Wände (ADR 0045). Ein Wechsel verschiebt keine Wand.
+private struct WallSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let lines = Set(model.walls.map(\.alignment))
+        let current = lines.count == 1 ? Int(lines.first!) : -1
+        Section(model.walls.count == 1 ? "Wand" : "Wände · \(model.walls.count)") {
+            Picker("Bezugslinie", selection: Binding(get: { current }, set: { i in
+                if i >= 0 { model.run(AppModel.alignments[i].command) }
+            })) {
+                if current < 0 { Text("verschieden").tag(-1) }
+                ForEach(Array(AppModel.alignments.enumerated()), id: \.offset) { index, item in
+                    Text(item.title).tag(index)
+                }
+            }
+            let tops = Set(model.walls.map(\.top))
+            Picker("Oberkante", selection: Binding(get: { tops.count == 1 ? Int(tops.first!) : -1 }, set: { i in
+                if i >= 0 { model.run(AppModel.tops[i].command) }
+            })) {
+                if tops.count > 1 { Text("verschieden").tag(-1) }
+                ForEach(Array(AppModel.tops.enumerated()), id: \.offset) { index, item in
+                    Text(item.title).tag(index)
+                }
+            }
+            if model.walls.count == 1, let wall = model.walls.first {
+                LabeledContent("Oberkante über OKFF", value: wall.topHeight.formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "de_DE"))) + " m")
+            }
+            LabeledContent("Innen und außen") {
+                Button("Umdrehen") { model.run("FlipWalls") }
+            }
+            Text("Die Bezugslinie ist eine Lesart: Ein Wechsel verschiebt die Wand nicht. Doppelklick auf eine Ecke zeigt den Anschluss.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Wandaufbau der gewählten Wände (ADR 0045): Schichten von außen nach innen.
+/// Jede Änderung wirkt auf alle Wände mit diesem Aufbau; die Bezugslinien bleiben stehen.
+private struct WallTypeSection: View {
+    @Environment(AppModel.self) private var model
+    let info: WallTypeInfo
+    @State private var name = ""
+    @State private var thickness: [String] = []
+
+    var body: some View {
+        Section("Wandaufbau · wirkt auf \(info.uses) Wand\(info.uses == 1 ? "" : "e")") {
+            TextField("Name", text: $name)
+                .onSubmit { if name != info.name { model.setWallType(info, name: name) } }
+            ForEach(Array(info.layers.enumerated()), id: \.offset) { index, layer in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Picker("Material", selection: Binding(get: { layer.material }, set: { set(index) { $0.material = $1 }($0) })) {
+                            if !AppModel.materials.contains(where: { $0.command == layer.material }) {
+                                Text(layer.material).tag(layer.material)
+                            }
+                            ForEach(AppModel.materials, id: \.command) { Text($0.title).tag($0.command) }
+                        }
+                        .labelsHidden()
+                        TextField("", text: Binding(get: { index < thickness.count ? thickness[index] : "" }, set: { if index < thickness.count { thickness[index] = $0 } }))
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 56)
+                            .onSubmit {
+                                guard index < thickness.count, let v = Double(thickness[index].replacingOccurrences(of: ",", with: ".")) else { return }
+                                set(index) { $0.thickness = $1 }(v / 100)
+                            }
+                        Text("cm").foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Picker("Funktion", selection: Binding(get: { Int(layer.function) }, set: { set(index) { $0.function = UInt32($1) }($0) })) {
+                            ForEach(Array(AppModel.functions.enumerated()), id: \.offset) { Text($0.element).tag($0.offset) }
+                        }
+                        .labelsHidden()
+                        Spacer()
+                        Button { move(index, by: -1) } label: { Image(systemName: "arrow.up") }
+                            .disabled(index == 0)
+                        Button { move(index, by: 1) } label: { Image(systemName: "arrow.down") }
+                            .disabled(index == info.layers.count - 1)
+                        Button { remove(index) } label: { Image(systemName: "minus.circle") }
+                            .disabled(info.layers.count == 1)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            Button("Schicht hinzufügen") {
+                var layers = info.layers
+                layers.append(LayerInfo(material: "putz", thickness: 0.015, function: 4))
+                model.setWallType(info, layers: layers)
+            }
+            Text("Von außen (linke Seite in Zeichenrichtung) nach innen. Dicke \(cm(info.layers.reduce(0) { $0 + $1.thickness })) cm.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onAppear(perform: load)
+        .onChange(of: info) { load() }
+    }
+
+    private func load() {
+        name = info.name
+        thickness = info.layers.map { cm($0.thickness) }
+    }
+
+    private func cm(_ m: Double) -> String {
+        (m * 100).formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "de_DE")))
+    }
+
+    private func set<T>(_ index: Int, _ change: @escaping (inout LayerInfo, T) -> Void) -> (T) -> Void {
+        { value in
+            var layers = info.layers
+            change(&layers[index], value)
+            model.setWallType(info, layers: layers)
+        }
+    }
+
+    private func move(_ index: Int, by delta: Int) {
+        var layers = info.layers
+        layers.swapAt(index, index + delta)
+        model.setWallType(info, layers: layers)
+    }
+
+    private func remove(_ index: Int) {
+        var layers = info.layers
+        layers.remove(at: index)
+        model.setWallType(info, layers: layers)
+    }
+}
+
+/// Ein Anschluss: wie jede Wand anschließt, welche Schicht welche schneidet,
+/// und Ausnahmen je Wandende (ADR 0045).
+private struct JunctionSection: View {
+    @Environment(AppModel.self) private var model
+    let junction: JunctionInfo
+
+    var body: some View {
+        Section("Anschluss · \(junction.title)") {
+            ForEach(junction.lines, id: \.self) { Text($0) }
+            if junction.lines.isEmpty {
+                Text("Keine Schichten berühren sich.").foregroundStyle(.secondary)
+            }
+        }
+        ForEach(junction.arms, id: \.wall) { arm in
+            Section(arm.label) {
+                LabeledContent("Anschluss", value: arm.role)
+                if arm.commands.count == 3 {
+                    Picker("Ausnahme", selection: Binding(get: { Int(arm.rule) }, set: { model.run(arm.commands[$0]) })) {
+                        Text("keine").tag(0)
+                        Text("läuft durch").tag(1)
+                        Text("nicht verbinden").tag(2)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Füllung und die zweite Brüstungshöhe einer Öffnung (ADR 0047): Die fertige
+/// BRH über OKFF ist führend, die Rohbaubrüstung über Rohdecke ergibt sich aus
+/// Fußbodenaufbau und unterem Anschluss und lässt sich ebenso tippen.
+private struct OpeningRows: View {
+    @Environment(AppModel.self) private var model
+    let opening: OpeningInfo
+    @State private var rough = ""
+    @State private var connection = ""
+    @State private var recess = ""
+
+    var body: some View {
+        Picker("Füllung", selection: Binding(get: { Int(opening.fill) }, set: { model.run(AppModel.fills[$0].command) })) {
+            ForEach(Array(AppModel.fills.enumerated()), id: \.offset) { index, item in
+                Text(item.title).tag(index)
+            }
+        }
+        if let depth = opening.recessDepth {
+            LabeledContent("Nischentiefe") {
+                HStack(spacing: 4) {
+                    TextField("", text: $recess)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 64)
+                        .onSubmit {
+                            if let v = number(recess) { model.run("SetRecess(\(opening.recessLeft ? "Left" : "Right"),\(v))") }
+                        }
+                    Text("m").foregroundStyle(.secondary)
+                }
+            }
+            .onAppear { recess = german(depth) }
+            .onChange(of: opening.recessDepth) { recess = german(opening.recessDepth ?? 0) }
+            Picker("Nische auf der", selection: Binding(get: { opening.recessLeft }, set: { left in
+                model.run("SetRecess(\(left ? "Left" : "Right"),\(depth))")
+            })) {
+                Text("linken Wandseite").tag(true)
+                Text("rechten Wandseite").tag(false)
+            }
+        }
+        if opening.roughSill != nil {
+            LabeledContent("Rohbaubrüstung über Rohdecke") {
+                HStack(spacing: 4) {
+                    TextField("", text: $rough)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 64)
+                        .onSubmit {
+                            if let v = number(rough) { model.setRoughSill(v, for: opening.element) }
+                        }
+                    Text("m").foregroundStyle(.secondary)
+                }
+            }
+        }
+        LabeledContent("Fußbodenaufbau", value: opening.floorBuildUp.map { german($0) + " m" } ?? "keine Decke davor")
+        LabeledContent("Unterer Anschluss") {
+            HStack(spacing: 4) {
+                TextField("", text: $connection)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 64)
+                    .onSubmit {
+                        if let v = number(connection) { model.run("SetSillConnection(\(v))") }
+                    }
+                Text("m").foregroundStyle(.secondary)
+            }
+        }
+        Text(opening.typeName.isEmpty
+             ? "Der untere Anschluss gehört zum Typ; ohne Typ legt Lot einen an."
+             : "Typ \(opening.typeName), wirkt auf \(opening.typeUses) Öffnung\(opening.typeUses == 1 ? "" : "en")")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .onAppear(perform: load)
+            .onChange(of: opening.roughSill) { load() }
+            .onChange(of: opening.sillConnection) { load() }
+    }
+
+    private func load() {
+        rough = opening.roughSill.map(german) ?? ""
+        connection = german(opening.sillConnection)
+    }
+
+    private func number(_ text: String) -> Double? {
+        Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+    }
+
+    private func german(_ v: Double) -> String {
+        v.formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "de_DE")))
     }
 }
 
@@ -319,12 +579,12 @@ extension ParamKind {
         case .wallLength: "Länge"
         case .wallSagitta: "Stich (Bogen)"
         case .wallHeight: "Höhe"
-        case .wallTopOffset: "Oberkante über Geschoss"
+        case .wallTopOffset: "Versatz Oberkante"
         case .baseOffset: "Unterkante über OKFF"
         case .openingOffset: "Abstand vom Wandanfang"
-        case .openingWidth: "Breite"
-        case .openingHeight: "Höhe"
-        case .openingSillHeight: "Brüstungshöhe"
+        case .openingWidth: "Breite (Rohbau)"
+        case .openingHeight: "Höhe (Rohbau)"
+        case .openingSillHeight: "BRH über OKFF (fertig)"
         case .storeyElevation: "OKFF über ±0,00"
         case .storeyHeight: "Geschosshöhe"
         case .columnWidth: "Breite"

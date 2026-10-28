@@ -48,9 +48,9 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0042](0042-meilensteine-anhalten-bedienung-vergleichen.md) | Meilensteine anhalten, erst die Bedienung vergleichen | entschieden |
 | [0043](0043-auswaehlen.md) | Auswählen | umgesetzt, Teile offen |
 | [0044](0044-bearbeiten.md) | Bearbeiten | umgesetzt, Teile offen |
-| [0045](0045-wandlogik.md) | Wandlogik: Bezugslinie, Anschlüsse, Höhen | entschieden |
+| [0045](0045-wandlogik.md) | Wandlogik: Bezugslinie, Anschlüsse, Höhen | umgesetzt, Teile offen |
 | [0046](0046-zeichnen-und-fangen.md) | Zeichnen mit Zahleneingabe und Fangen | umgesetzt, Teile offen |
-| [0047](0047-oeffnungen.md) | Öffnungen: Rohbauöffnung zuerst, zwei Brüstungshöhen | entschieden, Ben testet |
+| [0047](0047-oeffnungen.md) | Öffnungen: Rohbauöffnung zuerst, zwei Brüstungshöhen | umgesetzt, Teile offen, Ben testet |
 | [0048](0048-typen-und-eigenschaften.md) | Typen und Eigenschaften | entschieden, Ben testet |
 | [0049](0049-navigation.md) | Navigation: Seitenleiste, Geschosse, Schnitte und Blätter | entschieden, Ben testet |
 | [0050](0050-sichtbarkeit.md) | Sichtbarkeit und Ansichtsvorlagen | entschieden |

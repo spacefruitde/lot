@@ -31,7 +31,10 @@
 
 use std::collections::BTreeMap;
 
-use lot_model::{CircularArc, ColumnProfile, Element, ElementId, LayerFunction, Point2, Project, Wall, WallType};
+use lot_model::{
+    CircularArc, ColumnProfile, Element, ElementId, JoinRule, LayerFunction, Phase, Point2, Project, Wall, WallEnd,
+    WallType,
+};
 
 use crate::poly::{Area, strip};
 
@@ -201,11 +204,20 @@ fn regions_at(project: &Project, storey: ElementId, z: f64, with_openings: bool)
 
     // Öffnungen in Schnitthöhe.
     for (id, wall, left_face, right_face) in present.into_iter().filter(|_| with_openings) {
-        let Some((bottom, _)) = project.wall_extent(wall) else { continue };
         for (_, o) in project.openings_in(id) {
-            let (o0, o1) = (bottom + o.sill_height, bottom + o.sill_height + o.height);
+            let Some((o0, o1)) = project.opening_span(o) else { continue };
             if o0 <= z && z < o1 {
-                let hole = wall_section(wall, (o.offset, o.offset + o.width), (left_face + 0.01, right_face - 0.01));
+                // Eine Nische reicht nur von ihrer Seite so tief wie angegeben in die Wand.
+                let across = match o.recess {
+                    Some(lot_model::Recess { side: lot_model::WallSide::Left, depth }) => {
+                        (left_face + 0.01, left_face - depth)
+                    }
+                    Some(lot_model::Recess { side: lot_model::WallSide::Right, depth }) => {
+                        (right_face + depth, right_face - 0.01)
+                    }
+                    None => (left_face + 0.01, right_face - 0.01),
+                };
+                let hole = wall_section(wall, (o.offset, o.offset + o.width), across);
                 for r in regions.iter_mut() {
                     if r.function.is_some() {
                         r.area = r.area.difference(&hole);
@@ -325,6 +337,7 @@ struct WallInfo<'a> {
     top: f64,
     /// Ob die Wand in der betrachteten Höhe vorhanden ist.
     present: bool,
+    phase: Phase,
 }
 
 impl<'a> WallInfo<'a> {
@@ -372,6 +385,7 @@ impl<'a> WallInfo<'a> {
                     offsets: offsets.clone(),
                     top,
                     present,
+                    phase: wall.phase,
                 }
             })
             .collect()
@@ -380,6 +394,11 @@ impl<'a> WallInfo<'a> {
     /// Ob das Ende dieser Facette ein Ende der Wand ist.
     fn is_wall_end(&self, end: End) -> bool {
         self.ends[end as usize]
+    }
+
+    /// Ausnahme am Anschluss dieses Endes; Facettenecken haben keine.
+    fn rule(&self, end: End) -> JoinRule {
+        if self.is_wall_end(end) { self.wall.joins[end as usize] } else { JoinRule::Auto }
     }
 
     fn thickness(&self) -> f64 {
@@ -441,6 +460,9 @@ enum Joint {
     Over(usize),
 }
 
+/// Ein Wandende an einem Knoten: Index der Wand und welches Ende.
+type Arm = (usize, End);
+
 /// Ein Knoten aus zusammenfallenden Wandenden.
 struct Node {
     point: [f64; 2],
@@ -451,6 +473,11 @@ struct Node {
 struct Nodes {
     joints: Vec<[Joint; 2]>,
     nodes: Vec<Node>,
+    /// Ob die Schichten dieses Wandendes in die andere Wand eingreifen; nicht
+    /// bei der Ausnahme „nicht verbinden“ und zwischen Neubau und Bestand.
+    interlock: Vec<[bool; 2]>,
+    /// Warum ein Ende anders angeschlossen ist als nach der Regel.
+    causes: Vec<[Option<Cause>; 2]>,
 }
 
 impl Nodes {
@@ -459,8 +486,21 @@ impl Nodes {
     }
 }
 
+/// Grund, warum ein Wandende nicht nach der Regel angeschlossen ist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cause {
+    /// Ausnahme am Knoten, von Hand gesetzt.
+    Exception,
+    /// Verschiedene Bauzustände (Neubau an Bestand).
+    Phase,
+    /// Verschiedene Höhen: Die höhere Wand läuft durch.
+    Height,
+}
+
 fn find_nodes(walls: &[WallInfo]) -> Nodes {
     let mut joints: Vec<[Joint; 2]> = walls.iter().map(|_| [Joint::Free, Joint::Free]).collect();
+    let mut interlock: Vec<[bool; 2]> = walls.iter().map(|_| [true, true]).collect();
+    let mut causes: Vec<[Option<Cause>; 2]> = walls.iter().map(|_| [None, None]).collect();
     // T-Stöße: Wandende liegt in der Fläche einer anderen Wand, nicht an deren Ende.
     for (i, w) in walls.iter().enumerate() {
         for end in [End::Start, End::End] {
@@ -487,8 +527,15 @@ fn find_nodes(walls: &[WallInfo]) -> Nodes {
                     && dist(p, [other.wall.start.x, other.wall.start.y]) > JOIN_TOLERANCE
                     && dist(p, [other.wall.end.x, other.wall.end.y]) > JOIN_TOLERANCE
             });
-            if let Some((j, _)) = through {
+            if let Some((j, other)) = through {
                 joints[i][end as usize] = Joint::Tee(j);
+                if w.rule(end) == JoinRule::Butt {
+                    interlock[i][end as usize] = false;
+                    causes[i][end as usize] = Some(Cause::Exception);
+                } else if !w.phase.joins_with(other.phase) {
+                    interlock[i][end as usize] = false;
+                    causes[i][end as usize] = Some(Cause::Phase);
+                }
             }
         }
     }
@@ -507,29 +554,79 @@ fn find_nodes(walls: &[WallInfo]) -> Nodes {
         }
     }
     nodes.retain(|n| n.arms.len() >= 2);
-    for (k, node) in nodes.iter_mut().enumerate() {
+    for node in nodes.iter_mut() {
         node.arms.sort_by(|x, y| {
             let ax = angle(walls[x.0].outward(x.1));
             let ay = angle(walls[y.0].outward(y.1));
             ax.total_cmp(&ay)
         });
+    }
+    // Ausnahmen: Arme, die nicht verbunden werden, verlassen den Knoten und
+    // stoßen stumpf an; ebenso Neubau an einem Knoten mit Bestand.
+    let mut separate: Vec<(Arm, Cause, Vec<Arm>)> = Vec::new();
+    for node in nodes.iter_mut() {
+        let built = |a: &(usize, End)| walls[a.0].phase != Phase::New;
+        let mixed = node.arms.iter().any(built) && node.arms.iter().any(|a| !built(a));
+        let mut kept = Vec::new();
+        let mut gone = Vec::new();
+        for &(i, end) in &node.arms {
+            if walls[i].rule(end) == JoinRule::Butt {
+                gone.push(((i, end), Cause::Exception));
+            } else if mixed && walls[i].phase == Phase::New {
+                gone.push(((i, end), Cause::Phase));
+            } else {
+                kept.push((i, end));
+            }
+        }
+        if !gone.is_empty() {
+            node.arms = kept.clone();
+            separate.extend(gone.into_iter().map(|(arm, cause)| (arm, cause, kept.clone())));
+        }
+    }
+    for ((i, end), cause, kept) in separate {
+        causes[i][end as usize] = Some(cause);
+        interlock[i][end as usize] = false;
+        let target = kept.iter().copied().find(|a| cross(walls[a.0].dir, walls[i].dir).abs() >= PARALLEL_SIN);
+        let Some((j, ej)) = target else { continue };
+        joints[i][end as usize] = Joint::Tee(j);
+        // Bleibt nur eine Wand übrig, läuft sie bis an die abgewandte Fläche durch.
+        if kept.len() == 1 {
+            joints[j][ej as usize] = Joint::Over(i);
+            causes[j][ej as usize] = Some(cause);
+        }
+    }
+    nodes.retain(|n| n.arms.len() >= 2);
+    for (k, node) in nodes.iter().enumerate() {
         for &(i, end) in &node.arms {
             joints[i][end as usize] = Joint::Node(k);
         }
     }
-    // Ecken aus zwei Wänden verschiedener Höhe: die höhere läuft durch.
+    // Ecken aus zwei Wänden: Durchlaufen als Ausnahme, sonst läuft bei
+    // verschiedenen Höhen die höhere durch.
     for node in &nodes {
-        if let [(i, ei), (j, ej)] = node.arms[..]
-            && (walls[i].top - walls[j].top).abs() > 0.01
-            && cross(walls[i].dir, walls[j].dir).abs() >= PARALLEL_SIN
-        {
-            let ((hi, he), (lo, le)) =
-                if walls[i].top > walls[j].top { ((i, ei), (j, ej)) } else { ((j, ej), (i, ei)) };
+        let [(i, ei), (j, ej)] = node.arms[..] else { continue };
+        if cross(walls[i].dir, walls[j].dir).abs() < PARALLEL_SIN {
+            continue;
+        }
+        let through = |a: usize, e: End| walls[a].rule(e) == JoinRule::Through;
+        let pick = match (through(i, ei), through(j, ej)) {
+            (true, false) => Some(((i, ei), (j, ej), Cause::Exception)),
+            (false, true) => Some(((j, ej), (i, ei), Cause::Exception)),
+            _ if (walls[i].top - walls[j].top).abs() > 0.01 => Some(if walls[i].top > walls[j].top {
+                ((i, ei), (j, ej), Cause::Height)
+            } else {
+                ((j, ej), (i, ei), Cause::Height)
+            }),
+            _ => None,
+        };
+        if let Some(((hi, he), (lo, le), cause)) = pick {
             joints[hi][he as usize] = Joint::Over(lo);
             joints[lo][le as usize] = Joint::Tee(hi);
+            causes[hi][he as usize] = Some(cause);
+            causes[lo][le as usize] = Some(cause);
         }
     }
-    Nodes { joints, nodes }
+    Nodes { joints, nodes, interlock, causes }
 }
 
 /// Seitenflächen eines Arms vom Knoten aus gesehen: (links, rechts) als Abstand quer zur Wand.
@@ -678,7 +775,7 @@ fn apply_extensions(
     let mut extensions = Vec::new();
     for (i, w) in walls.iter().enumerate() {
         for end in [End::Start, End::End] {
-            if !w.present {
+            if !w.present || !nodes.interlock[i][end as usize] {
                 continue;
             }
             let others: Vec<usize> = match nodes.joint(i, end) {
@@ -793,6 +890,178 @@ pub fn node_summary(project: &Project, storey: ElementId) -> Vec<([f64; 2], usiz
         .filter(|n| n.arms.iter().any(|a| walls[a.0].id != walls[n.arms[0].0].id))
         .map(|n| (n.point, n.arms.len()))
         .collect()
+}
+
+/// Rolle einer Wand an einem Anschluss.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArmRole {
+    /// Trifft die anderen Wände auf Gehrung.
+    Mitre,
+    /// Läuft durch, die anderen stoßen an.
+    Through,
+    /// Stößt an, die Schichten greifen nach ihrem Rang ineinander.
+    Butts,
+    /// Stößt stumpf an, ohne Verbindung.
+    Separate,
+}
+
+/// Eine Wand an einem Anschluss.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct JunctionArm {
+    pub wall: ElementId,
+    /// Das Ende am Anschluss; `None` bei der Wand, die an einem T-Stoß durchläuft.
+    pub end: Option<WallEnd>,
+    pub role: ArmRole,
+    /// Warum die Wand anders angeschlossen ist als nach der Regel.
+    pub cause: Option<Cause>,
+}
+
+/// Ein Anschluss im Grundriss, auswählbar wie ein Bauteil (ADR 0045).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Junction {
+    pub point: Point2,
+    pub arms: Vec<JunctionArm>,
+}
+
+/// Schicht einer Wand.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LayerRef {
+    pub wall: ElementId,
+    pub layer: usize,
+    pub material: String,
+    pub function: LayerFunction,
+}
+
+/// Zwei Schichten verschiedener Wände, die sich an einem Anschluss berühren.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Contact {
+    pub first: LayerRef,
+    pub second: LayerRef,
+    /// Ob `first` die Schicht `second` schneidet (höherer Rang), sonst stoßen beide aneinander.
+    pub cuts: bool,
+}
+
+/// Alle Anschlüsse eines Geschosses.
+pub fn junctions(project: &Project, storey: ElementId) -> Vec<Junction> {
+    let walls: Vec<WallInfo> = project
+        .walls_on(storey)
+        .filter_map(|(id, w)| {
+            Some(WallInfo::facets(id, w, project.wall_type(w.wall_type)?, project.wall_extent(w)?.1, true))
+        })
+        .flatten()
+        .collect();
+    let nodes = find_nodes(&walls);
+    let mut out: Vec<Junction> = Vec::new();
+    let mut add = |p: [f64; 2], arm: JunctionArm| {
+        let k = match out.iter().position(|j| dist([j.point.x, j.point.y], p) <= JOIN_TOLERANCE) {
+            Some(k) => k,
+            None => {
+                out.push(Junction { point: Point2::new(p[0], p[1]), arms: Vec::new() });
+                out.len() - 1
+            }
+        };
+        if !out[k].arms.iter().any(|a| a.wall == arm.wall && a.end == arm.end) {
+            out[k].arms.push(arm);
+        }
+    };
+    let wall_end = |end: End| match end {
+        End::Start => WallEnd::Start,
+        End::End => WallEnd::End,
+    };
+    for (i, w) in walls.iter().enumerate() {
+        for end in [End::Start, End::End] {
+            if !w.is_wall_end(end) {
+                continue;
+            }
+            let p = w.point(end);
+            let cause = nodes.causes[i][end as usize];
+            let arm = |role| JunctionArm { wall: w.id, end: Some(wall_end(end)), role, cause };
+            match nodes.joint(i, end) {
+                Joint::Free => {}
+                Joint::Node(_) => add(p, arm(ArmRole::Mitre)),
+                Joint::Over(_) => add(p, arm(ArmRole::Through)),
+                Joint::Tee(j) => {
+                    add(p, arm(if nodes.interlock[i][end as usize] { ArmRole::Butts } else { ArmRole::Separate }));
+                    let o = &walls[*j];
+                    let at_end = [o.wall.start, o.wall.end].iter().any(|q| dist(p, [q.x, q.y]) <= JOIN_TOLERANCE);
+                    if !at_end {
+                        add(p, JunctionArm { wall: o.id, end: None, role: ArmRole::Through, cause: None });
+                    }
+                }
+            }
+        }
+    }
+    out.retain(|j| j.arms.len() >= 2);
+    out
+}
+
+/// Der Anschluss nächst `p`, wenn der Punkt höchstens `tolerance` oder eine Wanddicke entfernt liegt.
+pub fn junction_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<Junction> {
+    let reach = |j: &Junction| {
+        j.arms
+            .iter()
+            .filter_map(|a| project.wall(a.wall).and_then(|w| project.wall_type(w.wall_type)))
+            .map(|t| t.thickness())
+            .fold(tolerance, f64::max)
+    };
+    junctions(project, storey)
+        .into_iter()
+        .filter(|j| j.point.distance(p) <= reach(j))
+        .min_by(|a, b| a.point.distance(p).total_cmp(&b.point.distance(p)))
+}
+
+/// Welche Schichten sich an einem Anschluss berühren, in einer Höhe, in der alle Wände stehen.
+pub fn contacts(project: &Project, storey: ElementId, junction: &Junction) -> Vec<Contact> {
+    let ids: Vec<ElementId> = junction.arms.iter().map(|a| a.wall).collect();
+    let extents: Vec<(f64, f64)> =
+        ids.iter().filter_map(|id| project.wall(*id).and_then(|w| project.wall_extent(w))).collect();
+    let (Some(low), Some(high)) =
+        (extents.iter().map(|e| e.0).reduce(f64::max), extents.iter().map(|e| e.1).reduce(f64::min))
+    else {
+        return Vec::new();
+    };
+    let z = if low < high { (low + high) / 2.0 } else { low + 0.01 };
+    let thickness = ids
+        .iter()
+        .filter_map(|id| project.wall(*id).and_then(|w| project.wall_type(w.wall_type)))
+        .map(|t| t.thickness())
+        .fold(0.0, f64::max);
+    let r = 3.0 * thickness + 0.3;
+    let p = [junction.point.x, junction.point.y];
+    let local = strip(p, [1.0, 0.0], (-r, r), (-r, r));
+    let regions: Vec<LayerRegion> = solid_regions(project, storey, z)
+        .into_iter()
+        .filter(|g| ids.contains(&g.element) && g.function.is_some())
+        .map(|mut g| {
+            g.area = g.area.intersection(&local);
+            g
+        })
+        .filter(|g| !g.area.is_empty())
+        .collect();
+    let loose: Vec<ElementId> = junction.arms.iter().filter(|a| a.role == ArmRole::Separate).map(|a| a.wall).collect();
+    let layer = |g: &LayerRegion| LayerRef {
+        wall: g.element,
+        layer: g.layer,
+        material: g.material.clone(),
+        function: g.function.unwrap_or(LayerFunction::Structure),
+    };
+    let mut out = Vec::new();
+    for (k, a) in regions.iter().enumerate() {
+        let grown = a.area.offset(0.002);
+        for b in &regions[k + 1..] {
+            if a.element == b.element || grown.intersection(&b.area).area() < 1e-6 {
+                continue;
+            }
+            let free = !loose.contains(&a.element) && !loose.contains(&b.element);
+            let (first, second, cuts) = match a.priority().cmp(&b.priority()) {
+                std::cmp::Ordering::Less if free => (a, b, true),
+                std::cmp::Ordering::Greater if free => (b, a, true),
+                _ => (a, b, false),
+            };
+            out.push(Contact { first: layer(first), second: layer(second), cuts });
+        }
+    }
+    out
 }
 
 /// Ob das Element eine Wand ist (für Aufrufer, die Regionen nach Art filtern).

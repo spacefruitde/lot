@@ -141,7 +141,7 @@ impl Project {
         let bottom = s.elevation + base_offset;
         let top = match top {
             Top::Height(h) => bottom + h,
-            Top::Storey { offset } => s.elevation + s.height + offset,
+            Top::Storey { offset } | Top::Slab { offset } => s.elevation + s.height + offset,
             Top::Roof { offset } => {
                 // Höchster Punkt der Dachunterseite; im 3D wird darunter genau geschnitten.
                 let highest = self
@@ -159,7 +159,109 @@ impl Project {
 
     /// Unter- und Oberkante einer Wand über ±0,00.
     pub fn wall_extent(&self, wall: &Wall) -> Option<(f64, f64)> {
-        self.vertical_extent(wall.storey, wall.base_offset, wall.top)
+        let (bottom, top) = self.vertical_extent(wall.storey, wall.base_offset, wall.top)?;
+        if let Top::Slab { offset } = wall.top {
+            // Gesucht wird über der Mitte des Kerns, der die Decke trägt.
+            let t = self.wall_type(wall.wall_type)?;
+            let (outer, inner) = t.core();
+            let across = wall.alignment.depth(t) - (outer + inner) / 2.0;
+            if let Some(slab) = self.slab_above(wall.point_at(wall.length() / 2.0, across), bottom) {
+                return Some((bottom, slab + offset));
+            }
+        }
+        Some((bottom, top))
+    }
+
+    pub fn opening_type(&self, id: ElementId) -> Option<&crate::OpeningType> {
+        match self.elements.get(&id) {
+            Some(Element::OpeningType(t)) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// Tür- und Fenstertypen.
+    pub fn opening_types(&self) -> impl Iterator<Item = (ElementId, &crate::OpeningType)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::OpeningType(t) => Some((*id, t)),
+            _ => None,
+        })
+    }
+
+    /// Unterer Anschluss einer Öffnung aus ihrem Typ; ohne Typ 0.
+    pub fn sill_connection(&self, opening: &Opening) -> f64 {
+        opening.opening_type.and_then(|t| self.opening_type(t)).map_or(0.0, |t| t.sill_connection)
+    }
+
+    /// Unter- und Oberkante der Rohbauöffnung über ±0,00: Die fertige
+    /// Brüstung liegt `sill_height` über OKFF, die Rohbaubrüstung um den
+    /// unteren Anschluss tiefer (ADR 0047).
+    pub fn opening_span(&self, opening: &Opening) -> Option<(f64, f64)> {
+        let wall = self.wall(opening.host)?;
+        let okff = self.storey(wall.storey)?.elevation;
+        let bottom = okff + opening.sill_height - self.sill_connection(opening);
+        Some((bottom, bottom + opening.height))
+    }
+
+    /// Fußbodenaufbau vor einer Öffnung: von der Oberkante der Rohdecke bis
+    /// OKFF, aus der Decke des Geschosses auf der Raumseite. `None`, wenn auf
+    /// keiner Seite eine Decke liegt.
+    pub fn floor_build_up(&self, opening: &Opening) -> Option<f64> {
+        let wall = self.wall(opening.host)?;
+        let t = self.wall_type(wall.wall_type)?;
+        let offsets = wall.layer_offsets(t);
+        let (left, right) = (offsets[0].0, offsets[offsets.len() - 1].1);
+        let along = opening.offset + opening.width / 2.0;
+        [left + 0.2, right - 0.2]
+            .into_iter()
+            .filter_map(|across| {
+                let p = wall.point_at(along, across);
+                self.elements.values().find_map(|e| match e {
+                    Element::Slab(s) if s.storey == wall.storey && contains(&s.outline, p) => {
+                        let st = self.slab_type(s.slab_type)?;
+                        let above: f64 = st
+                            .layers
+                            .iter()
+                            .take_while(|l| l.function != crate::LayerFunction::Structure)
+                            .map(|l| l.thickness)
+                            .sum();
+                        // OK Rohdecke liegt `above` unter der Oberkante der Decke.
+                        Some(above - s.top_offset)
+                    }
+                    _ => None,
+                })
+            })
+            .reduce(f64::max)
+    }
+
+    /// Rohbaubrüstung über Oberkante Rohdecke (ADR 0047): fertige Brüstung plus
+    /// Fußbodenaufbau, minus unterer Anschluss. `None` ohne Decke vor der Öffnung.
+    pub fn rough_sill(&self, opening: &Opening) -> Option<f64> {
+        Some(opening.sill_height + self.floor_build_up(opening)? - self.sill_connection(opening))
+    }
+
+    /// Alle Öffnungen.
+    pub fn openings(&self) -> impl Iterator<Item = (ElementId, &Opening)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::Opening(o) => Some((*id, o)),
+            _ => None,
+        })
+    }
+
+    /// Fertige Brüstung und Rohbaubrüstung aller Öffnungen mit Decke davor.
+    pub fn rough_sills(&self) -> BTreeMap<ElementId, (f64, f64)> {
+        self.openings().filter_map(|(id, o)| Some((id, (o.sill_height, self.rough_sill(o)?)))).collect()
+    }
+
+    /// Oberkante der niedrigsten Decke, die an der Stelle `p` höher als 10 cm über `z` liegt.
+    pub fn slab_above(&self, p: Point2, z: f64) -> Option<f64> {
+        self.elements
+            .values()
+            .filter_map(|e| match e {
+                Element::Slab(s) if contains(&s.outline, p) => Some(self.storey(s.storey)?.elevation + s.top_offset),
+                _ => None,
+            })
+            .filter(|top| *top > z + 0.1)
+            .min_by(f64::total_cmp)
     }
 
     pub fn roof(&self, id: ElementId) -> Option<&crate::Roof> {
@@ -525,6 +627,7 @@ impl Project {
         p.elements.insert(
             ElementId(3),
             Element::Wall(Wall {
+                joins: Default::default(),
                 phase: Default::default(),
                 storey: ElementId(1),
                 wall_type: ElementId(2),
@@ -539,6 +642,8 @@ impl Project {
         p.elements.insert(
             ElementId(4),
             Element::Opening(Opening {
+                recess: None,
+                opening_type: None,
                 phase: Default::default(),
                 host: ElementId(3),
                 offset: 1.75,
@@ -565,4 +670,32 @@ fn ridge_samples(r: &crate::Roof) -> Vec<Point2> {
     let c = r.outline.iter().fold((0.0, 0.0), |acc, p| (acc.0 + p.x / n as f64, acc.1 + p.y / n as f64));
     points.push(Point2::new(c.0, c.1));
     points
+}
+
+/// Ob der Punkt im Polygon liegt (gerade-ungerade-Regel).
+fn contains(ring: &[Point2], p: Point2) -> bool {
+    let mut inside = false;
+    for (i, a) in ring.iter().enumerate() {
+        let b = ring[(i + 1) % ring.len()];
+        if (a.y > p.y) != (b.y > p.y) && p.x < a.x + (p.y - a.y) / (b.y - a.y) * (b.x - a.x) {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+/// Öffnungen, deren Rohbaubrüstung sich geändert hat, obwohl die fertige
+/// Brüstung blieb, etwa weil der Fußbodenaufbau dicker wurde (ADR 0047):
+/// (Öffnung, vorher, nachher).
+pub fn rough_sill_changes(
+    before: &BTreeMap<ElementId, (f64, f64)>,
+    after: &BTreeMap<ElementId, (f64, f64)>,
+) -> Vec<(ElementId, f64, f64)> {
+    after
+        .iter()
+        .filter_map(|(id, (brh, rough))| {
+            let (old_brh, old_rough) = before.get(id)?;
+            ((old_brh - brh).abs() < 1e-6 && (old_rough - rough).abs() > 0.0005).then_some((*id, *old_rough, *rough))
+        })
+        .collect()
 }

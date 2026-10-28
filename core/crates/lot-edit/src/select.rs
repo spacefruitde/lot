@@ -204,6 +204,7 @@ pub fn kind_label(project: &Project, id: ElementId) -> String {
             lot_model::SlabKind::Base => "Bodenplatte".into(),
         },
         Some(Element::SlabType(t)) => format!("Deckenaufbau {}", t.name),
+        Some(Element::OpeningType(t)) => format!("Tür- oder Fenstertyp {}", t.name),
         Some(Element::SlabOpening(_)) => "Deckendurchbruch".into(),
         Some(Element::Roof(_)) => "Dach".into(),
         Some(Element::RoofWindow(_)) => "Dachfenster".into(),

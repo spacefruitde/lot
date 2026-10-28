@@ -127,7 +127,8 @@ impl<'a> StoreyRooms<'a> {
                     right: room_at(pr),
                     left_outside: outside(pl),
                     right_outside: outside(pr),
-                    sill: o.sill_height + wall.base_offset,
+                    // Fertige Brüstung über OKFF (ADR 0047).
+                    sill: o.sill_height,
                 });
             }
         }

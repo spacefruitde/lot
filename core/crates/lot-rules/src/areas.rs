@@ -234,6 +234,7 @@ mod tests {
             p.elements.insert(
                 id,
                 Element::Wall(Wall {
+                    joins: Default::default(),
                     phase: Default::default(),
                     storey,
                     wall_type,
@@ -362,6 +363,7 @@ mod roof_tests {
             p.elements.insert(
                 id,
                 Element::Wall(Wall {
+                    joins: Default::default(),
                     phase: Default::default(),
                     storey,
                     wall_type,

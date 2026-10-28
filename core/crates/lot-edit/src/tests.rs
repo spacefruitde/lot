@@ -153,6 +153,8 @@ fn delete_removes_wall_with_openings() {
     let (mut doc, mut ed) = house();
     let inner = wall_with(&doc, Point2::new(3.0, 0.0), Point2::new(3.0, 4.0));
     doc.insert(lot_model::Element::Opening(Opening {
+        recess: None,
+        opening_type: None,
         phase: Default::default(),
         host: inner,
         offset: 1.0,
@@ -179,6 +181,8 @@ fn flip_keeps_openings_in_place() {
     let bottom = wall_with(&doc, Point2::new(6.0, 0.0), Point2::new(0.0, 0.0));
     let id = doc
         .insert(lot_model::Element::Opening(Opening {
+            recess: None,
+            opening_type: None,
             phase: Default::default(),
             host: bottom,
             offset: 1.0,
@@ -1266,4 +1270,286 @@ fn drawing_direction_from_an_edge_turns_right_angles_and_rectangles() {
     ed.run(&mut doc, &Command::DirectionFromEdge);
     click(&mut doc, &mut ed, 50.0, 50.0);
     assert_eq!(ed.direction, 0.0);
+}
+
+/// Fläche aller Wände in Brüstungshöhe, als eine Fläche.
+fn wall_body(doc: &Document, storey: ElementId) -> lot_geom::Area {
+    let regions = lot_geom::solid_regions(doc.project(), storey, 1.0);
+    lot_geom::Area::union_all(regions.iter().map(|r| &r.area))
+}
+
+#[test]
+fn alignment_change_keeps_walls_and_corners_in_place() {
+    let (mut doc, mut ed) = house();
+    let body = wall_body(&doc, ed.storey);
+    let joins = lot_geom::junctions(doc.project(), ed.storey).len();
+    ed.run(&mut doc, &Command::SelectAll);
+    ed.run(&mut doc, &Command::SetAlignment(WallAlignment::Exterior));
+    let after = wall_body(&doc, ed.storey);
+    assert!((after.area() - body.area()).abs() < 1e-6 && after.difference(&body).area() < 1e-6);
+    assert_eq!(lot_geom::junctions(doc.project(), ed.storey).len(), joins);
+    // Die Ecken liegen jetzt an der Außenkante: Die Wände wurden länger, nicht verschoben.
+    let t = doc.project().wall_types().next().unwrap().1.thickness();
+    assert!(doc.project().walls().any(|(_, w)| (w.length() - (6.0 + t)).abs() < 1e-9));
+    // Kernmitte, und zurück zur Mitte: wieder genau wie vorher.
+    ed.run(&mut doc, &Command::SetAlignment(WallAlignment::CoreCenter));
+    assert!(wall_body(&doc, ed.storey).difference(&body).area() < 1e-6);
+    ed.run(&mut doc, &Command::SetAlignment(WallAlignment::Center));
+    assert!(doc.project().walls().any(|(_, w)| w.start == Point2::new(0.0, 0.0)));
+    assert!(doc.undo().unwrap());
+}
+
+#[test]
+fn flip_keeps_the_wall_and_swaps_its_layers() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SelectAll);
+    ed.run(&mut doc, &Command::SetAlignment(WallAlignment::CoreExterior));
+    let bottom =
+        doc.project().walls().find(|(_, w)| w.start.y.abs() < 1.0 && w.end.y.abs() < 1.0).map(|(id, _)| id).unwrap();
+    let door = doc
+        .insert(lot_model::Element::Opening(Opening {
+            recess: None,
+            opening_type: None,
+            phase: Default::default(),
+            host: bottom,
+            offset: 1.0,
+            width: 1.01,
+            height: 2.135,
+            sill_height: 0.0,
+            kind: lot_model::OpeningKind::Door(lot_model::Door {
+                opens_to: lot_model::WallSide::Left,
+                hinge: lot_model::Handing::DinLeft,
+            }),
+        }))
+        .unwrap();
+    let body = wall_body(&doc, ed.storey);
+    let joins = lot_geom::junctions(doc.project(), ed.storey).len();
+    let storey = ed.storey;
+    let side_of = |doc: &Document| {
+        let w = doc.project().wall(bottom).unwrap();
+        let regions = lot_geom::solid_regions(doc.project(), storey, 1.0);
+        // Dämmung: Schicht 1 des Außenwandaufbaus. Mitte in y.
+        let r = regions.iter().find(|r| r.element == bottom && r.layer == 1).unwrap();
+        let (lo, hi) = r.area.bounds().unwrap();
+        ((lo[1] + hi[1]) / 2.0, w.clone())
+    };
+    let (before, w0) = side_of(&doc);
+    ed.selection = vec![bottom];
+    ed.key(&mut doc, Key::Char(' '));
+    let (after, w1) = side_of(&doc);
+    assert!(wall_body(&doc, ed.storey).difference(&body).area() < 1e-6, "Wand ist verrutscht");
+    assert_eq!(lot_geom::junctions(doc.project(), ed.storey).len(), joins);
+    assert!(before < 0.0 && after > before, "Dämmung lag bei {before}, jetzt bei {after}");
+    assert_eq!(w1.alignment, WallAlignment::CoreInterior);
+    assert_eq!(w0.joins, w1.joins);
+    // Die Tür schlägt weiter nach Süden auf, mit den Bändern an derselben Stelle.
+    let d = match &doc.project().elements[&door] {
+        lot_model::Element::Opening(o) => o.clone(),
+        _ => unreachable!(),
+    };
+    let lot_model::OpeningKind::Door(dd) = d.kind else { panic!("keine Tür") };
+    let hinge =
+        |w: &lot_model::Wall, o: &Opening, at_end: bool| w.point_at(o.offset + if at_end { o.width } else { 0.0 }, 0.0);
+    let o0 = Opening { offset: 1.0, width: 1.01, ..d.clone() };
+    let before_hinge = hinge(&w0, &o0, true);
+    let after_hinge = hinge(&w1, &d, dd.hinge_at_end());
+    assert!(before_hinge.distance(after_hinge) < 0.4, "{before_hinge:?} {after_hinge:?}");
+    assert_eq!(dd.opens_to, lot_model::WallSide::Right);
+}
+
+#[test]
+fn double_click_at_a_corner_selects_the_junction() {
+    let (mut doc, mut ed) = house();
+    ed.pointer_moved(doc.project(), input(0.05, 0.05));
+    ed.pointer_down(&mut doc, input(0.05, 0.05), 1);
+    ed.pointer_up(&mut doc);
+    ed.pointer_down(&mut doc, input(0.05, 0.05), 2);
+    ed.pointer_up(&mut doc);
+    let j = ed.selected_junction(doc.project()).expect("Anschluss gewählt");
+    assert!(ed.selection.is_empty());
+    assert_eq!(j.arms.len(), 2);
+    assert!(ed.overlay(doc.project()).junction.is_some());
+    // Ausnahme: Die erste Wand läuft durch.
+    let a = j.arms[0];
+    ed.run(&mut doc, &Command::SetJoinRule(a.wall.0, a.end.unwrap(), lot_model::JoinRule::Through));
+    let j = ed.selected_junction(doc.project()).unwrap();
+    let role = j.arms.iter().find(|x| x.wall == a.wall).unwrap().role;
+    assert_eq!(role, lot_geom::ArmRole::Through);
+    ed.key(&mut doc, Key::Escape);
+    assert!(ed.junction.is_none());
+}
+
+#[test]
+fn wall_top_mode_keeps_the_height_when_fixed() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SelectAll);
+    let before: Vec<f64> = doc.project().walls().map(|(_, w)| doc.project().wall_extent(w).unwrap().1).collect();
+    ed.run(&mut doc, &Command::SetWallTop(3));
+    for ((_, w), b) in doc.project().walls().zip(&before) {
+        assert!(matches!(w.top, lot_model::Top::Height(_)));
+        assert!((doc.project().wall_extent(w).unwrap().1 - b).abs() < 1e-6);
+    }
+    ed.run(&mut doc, &Command::SetWallTop(1));
+    assert!(doc.project().walls().all(|(_, w)| w.top == lot_model::Top::Slab { offset: 0.0 }));
+}
+
+/// Haus mit Bodenplatte im EG (Estrich 6 cm, Dämmung 10 cm über der Platte) und
+/// einem Fenster mit BRH 0,90 in der unteren Außenwand.
+fn house_with_window() -> (Document, Editor, ElementId) {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SlabFromWalls);
+    let bottom =
+        doc.project().walls().find(|(_, w)| w.start.y.abs() < 1e-9 && w.end.y.abs() < 1e-9).map(|(id, _)| id).unwrap();
+    let id = doc
+        .insert(lot_model::Element::Opening(Opening {
+            recess: None,
+            phase: Default::default(),
+            host: bottom,
+            offset: 1.0,
+            width: 1.26,
+            height: 1.385,
+            sill_height: 0.9,
+            kind: lot_model::OpeningKind::Window,
+            opening_type: None,
+        }))
+        .unwrap();
+    (doc, ed, id)
+}
+
+fn opening(doc: &Document, id: ElementId) -> Opening {
+    match &doc.project().elements[&id] {
+        lot_model::Element::Opening(o) => o.clone(),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn rough_sill_follows_floor_build_up_and_sill_connection() {
+    let (mut doc, mut ed, id) = house_with_window();
+    let o = opening(&doc, id);
+    // Bodenplatte: Estrich 6 cm und Dämmung 10 cm über der Tragschicht.
+    assert!((doc.project().floor_build_up(&o).unwrap() - 0.16).abs() < 1e-9);
+    assert!((doc.project().rough_sill(&o).unwrap() - 1.06).abs() < 1e-9);
+    // Unterer Anschluss 3 cm am neuen Typ F1: Rohbaubrüstung 1,03, die Rohbauöffnung beginnt 0,87 über OKFF.
+    ed.selection = vec![id];
+    ed.run(&mut doc, &Command::SetSillConnection(0.03));
+    let o = opening(&doc, id);
+    let ty = doc.project().opening_type(o.opening_type.unwrap()).unwrap();
+    assert_eq!((ty.mark.as_str(), ty.name.as_str()), ("F1", "Fenster"));
+    assert!((doc.project().rough_sill(&o).unwrap() - 1.03).abs() < 1e-9);
+    assert!((doc.project().opening_span(&o).unwrap().0 - 0.87).abs() < 1e-9);
+    // Die Rohbaubrüstung getippt: die BRH folgt.
+    assert!((openings::sill_for_rough(doc.project(), &o, 1.10).unwrap() - 0.97).abs() < 1e-9);
+    // Der Fußbodenaufbau wird dicker: BRH bleibt, die Rohbaubrüstung wandert und wird gemeldet.
+    let before = doc.project().rough_sills();
+    let slab_type = doc.project().slab_types().find(|(_, t)| t.name.contains("Bodenplatte")).unwrap().0;
+    let mut t = doc.project().slab_type(slab_type).unwrap().clone();
+    t.layers[0].thickness = 0.08;
+    doc.replace(slab_type, lot_model::Element::SlabType(t)).unwrap();
+    let changes = lot_model::rough_sill_changes(&before, &doc.project().rough_sills());
+    assert_eq!(changes.len(), 1);
+    assert!((changes[0].1 - 1.03).abs() < 1e-9 && (changes[0].2 - 1.05).abs() < 1e-9, "{changes:?}");
+}
+
+#[test]
+fn fill_changes_without_touching_the_opening() {
+    let (mut doc, mut ed, id) = house_with_window();
+    let before = opening(&doc, id);
+    ed.selection = vec![id];
+    ed.run(&mut doc, &Command::SetOpeningFill(0));
+    let plain = opening(&doc, id);
+    assert_eq!(plain.kind, lot_model::OpeningKind::Plain);
+    assert_eq!(
+        (plain.offset, plain.width, plain.height, plain.sill_height),
+        (before.offset, before.width, before.height, before.sill_height)
+    );
+    ed.run(&mut doc, &Command::SetOpeningFill(2));
+    assert!(matches!(opening(&doc, id).kind, lot_model::OpeningKind::Door(_)));
+}
+
+#[test]
+fn a_niche_cuts_only_part_of_the_wall() {
+    let (mut doc, mut ed, id) = house_with_window();
+    let host = opening(&doc, id).host;
+    let area = |doc: &Document| -> f64 {
+        lot_geom::layer_regions(doc.project(), ed_storey(doc), 1.2)
+            .iter()
+            .filter(|r| r.element == host)
+            .map(|r| r.area.area())
+            .sum()
+    };
+    // Das Fenster geht durch die ganze Wand (36 cm).
+    let solid = area(&doc) + 1.26 * 0.36;
+    ed.selection = vec![id];
+    ed.run(&mut doc, &Command::SetOpeningFill(1));
+    let o = opening(&doc, id);
+    assert_eq!(o.recess.map(|r| r.depth), Some(0.1));
+    // Als Nische fehlen nur 1,26 × 0,10 m.
+    assert!((solid - area(&doc) - 1.26 * 0.1).abs() < 1e-6, "{} {}", solid, area(&doc));
+    ed.run(&mut doc, &Command::SetRecess(lot_model::WallSide::Right, 0.05));
+    assert!((solid - area(&doc) - 1.26 * 0.05).abs() < 1e-6);
+    // Zu tief: Die Nische würde die Wand durchstoßen.
+    let r = ed.run(&mut doc, &Command::SetRecess(lot_model::WallSide::Right, 0.5));
+    assert!(r.error.is_some());
+}
+
+fn ed_storey(doc: &Document) -> ElementId {
+    doc.project().storeys()[0].0
+}
+
+#[test]
+fn doors_are_placed_by_distance_or_centered() {
+    let (mut doc, mut ed) = house();
+    let bottom = doc
+        .project()
+        .walls()
+        .find(|(_, w)| w.start == Point2::new(6.0, 0.0) && w.end == Point2::new(0.0, 0.0))
+        .map(|(id, _)| id)
+        .unwrap();
+    ed.run(&mut doc, &Command::DoorTool);
+    // Anschläge: Innenfläche der Ostwand (s = 0,18) und Ostfläche der Mittelwand (s = 2,82).
+    ed.pointer_moved(doc.project(), input(4.52, 0.05));
+    let tip = ed.overlay(doc.project()).tip.map(|t| t.1);
+    assert_eq!(tip.as_deref(), Some("mittig"));
+    assert_eq!(ed.overlay(doc.project()).temp_dims.len(), 2);
+    ed.pointer_moved(doc.project(), input(5.0, 0.05));
+    for c in "0,30".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    ed.key(&mut doc, Key::Enter);
+    let first: Vec<Opening> = openings(&doc, bottom);
+    assert_eq!(first.len(), 1);
+    assert!((first[0].offset - 0.48).abs() < 1e-9, "{}", first[0].offset);
+    // ⇥: Abstand vom Anschlag dahinter; Leertaste dreht die Tür weiter.
+    ed.pointer_moved(doc.project(), input(4.0, 0.05));
+    ed.key(&mut doc, Key::Tab);
+    ed.key(&mut doc, Key::Char(' '));
+    for c in "0,10".chars() {
+        ed.key(&mut doc, Key::Char(c));
+    }
+    let r = ed.key(&mut doc, Key::Enter);
+    assert!(r.error.is_none(), "{:?}", r.error);
+    let mut all = openings(&doc, bottom);
+    all.sort_by(|a, b| a.offset.total_cmp(&b.offset));
+    assert_eq!(all.len(), 2);
+    assert!((all[1].offset - (2.82 - 0.1 - 1.01)).abs() < 1e-9, "{}", all[1].offset);
+}
+
+#[test]
+fn space_turns_the_door_before_placing() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::DoorTool);
+    ed.pointer_moved(doc.project(), input(1.5, 0.05));
+    let kind = |ed: &Editor, doc: &Document| match ed.placed_opening(doc.project(), Point2::new(1.5, 0.05), 0.15) {
+        Some(Opening { kind: lot_model::OpeningKind::Door(d), .. }) => (d.opens_to, d.hinge_at_end()),
+        _ => panic!("keine Tür"),
+    };
+    let mut seen = vec![kind(&ed, &doc)];
+    for _ in 0..3 {
+        ed.key(&mut doc, Key::Char(' '));
+        seen.push(kind(&ed, &doc));
+    }
+    seen.sort_by_key(|(s, e)| (*s == lot_model::WallSide::Left, *e));
+    seen.dedup();
+    assert_eq!(seen.len(), 4, "alle vier Lagen");
 }
