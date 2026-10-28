@@ -79,6 +79,11 @@ struct LotApp: App {
                 .disabled(model.viewState?.hasBelow != true)
                 Toggle("Nebeneinander", isOn: Binding(get: { model.showSplit }, set: { model.showSplit = $0 }))
                     .keyboardShortcut("n", modifiers: [.command, .option])
+                Toggle("Druckbild", isOn: Binding(get: { model.viewState?.printView ?? false }, set: { model.setPrintView($0) }))
+                    .keyboardShortcut("p", modifiers: [.command, .option])
+                Button("Auswahl vorübergehend ausblenden (H)") { model.run("TempHide") }
+                Button("Auswahl isolieren (I)") { model.run("TempIsolate") }
+                Button("Ausgeblendetes wieder zeigen") { model.run("TempReset") }
                 Divider()
             }
             CommandMenu("Prüfen") {

@@ -22,6 +22,7 @@ pub mod site_plan;
 pub mod stairs;
 pub mod standard;
 pub mod table;
+pub mod views;
 
 /// Punkt auf dem Blatt in Millimetern.
 #[derive(Debug, Clone, Copy, PartialEq)]

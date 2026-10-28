@@ -1928,3 +1928,117 @@ fn storey_height_moves_the_storeys_above() {
     assert!((now(&doc, high.0).0 - (high.1 + 0.25)).abs() < 1e-9);
     assert!(ed.run(&mut doc, &Command::SetStoreyHeight(low.0.0, 0.0)).error.is_some());
 }
+
+// Sichtbarkeit (ADR 0050)
+
+fn plan_of(ed: &Editor) -> lot_model::ViewContent {
+    lot_model::ViewContent::FloorPlan { storey: ed.storey }
+}
+
+fn settings(doc: &Document, view: lot_model::ViewContent) -> Option<lot_model::ViewSettings> {
+    doc.project().view_settings(view).map(|(_, s)| s.clone())
+}
+
+#[test]
+fn view_fields_are_stored_only_while_the_view_sets_them() {
+    use visibility::ViewField;
+    let (mut doc, mut ed) = house();
+    let view = plan_of(&ed);
+    assert_eq!(settings(&doc, view), None);
+    ed.run(&mut doc, &Command::SetViewField(view, ViewField::Scale(Some(50.0))));
+    assert_eq!(settings(&doc, view).unwrap().scale, Some(50.0));
+    // Zurücksetzen übernimmt wieder; ohne eigene Werte verschwindet das Element.
+    ed.run(&mut doc, &Command::SetViewField(view, ViewField::Scale(None)));
+    assert_eq!(settings(&doc, view), None);
+    assert!(ed.run(&mut doc, &Command::SetViewField(view, ViewField::CutHeight(Some(0.0)))).error.is_some());
+    // Eine Vorlage nimmt der Ansicht die Werte ab, die ihre Bausteine steuern.
+    ed.run(&mut doc, &Command::SetViewField(view, ViewField::Scale(Some(100.0))));
+    ed.run(&mut doc, &Command::SetViewField(view, ViewField::FadedBelow(Some(false))));
+    ed.run(&mut doc, &Command::SetViewTemplate(view, Some("Werkplan 1:50".into())));
+    let s = settings(&doc, view).unwrap();
+    assert_eq!((s.template.as_deref(), s.scale, s.faded_below), (Some("Werkplan 1:50"), None, Some(false)));
+    let look = lot_plan::views::look(doc.project(), lot_plan::standard::OfficeStandard::builtin(), view);
+    assert_eq!((look.scale.value, look.scale.origin), (50.0, lot_plan::views::Origin::Template));
+    assert!(ed.run(&mut doc, &Command::SetViewTemplate(view, Some("Gibt es nicht".into()))).error.is_some());
+    // Alles ist ein Schritt zum Widerrufen.
+    doc.undo().unwrap();
+    assert_eq!(settings(&doc, view).unwrap().template, None);
+}
+
+#[test]
+fn h_hides_i_isolates_and_hidden_cannot_be_picked() {
+    let (mut doc, mut ed) = house();
+    let middle = wall_with(&doc, Point2::new(3.0, 0.0), Point2::new(3.0, 4.0));
+    click(&mut doc, &mut ed, 3.0, 2.0);
+    assert_eq!(ed.selection, vec![middle]);
+    ed.key(&mut doc, Key::Char('h'));
+    assert!(ed.selection.is_empty());
+    assert!(ed.temp.hidden.contains(&middle));
+    // Die Ansicht meldet Ausgeblendetes; anklicken geht dann nicht.
+    ed.hidden = ed.temp.hidden.clone();
+    click(&mut doc, &mut ed, 3.0, 2.0);
+    assert!(ed.selection.is_empty());
+    // H ohne Auswahl zeigt wieder alles.
+    ed.key(&mut doc, Key::Char('h'));
+    assert!(!ed.temp.is_active());
+    ed.hidden.clear();
+    // I isoliert die Auswahl.
+    click(&mut doc, &mut ed, 3.0, 2.0);
+    ed.key(&mut doc, Key::Char('i'));
+    assert_eq!(ed.temp.isolated, Some([middle].into()));
+    ed.run(&mut doc, &Command::TempReset);
+    assert!(!ed.temp.is_active());
+    // Snap-Kürzel mit I bleiben: S, dann I.
+    ed.run(&mut doc, &Command::WallTool);
+    ed.key(&mut doc, Key::Char('s'));
+    ed.key(&mut doc, Key::Char('i'));
+    assert!(!ed.temp.is_active());
+}
+
+#[test]
+fn reasons_name_why_and_fix_it_with_one_click() {
+    use visibility::{Fix, ViewField};
+    let (mut doc, mut ed) = house();
+    let view = plan_of(&ed);
+    let middle = wall_with(&doc, Point2::new(3.0, 0.0), Point2::new(3.0, 4.0));
+    ed.run(&mut doc, &Command::SetSelection(vec![middle.0]));
+    ed.run(&mut doc, &Command::HideInView(view));
+    let standard = lot_plan::standard::OfficeStandard::builtin();
+    let look = lot_plan::views::look(doc.project(), standard, view);
+    let reasons = visibility::reasons(doc.project(), &look, &Default::default(), middle);
+    assert_eq!(reasons.len(), 1);
+    assert_eq!(reasons[0].text, "in dieser Ansicht ausgeblendet");
+    let Some((title, Fix::Run(fix))) = reasons[0].fix.clone() else { panic!("keine Lösung") };
+    assert_eq!(title, "Wieder zeigen");
+    ed.run(&mut doc, &fix);
+    let look = lot_plan::views::look(doc.project(), standard, view);
+    assert!(visibility::reasons(doc.project(), &look, &Default::default(), middle).is_empty());
+    // Bauzustand: Neubau fehlt im Bestand; die Lösung zeigt den Umbauplan.
+    ed.run(&mut doc, &Command::SetViewField(view, ViewField::Phase(Some(lot_model::PhaseFilter::Existing))));
+    let look = lot_plan::views::look(doc.project(), standard, view);
+    let reasons = visibility::reasons(doc.project(), &look, &Default::default(), middle);
+    assert!(reasons[0].text.starts_with("Bauzustand: die Ansicht zeigt Bestand"), "{}", reasons[0].text);
+    assert!(matches!(&reasons[0].fix, Some((_, Fix::Run(Command::SetViewField(_, ViewField::Phase(Some(_))))))));
+    // Anderes Geschoss: die Lösung geht dorthin.
+    ed.run(&mut doc, &Command::AddStorey);
+    let upper = lot_model::ViewContent::FloorPlan { storey: ed.storey };
+    let look = lot_plan::views::look(doc.project(), standard, upper);
+    let reasons = visibility::reasons(doc.project(), &look, &Default::default(), middle);
+    assert!(reasons.iter().any(|r| matches!(r.fix, Some((_, Fix::Go(_))))));
+}
+
+#[test]
+fn view_fields_parse_as_the_app_writes_them() {
+    use visibility::ViewField;
+    for (text, field) in [
+        ("Scale(Some(50.0))", ViewField::Scale(Some(50.0))),
+        ("Detail(Some(Fine))", ViewField::Detail(Some(lot_model::Detail::Fine))),
+        ("Phase(None)", ViewField::Phase(None)),
+        ("Theme(Some(\"Brandschutz\"))", ViewField::Theme(Some("Brandschutz".into()))),
+        ("Theme(Some(\"\"))", ViewField::Theme(Some(String::new()))),
+        ("FadedBelow(Some(false))", ViewField::FadedBelow(Some(false))),
+        ("CutHeight(Some(1.5))", ViewField::CutHeight(Some(1.5))),
+    ] {
+        assert_eq!(ViewField::parse(text), Some(field), "{text}");
+    }
+}

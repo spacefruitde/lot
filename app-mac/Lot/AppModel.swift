@@ -79,6 +79,8 @@ final class AppModel {
     private var pendingSecond: String?
     /// Titel jeder Ansicht, etwa „Schnitt A-A“.
     private(set) var paneTitles: [Int: String] = [:]
+    /// Vorübergehend Ausgeblendetes je Ansicht, etwa „3 ausgeblendet · H zeigt wieder alles“.
+    private(set) var paneTemporary: [Int: String] = [:]
     private var redrawers: [Int: () -> Void] = [:]
 
     /// Die aktive Ansicht.
@@ -99,6 +101,12 @@ final class AppModel {
     private(set) var sheet: SheetInfo?
     private(set) var placed: PlacedInfo?
     static let formats = sheetFormats()
+    /// Darstellung der aktiven Ansicht mit Herkunft jeder Einstellung (ADR 0050).
+    private(set) var look: LookInfo?
+    /// Gewählte Bauteile, die die aktive Ansicht nicht zeigt, mit Gründen.
+    private(set) var hiddenInfos: [HiddenInfo] = []
+    static let details = detailLevels()
+    static let phases = phaseFilters()
 
     static let fileType = UTType(filenameExtension: "lot") ?? .data
 
@@ -241,9 +249,47 @@ final class AppModel {
     }
 
     func setFadedBelow(_ show: Bool) {
-        viewport?.setFadedBelow(showIt: show)
+        guard let viewport else { return }
+        handle(viewport.setFadedBelow(showIt: show))
+    }
+
+    // MARK: Sichtbarkeit (ADR 0050)
+
+    /// Eine Einstellung der aktiven Ansicht, als RON eines `ViewField`, etwa `Scale(Some(50.0))`.
+    func setViewField(_ field: String) {
+        guard let viewport else { return }
+        handle(viewport.setViewField(field: field))
+    }
+
+    func setViewTemplate(_ name: String?) {
+        guard let viewport else { return }
+        handle(viewport.setViewTemplate(name: name))
+    }
+
+    func setRule(_ rule: RuleInfo, on: Bool) {
+        guard let viewport else { return }
+        handle(viewport.setRuleOn(name: rule.name, on: on, own: rule.own))
+    }
+
+    func hideInView() {
+        guard let viewport else { return }
+        handle(viewport.hideInView())
+    }
+
+    func showInView(_ ids: [UInt64]) {
+        guard let viewport else { return }
+        handle(viewport.showInView(ids: ids))
+    }
+
+    func setPrintView(_ on: Bool) {
+        viewport?.setPrintView(on: on)
         updateViewState()
         requestRedraw?()
+    }
+
+    /// Behebt einen Grund, warum ein Bauteil fehlt: Befehl oder Sprung.
+    func fix(_ reason: ReasonInfo) {
+        run(reason.fix)
     }
 
     /// Ansicht aus der Seitenleiste auf das Blatt in dieser Hälfte legen; Lage
@@ -273,13 +319,17 @@ final class AppModel {
 
     func updateViewState() {
         for (pane, v) in [(0, primary), (1, secondary)] {
-            paneTitles[pane] = v?.state().title
+            let state = v?.state()
+            paneTitles[pane] = state?.title
+            paneTemporary[pane] = state?.printView == true ? nil : state?.temporary
         }
         guard let viewport else { return }
         let state = viewport.state()
         viewState = state
         sections = state.selection.isEmpty ? [] : document.sections(ids: state.selection)
         placed = viewport.placedInfo()
+        look = viewport.look()
+        hiddenInfos = state.selection.isEmpty ? [] : viewport.hiddenReasons(ids: state.selection)
         if state.view == .sheet, let id = UInt64(state.shown.dropFirst("Sheet(".count).dropLast()) {
             sheet = document.sheetInfo(sheet: id)
         } else {

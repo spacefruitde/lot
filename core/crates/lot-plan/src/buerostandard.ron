@@ -161,4 +161,37 @@ OfficeStandard(
             grid_bubble: 6.0,
         ),
     ],
+    // Voreinstellungen jeder Ansicht (ADR 0050): gelten, solange weder Vorlage
+    // noch Ansicht etwas anderes setzen.
+    views: ViewDefaults(scale: 100.0, site_scale: 500.0, cut_height: 1.0, phase: All, faded_below: true),
+    // Ansichtsvorlagen aus Bausteinen (Maßstab mit Detailgrad, Bauzustand,
+    // Thema); ein Baustein, der fehlt, steuert nichts. Vorschlag, Ben prüft.
+    templates: [
+        (name: "Entwurf 1:200", scale: Some((scale: 200.0))),
+        (name: "Bauantrag 1:100", scale: Some((scale: 100.0)), phase: Some(All)),
+        (name: "Werkplan 1:50", scale: Some((scale: 50.0))),
+        (name: "Präsentation", theme: Some("Präsentation")),
+        (name: "Umbauplan", phase: Some(All)),
+        (name: "Flächenplan", theme: Some("Flächen")),
+        (name: "Brandschutzplan", theme: Some("Brandschutz")),
+    ],
+    // Themen: Regeln nach Eigenschaften; je Bauteil gilt die erste, die trifft.
+    // Farben sind ein Vorschlag, Ben prüft.
+    themes: [
+        (name: "Präsentation", presentation: true),
+        (name: "Flächen", rules: [
+            (name: "Nutzungsfläche", when: [Kind(Space), Usage("NUF")], then: Color((250, 228, 160))),
+            (name: "Technikfläche", when: [Kind(Space), Usage("TF")], then: Color((214, 214, 214))),
+            (name: "Verkehrsfläche", when: [Kind(Space), Usage("VF")], then: Color((200, 224, 244))),
+            (name: "Maßketten ausblenden", when: [Kind(Dimension)], then: Hide),
+        ]),
+        (name: "Brandschutz", rules: [
+            (name: "Brandwand", when: [Kind(Wall), Property(FireRating, "Brandwand")], then: Color((128, 0, 0))),
+            (name: "F90", when: [Kind(Wall), Property(FireRating, "F90")], then: Color((226, 35, 26))),
+            (name: "F60", when: [Kind(Wall), Property(FireRating, "F60")], then: Color((245, 150, 40))),
+            (name: "F30", when: [Kind(Wall), Property(FireRating, "F30")], then: Color((60, 160, 70))),
+            (name: "Übrige Wände grau", when: [Kind(Wall)], then: Gray),
+            (name: "Maßketten ausblenden", when: [Kind(Dimension)], then: Hide),
+        ]),
+    ],
 )

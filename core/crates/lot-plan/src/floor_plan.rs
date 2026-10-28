@@ -28,6 +28,7 @@ use lot_model::{ElementId, LayerFunction, OpeningKind, Project, WallSide};
 
 use crate::clip::clip_polyline;
 use crate::standard::{CutPattern, Detail, OfficeStandard, ScaleStyle};
+use crate::views::Paint;
 use crate::{Anchor, Area as PlanArea, Color, Fill, Line, LineStyle, PaperPoint, Pen, PlanObject, Text, Viewport};
 
 /// Ein Grundriss: Geschoss, Schnitthöhe über OKFF und Maßstab.
@@ -53,6 +54,17 @@ pub fn floor_plan(
     floor_plan_layers(project, view, standard, viewport).into_iter().flat_map(|(_, objects)| objects).collect()
 }
 
+/// Grundriss mit den Farben und dem Detailgrad einer Ansicht (ADR 0050).
+pub fn floor_plan_with(
+    project: &Project,
+    view: FloorPlanView,
+    standard: &OfficeStandard,
+    viewport: Viewport,
+    paint: &Paint,
+) -> Vec<PlanObject> {
+    floor_plan_layers_with(project, view, standard, viewport, paint).into_iter().flat_map(|(_, o)| o).collect()
+}
+
 /// Wie [`floor_plan`], nach Layern getrennt, für den Austausch über DXF und DWG
 /// (6.04). Die Namen sind Vorschläge ohne Umlaute; leere Layer fehlen.
 pub fn floor_plan_layers(
@@ -61,8 +73,23 @@ pub fn floor_plan_layers(
     standard: &OfficeStandard,
     viewport: Viewport,
 ) -> Vec<(&'static str, Vec<PlanObject>)> {
+    floor_plan_layers_with(project, view, standard, viewport, &Paint::default())
+}
+
+/// Wie [`floor_plan_layers`], mit den Farben und dem Detailgrad einer Ansicht.
+pub fn floor_plan_layers_with(
+    project: &Project,
+    view: FloorPlanView,
+    standard: &OfficeStandard,
+    viewport: Viewport,
+    paint: &Paint,
+) -> Vec<(&'static str, Vec<PlanObject>)> {
     let Some(storey) = project.storey(view.storey) else { return Vec::new() };
-    let style = standard.style_for(view.scale);
+    let mut owned = standard.style_for(view.scale).clone();
+    if let Some(d) = paint.detail {
+        owned.detail = d;
+    }
+    let style = &owned;
     let z_cut = storey.elevation + view.cut_height;
     // Im Umbauplan durchbrechen zugemauerte und neue Öffnungen in Bestand die Wand nicht.
     let phased = project.has_phases().then(|| project.without_phase_openings());
@@ -77,6 +104,9 @@ pub fn floor_plan_layers(
             layers.push((name, objects));
         }
     };
+
+    // 0. Räume farbig nach den Regeln der Ansicht (ADR 0050), ganz unten.
+    layer("A_Raumfarben", &mut |objects| draw_space_colors(objects, project, view.storey, paint, viewport));
 
     // 1. Sichtbares unterhalb der Schnittebene.
     layer("A_Sichtkanten", &mut |objects| {
@@ -96,7 +126,7 @@ pub fn floor_plan_layers(
 
     // 2. bis 4. Geschnittene Bauteile, im Umbauplan farbig.
     layer("A_Bauteile_Schnitt", &mut |objects| {
-        draw_cut_for(objects, project, &cut, Some((view.storey, z_cut)), standard, style, viewport)
+        draw_cut_for(objects, project, &cut, Some((view.storey, z_cut)), standard, style, viewport, paint)
     });
 
     // 5. Türen und Fenster, Deckendurchbrüche.
@@ -579,7 +609,72 @@ pub fn format_area(m2: f64) -> String {
 /// je Bauzustand statt mit Materialschraffur. `opening_cut` (Geschoss und Höhe)
 /// legt im Grundriss Öffnungen farbig an, die die Wand nicht durchbrechen:
 /// neue Öffnungen in Bestand gelb (Ausbruch), zugemauerte rot.
+/// Räume, denen eine Regel eine Farbe gibt, als Fläche.
+fn draw_space_colors(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    storey: ElementId,
+    paint: &Paint,
+    viewport: Viewport,
+) {
+    if paint.colors.is_empty() {
+        return;
+    }
+    let finder = lot_geom::spaces::SpaceFinder::new(project, storey);
+    for (id, space) in project.spaces_on(storey) {
+        let (Some(color), Some(area)) = (paint.colors.get(&id), finder.area_at([space.position.x, space.position.y]))
+        else {
+            continue;
+        };
+        let rings: Vec<Vec<PaperPoint>> = area.rings().iter().map(|r| paper(r, viewport)).collect();
+        objects.push(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(*color) }));
+    }
+}
+
+/// Geschnittene Bauteile; Bauteile mit einer Farbe aus den Regeln der Ansicht
+/// (ADR 0050) voll in dieser Farbe, die übrigen wie gewohnt, im Umbauplan nach Bauzustand.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_cut_for(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    cut: &[LayerRegion],
+    opening_cut: Option<(ElementId, f64)>,
+    standard: &OfficeStandard,
+    style: &ScaleStyle,
+    viewport: Viewport,
+    paint: &Paint,
+) {
+    let (painted, rest): (Vec<LayerRegion>, Vec<LayerRegion>) =
+        cut.iter().cloned().partition(|r| paint.colors.contains_key(&r.element));
+    if !rest.is_empty() {
+        draw_cut_phased(objects, project, &rest, opening_cut, standard, style, viewport);
+    }
+    if painted.is_empty() {
+        return;
+    }
+    let mut colors: Vec<Color> = Vec::new();
+    for r in &painted {
+        let c = paint.colors[&r.element];
+        if !colors.contains(&c) {
+            colors.push(c);
+        }
+    }
+    for c in colors {
+        let area = Area::union_all(painted.iter().filter(|r| paint.colors[&r.element] == c).map(|r| &r.area));
+        let rings: Vec<Vec<PaperPoint>> = area.rings().iter().map(|r| paper(r, viewport)).collect();
+        objects.push(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(c) }));
+    }
+    for area in material_areas(&painted).values() {
+        for ring in area.rings() {
+            objects.push(closed(paper(&ring, viewport), style.pens.layer));
+        }
+    }
+    for ring in Area::union_all(painted.iter().map(|r| &r.area)).rings() {
+        objects.push(closed(paper(&ring, viewport), style.pens.cut));
+    }
+}
+
+fn draw_cut_phased(
     objects: &mut Vec<PlanObject>,
     project: &Project,
     cut: &[LayerRegion],

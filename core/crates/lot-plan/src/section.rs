@@ -194,7 +194,23 @@ pub fn section(
     standard: &OfficeStandard,
     viewport: Viewport,
 ) -> Vec<PlanObject> {
-    let style = standard.style_for(viewport.scale);
+    section_with(project, geometry, view, standard, viewport, &crate::views::Paint::default())
+}
+
+/// Wie [`section`], mit den Farben und dem Detailgrad einer Ansicht (ADR 0050).
+pub fn section_with(
+    project: &Project,
+    geometry: &ModelGeometry,
+    view: &SectionView,
+    standard: &OfficeStandard,
+    viewport: Viewport,
+    paint: &crate::views::Paint,
+) -> Vec<PlanObject> {
+    let mut owned = standard.style_for(viewport.scale).clone();
+    if let Some(d) = paint.detail {
+        owned.detail = d;
+    }
+    let style = &owned;
     let frame = Frame::new(view);
     let mut objects = Vec::new();
 
@@ -301,7 +317,7 @@ pub fn section(
     }
 
     // 3. Schnittflächen über den Ansichtskanten.
-    draw_cut_for(&mut objects, project, &cut, None, standard, style, viewport);
+    draw_cut_for(&mut objects, project, &cut, None, standard, style, viewport, paint);
 
     // 4. Geländelinie, außerhalb der geschnittenen Bauteile.
     if let Some((lo, _)) = extent {
