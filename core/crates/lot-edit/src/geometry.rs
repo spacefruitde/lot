@@ -284,6 +284,12 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
                 vec![[x - w, y - h], [x + w, y - h], [x + w, y + h], [x - w, y + h]]
             }))
         }
+        Element::SectionView(v) => {
+            let len = v.start.distance(v.end).max(1e-12);
+            let (dx, dy) = ((v.end.x - v.start.x) / len, (v.end.y - v.start.y) / len);
+            let at = |p: Point2, t: f64| [p.x - dy * t, p.y + dx * t];
+            Some(vec![at(v.start, -0.05), at(v.end, -0.05), at(v.end, 0.05), at(v.start, 0.05)])
+        }
         Element::GridLine(g) => {
             let len = g.start.distance(g.end).max(1e-12);
             let (dx, dy) = ((g.end.x - g.start.x) / len, (g.end.y - g.start.y) / len);
@@ -384,6 +390,12 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
                 n.start = shift(g.start);
                 n.end = shift(g.end);
                 changes.push((*id, Element::GridLine(n)));
+            }
+            Some(Element::SectionView(v)) => {
+                let mut n = v.clone();
+                n.start = shift(v.start);
+                n.end = shift(v.end);
+                changes.push((*id, Element::SectionView(n)));
             }
             _ => {}
         }
@@ -505,4 +517,48 @@ fn follow_tee(project: &Project, w: &Wall, e: Point2, m: &Wall, delta: (f64, f64
 /// Ersetzungen als Elemente.
 pub fn as_elements(changes: Vec<(ElementId, Wall)>) -> Vec<(ElementId, Element)> {
     changes.into_iter().map(|(id, w)| (id, Element::Wall(w))).collect()
+}
+
+/// Schnitte und Ansichten unter dem Zeiger (ADR 0049), der nächste zuerst.
+/// Schnitte trifft man an ihren Marken: den breiten Enden der Linie, dem
+/// Pfeil und dem Buchstaben, je `mark` lang; die Linie durchs Gebäude bleibt
+/// frei für die Bauteile. Ansichten liegen vor der Fassade und sind auf der
+/// ganzen Linie zu treffen.
+pub fn views_at(project: &Project, p: Point2, tolerance: f64, mark: f64) -> Vec<ElementId> {
+    nearest(
+        project.section_views().map(|(id, v)| {
+            let d = match v.kind {
+                lot_model::SectionKind::Elevation => segment_distance(v.start, v.end, p),
+                lot_model::SectionKind::Section => {
+                    let len = v.start.distance(v.end).max(1e-12);
+                    let dir = ((v.end.x - v.start.x) / len, (v.end.y - v.start.y) / len);
+                    let (look, _) = v.frame();
+                    let k = mark.min(len / 3.0);
+                    let along = |q: Point2, d: (f64, f64), t: f64| Point2::new(q.x + d.0 * t, q.y + d.1 * t);
+                    [
+                        segment_distance(v.start, along(v.start, dir, k), p),
+                        segment_distance(v.end, along(v.end, dir, -k), p),
+                        segment_distance(v.start, along(v.start, look, mark * 1.2), p),
+                        segment_distance(v.end, along(v.end, look, mark * 1.2), p),
+                    ]
+                    .into_iter()
+                    .fold(f64::INFINITY, f64::min)
+                }
+            };
+            (id, d)
+        }),
+        tolerance,
+    )
+}
+
+/// Die Schnittlinie mit einem Ende an `to`; `None`, wenn nichts zu ändern ist
+/// oder die Linie zu kurz würde.
+pub fn moved_section_end(project: &Project, id: ElementId, end: End, to: Point2) -> Option<(ElementId, Element)> {
+    let Some(Element::SectionView(v)) = project.elements.get(&id) else { return None };
+    let mut n = v.clone();
+    match end {
+        End::Start => n.start = to,
+        End::End => n.end = to,
+    }
+    (n != *v && n.start.distance(n.end) >= 0.1).then_some((id, Element::SectionView(n)))
 }

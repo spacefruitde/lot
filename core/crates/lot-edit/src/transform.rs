@@ -155,6 +155,19 @@ pub fn transformed(e: &Element, t: &Transform) -> Option<Element> {
             n.end = p(g.end);
             Element::GridLine(n)
         }
+        Element::SectionView(v) => {
+            // Gespiegelt bleibt der Blick auf derselben Seite des Gebäudes.
+            let mut n = v.clone();
+            n.start = p(v.start);
+            n.end = p(v.end);
+            if t.mirrors() {
+                n.look = match v.look {
+                    lot_model::WallSide::Left => lot_model::WallSide::Right,
+                    lot_model::WallSide::Right => lot_model::WallSide::Left,
+                };
+            }
+            Element::SectionView(n)
+        }
         Element::Annotation(a) => {
             use lot_model::AnnotationShape as S;
             let mut n = a.clone();

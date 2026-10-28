@@ -555,6 +555,8 @@ impl Viewport {
                         Tool::Split => "split",
                         Tool::WallRect => "wallRect",
                         Tool::PickDirection => "direction",
+                        Tool::Section => "section",
+                        Tool::Elevation => "elevation",
                     }
                     .to_string(),
                 )

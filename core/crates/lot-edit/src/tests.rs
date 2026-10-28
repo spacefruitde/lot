@@ -20,6 +20,7 @@ fn click(doc: &mut Document, editor: &mut Editor, x: f64, y: f64) -> Response {
         redraw: r.redraw || up.redraw,
         model_changed: r.model_changed || up.model_changed,
         error: r.error.or(up.error),
+        open: r.open.or(up.open),
     }
 }
 
@@ -1669,4 +1670,235 @@ fn library_types_come_in_one_by_one_with_a_comparison() {
     let mine = lib.with_type(doc.project(), id).unwrap();
     let back = Library::parse(&mine.to_ron()).unwrap();
     assert_eq!(back, mine);
+}
+
+// Navigation (ADR 0049)
+
+fn section_ids(doc: &Document) -> Vec<ElementId> {
+    doc.project().section_views().map(|(id, _)| id).collect()
+}
+
+fn section(doc: &Document, id: ElementId) -> lot_model::SectionView {
+    match doc.project().elements.get(&id) {
+        Some(lot_model::Element::SectionView(v)) => v.clone(),
+        _ => panic!("Schnitt fehlt"),
+    }
+}
+
+#[test]
+fn section_tool_draws_lettered_sections_and_space_turns_the_look() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SectionTool);
+    click(&mut doc, &mut ed, -1.0, 2.0);
+    click(&mut doc, &mut ed, 7.0, 2.0);
+    let a = section(&doc, section_ids(&doc)[0]);
+    assert_eq!((a.name.as_str(), a.mark.as_str()), ("Schnitt A-A", "A"));
+    // Von links nach rechts gezeichnet blickt der Schnitt nach oben (wie Revit),
+    // so tief, dass die Wand dahinter noch drin ist.
+    assert_eq!(a.look, lot_model::WallSide::Left);
+    assert!(a.depth >= 2.0 + 1.0 - 1e-9, "Tiefe {}", a.depth);
+    // Der zweite bekommt B; die Leertaste dreht den Blick vor dem zweiten Klick.
+    click(&mut doc, &mut ed, 1.5, -1.0);
+    ed.key(&mut doc, Key::Char(' '));
+    click(&mut doc, &mut ed, 1.5, 5.0);
+    let b = doc.project().section_views().map(|(_, v)| v.clone()).find(|v| v.mark == "B").expect("Schnitt B");
+    assert_eq!(b.look, lot_model::WallSide::Right);
+    assert_eq!(b.kind, lot_model::SectionKind::Section);
+}
+
+#[test]
+fn elevation_is_named_after_the_facade_it_shows() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::ElevationTool);
+    // Unter dem Haus, Blick nach oben (Norden): die Südfassade.
+    click(&mut doc, &mut ed, -1.0, -3.0);
+    click(&mut doc, &mut ed, 7.0, -3.0);
+    let v = section(&doc, section_ids(&doc)[0]);
+    assert_eq!(v.kind, lot_model::SectionKind::Elevation);
+    assert_eq!(v.name, "Ansicht Süd");
+    assert!(v.mark.is_empty());
+}
+
+#[test]
+fn double_click_on_section_mark_opens_it_and_handles_move_its_end() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SectionTool);
+    click(&mut doc, &mut ed, -1.0, 2.0);
+    click(&mut doc, &mut ed, 7.0, 2.0);
+    ed.key(&mut doc, Key::Escape);
+    let id = section_ids(&doc)[0];
+    // Mitten im Haus trifft der Klick die Wand, nicht die Schnittlinie.
+    ed.pointer_moved(doc.project(), input(3.0, 2.0));
+    let r = ed.pointer_down(&mut doc, input(3.0, 2.0), 2);
+    assert_eq!(r.open, None);
+    ed.pointer_up(&mut doc);
+    // An der Marke links öffnet der Doppelklick den Schnitt.
+    ed.pointer_moved(doc.project(), input(-0.8, 2.0));
+    let r = ed.pointer_down(&mut doc, input(-0.8, 2.0), 2);
+    assert_eq!(r.open, Some(navigation::ViewRef::Section(id.0)));
+    ed.pointer_up(&mut doc);
+    // Gewählt: Griff am Ende ziehen verlängert die Linie.
+    click(&mut doc, &mut ed, -0.8, 2.0);
+    assert_eq!(ed.selection, vec![id]);
+    ed.pointer_down(&mut doc, input(7.0, 2.0), 1);
+    ed.pointer_dragged(doc.project(), input(8.0, 2.0));
+    ed.pointer_up(&mut doc);
+    assert_eq!(section(&doc, id).end, Point2::new(8.0, 2.0));
+    // Leertaste dreht den Blick des gewählten Schnitts.
+    ed.key(&mut doc, Key::Char(' '));
+    assert_eq!(section(&doc, id).look, lot_model::WallSide::Right);
+}
+
+#[test]
+fn deleting_a_section_takes_it_off_the_sheets() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SectionTool);
+    click(&mut doc, &mut ed, -1.0, 2.0);
+    click(&mut doc, &mut ed, 7.0, 2.0);
+    ed.key(&mut doc, Key::Escape);
+    let id = section_ids(&doc)[0];
+    let r = ed.run(&mut doc, &Command::AddSheet);
+    let Some(navigation::ViewRef::Sheet(sheet)) = r.open else { panic!("Blatt nicht geöffnet") };
+    ed.run(&mut doc, &Command::PlaceView(sheet, navigation::ViewRef::Section(id.0), 150.0, 150.0));
+    assert_eq!(navigation::placements(doc.project(), navigation::ViewRef::Section(id.0)).len(), 1);
+    ed.run(&mut doc, &Command::SetSelection(vec![id.0]));
+    let r = ed.run(&mut doc, &Command::DeleteSelection);
+    assert!(r.error.is_none(), "{:?}", r.error);
+    assert!(section_ids(&doc).is_empty());
+    match doc.project().elements.get(&ElementId(sheet)) {
+        Some(lot_model::Element::PlanSheet(s)) => assert!(s.views.is_empty()),
+        _ => panic!("Blatt fehlt"),
+    }
+}
+
+#[test]
+fn sheets_take_views_several_times_and_one_is_home() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SectionTool);
+    click(&mut doc, &mut ed, -1.0, 2.0);
+    click(&mut doc, &mut ed, 7.0, 2.0);
+    ed.key(&mut doc, Key::Escape);
+    let a = section_ids(&doc)[0];
+    let view = navigation::ViewRef::Section(a.0);
+    let open = |r: Response| match r.open {
+        Some(navigation::ViewRef::Sheet(id)) => id,
+        _ => panic!("kein Blatt"),
+    };
+    let s1 = open(ed.run(&mut doc, &Command::AddSheet));
+    let s2 = open(ed.run(&mut doc, &Command::AddSheet));
+    let number = |doc: &Document, id: u64| match doc.project().elements.get(&ElementId(id)) {
+        Some(lot_model::Element::PlanSheet(s)) => s.number.clone(),
+        _ => String::new(),
+    };
+    assert_eq!((number(&doc, s1), number(&doc, s2)), ("101".to_string(), "102".to_string()));
+    ed.run(&mut doc, &Command::PlaceView(s1, view, 100.0, 150.0));
+    ed.run(&mut doc, &Command::PlaceView(s2, view, 200.0, 150.0));
+    // 3D und Listen gehören nicht aufs Blatt.
+    let r = ed.run(&mut doc, &Command::PlaceView(s1, navigation::ViewRef::Model, 0.0, 0.0));
+    assert!(r.error.is_some());
+    // Ohne Wahl ist das erste Blatt die Heimat, dann das gewählte.
+    assert_eq!(navigation::home(doc.project(), view), Some((ElementId(s1), 0)));
+    ed.run(&mut doc, &Command::SetHome(a.0, s2));
+    assert_eq!(navigation::home(doc.project(), view), Some((ElementId(s2), 0)));
+    // Die Seitenleiste zeigt beide Platzierungen, die zweite als Heimat.
+    let tree = navigation::tree(doc.project());
+    let sheets = tree.iter().find(|g| g.title == "Planblätter").expect("Planblätter");
+    assert_eq!(sheets.entries.len(), 2);
+    assert!(!sheets.entries[0].children[0].home);
+    assert!(sheets.entries[1].children[0].home);
+    assert_eq!(sheets.entries[1].children[0].detail, "1:100 · Heimat");
+    let sections = tree.iter().find(|g| g.title == "Schnitte und Ansichten").expect("Schnitte");
+    assert_eq!(sections.entries[0].detail, "auf Plan 101, 102");
+    // Verschieben, Maßstab und Wegnehmen sind je ein Schritt; mit der Heimat verfällt die Wahl.
+    ed.run(&mut doc, &Command::MovePlacedView(s2, 0, 210.0, 140.0));
+    ed.run(&mut doc, &Command::SetPlacedViewScale(s2, 0, 50.0));
+    let placed = |doc: &Document, id: u64| match doc.project().elements.get(&ElementId(id)) {
+        Some(lot_model::Element::PlanSheet(s)) => s.views.clone(),
+        _ => Vec::new(),
+    };
+    assert_eq!(placed(&doc, s2)[0].center, Point2::new(210.0, 140.0));
+    assert_eq!(placed(&doc, s2)[0].scale, 50.0);
+    ed.run(&mut doc, &Command::RemovePlacedView(s2, 0));
+    assert!(placed(&doc, s2).is_empty());
+    assert_eq!(section(&doc, a).home, None);
+    assert_eq!(navigation::home(doc.project(), view), Some((ElementId(s1), 0)));
+    // Blatt umbenennen und löschen.
+    ed.run(&mut doc, &Command::SetSheetInfo(s1, "201".into(), "Schnitte".into(), "A2".into()));
+    assert_eq!(number(&doc, s1), "201");
+    let r = ed.run(&mut doc, &Command::DeleteSheet(s1));
+    assert!(r.error.is_none());
+    assert!(navigation::placements(doc.project(), view).is_empty());
+}
+
+#[test]
+fn search_finds_views_and_rooms_by_all_words() {
+    let (mut doc, mut ed) = setup();
+    two_spaces(&mut doc, &mut ed);
+    ed.run(&mut doc, &Command::DetectSpaces);
+    ed.run(&mut doc, &Command::SelectTool);
+    ed.run(&mut doc, &Command::SectionTool);
+    click(&mut doc, &mut ed, -1.0, 2.0);
+    click(&mut doc, &mut ed, 7.0, 2.0);
+    ed.key(&mut doc, Key::Escape);
+    let storey = doc.project().storey(ed.storey).expect("Geschoss").name.clone();
+    let titles =
+        |q: &str| -> Vec<String> { navigation::search(doc.project(), q).into_iter().map(|h| h.title).collect() };
+    assert!(titles("schnitt").contains(&"Schnitt A-A".to_string()));
+    assert!(titles("").contains(&"Lageplan".to_string()));
+    assert!(titles("").iter().all(|t| !t.starts_with("0.")), "leere Suche ohne Räume");
+    let space = &spaces(&doc)[0];
+    let hits = navigation::search(doc.project(), &format!("{} {}", space.name.to_lowercase(), storey));
+    let hit = hits.iter().find(|h| matches!(h.target, navigation::Target::Element(_))).expect("Raum gefunden");
+    assert_eq!(hit.detail, format!("Raum, {storey}"));
+    assert!(titles("gibtsnicht").is_empty());
+    // Kennungen gehen hin und zurück.
+    let t = navigation::Target::View(navigation::ViewRef::Section(7));
+    assert_eq!(navigation::Target::parse(&t.id()), Some(t));
+    assert_eq!(
+        navigation::ViewRef::parse("Schedule(Areas)"),
+        Some(navigation::ViewRef::Schedule(navigation::Schedule::Areas))
+    );
+}
+
+#[test]
+fn storeys_step_up_and_down_and_history_goes_back_and_forth() {
+    let (mut doc, mut ed) = setup();
+    ed.run(&mut doc, &Command::AddStorey);
+    let storeys: Vec<ElementId> = doc.project().storeys().into_iter().map(|(id, _)| id).collect();
+    let (low, high) = (storeys[storeys.len() - 2], storeys[storeys.len() - 1]);
+    assert_eq!(navigation::storey_step(doc.project(), low, true), Some(high));
+    assert_eq!(navigation::storey_step(doc.project(), high, false), Some(low));
+    assert_eq!(navigation::storey_step(doc.project(), high, true), None);
+    // Geschosse stehen in der Seitenleiste von oben nach unten.
+    let tree = navigation::tree(doc.project());
+    assert_eq!(tree[0].title, "Geschosse");
+    assert_eq!(tree[0].entries[0].view, navigation::ViewRef::FloorPlan(high.0));
+    assert!(tree[0].entries[0].detail.starts_with("OKFF +"));
+
+    use navigation::{History, Place, ViewRef};
+    let place = |v: ViewRef, x: f64| Place { view: v, camera: Some([x, 0.0, 1.0]) };
+    let mut h = History::default();
+    let plan = ViewRef::FloorPlan(low.0);
+    // Grundriss an der Stelle 5, dann Schnitt, dann 3D.
+    h.leave(place(plan, 5.0), ViewRef::Section(9));
+    h.leave(place(ViewRef::Section(9), 0.0), ViewRef::Model);
+    let back = h.back(place(ViewRef::Model, 0.0)).expect("zurück");
+    assert_eq!(back.view, ViewRef::Section(9));
+    let back = h.back(back).expect("zurück");
+    assert_eq!(back, place(plan, 5.0), "zurück an dieselbe Stelle");
+    assert!(!h.can_go_back());
+    let fwd = h.forward(back).expect("vor");
+    assert_eq!(fwd.view, ViewRef::Section(9));
+    // Ein neuer Weg löscht Vorwärts; ein Wechsel in dieselbe Ansicht zählt nicht.
+    h.leave(fwd, ViewRef::SitePlan);
+    assert!(!h.can_go_forward());
+    h.leave(place(ViewRef::SitePlan, 0.0), ViewRef::SitePlan);
+    // Verschwundene Ansichten fallen heraus.
+    h.retain(doc.project());
+    let mut views = Vec::new();
+    while let Some(p) = h.back(place(ViewRef::SitePlan, 0.0)) {
+        views.push(p.view);
+    }
+    assert!(!views.contains(&ViewRef::Section(9)));
+    assert!(views.contains(&plan));
 }

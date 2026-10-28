@@ -955,6 +955,7 @@ mod tests {
             look: WallSide::Left,
             depth: 20.0,
             kind,
+            home: None,
         }
     }
 
