@@ -25,6 +25,8 @@ pub struct StairCheck {
     pub headroom: Option<f64>,
     /// Abweichungen, leer wenn die Treppe den Grenzwerten entspricht.
     pub problems: Vec<String>,
+    /// Hinweise, bei denen die Norm begründete Ausnahmen zulässt.
+    pub notes: Vec<String>,
 }
 
 /// Grenzwerte einer Zeile der Tabelle 1, in m.
@@ -70,6 +72,7 @@ pub fn check_stair(project: &Project, id: ElementId, stair: &Stair) -> Option<St
     let (s, a) = (layout.rise, layout.tread);
     let step = 2.0 * s + a;
     let mut problems = Vec::new();
+    let mut notes = Vec::new();
     let cm = |v: f64| lot_format(v * 100.0, 1);
     if s < limits.rise.0 - 1e-9 || s > limits.rise.1 + 1e-9 {
         problems.push(format!(
@@ -154,7 +157,8 @@ pub fn check_stair(project: &Project, id: ElementId, stair: &Stair) -> Option<St
     {
         problems.push(format!("Lichte Durchgangshöhe {} m unter 2,00 m (DIN 18065:2020-08)", lot_format(clear, 2)));
     }
-    Some(StairCheck { stair: id, risers: stair.risers(), rise: s, tread: a, step, headroom, problems })
+    check_landings(project, stair, &layout, limits, &mut problems, &mut notes);
+    Some(StairCheck { stair: id, risers: stair.risers(), rise: s, tread: a, step, headroom, problems, notes })
 }
 
 /// Was über einer Treppe liegen kann: Decken (ohne Durchbrüche), Läufe und
@@ -247,6 +251,66 @@ fn add(p: Point2, d: Point2, t: f64) -> Point2 {
 /// Zahl mit Komma, `decimals` Nachkommastellen.
 fn lot_format(value: f64, decimals: usize) -> String {
     format!("{value:.decimals$}").replace('.', ",")
+}
+
+/// Podeste nach DIN 18065:2020-08, Tabelle 1: Zwischenpodest nach höchstens
+/// 18 Steigungen (Nr. 6.3.2, Gebäude im Allgemeinen, notwendige Treppen;
+/// begründete Ausnahmen möglich, daher Hinweis), Podestbreite und -tiefe
+/// mindestens die Laufbreite (Nr. 6.3.1), Podestauftritt auf der Lauflinie
+/// mindestens 3 · a, in Wohngebäuden 2,5 · a (Nr. 6.3.3).
+fn check_landings(
+    project: &Project,
+    stair: &Stair,
+    layout: &lot_model::StairLayout,
+    limits: Limits,
+    problems: &mut Vec<String>,
+    notes: &mut Vec<String>,
+) {
+    use lot_model::Landing;
+    let cm = |v: f64| lot_format(v * 100.0, 1);
+    let building = project.info().building;
+    if stair.necessary && building == BuildingClass::General {
+        // Wendelstufen sind kein Podest: über sie laufen die Steigungen weiter.
+        let mut run = 0;
+        let mut longest = 0;
+        for f in &stair.flights {
+            run += f.risers;
+            longest = longest.max(run);
+            if !f.landing.is_winder() && stair.spiral.is_none() {
+                run = 0;
+            }
+        }
+        if longest > 18 {
+            notes.push(format!(
+                "{longest} Steigungen ohne Zwischenpodest, mehr als 18 (DIN 18065:2020-08, Tabelle 1, Nr. 6.3.2)"
+            ));
+        }
+    }
+    let w = layout.width;
+    let factor = if building == BuildingClass::SmallResidential { 2.5 } else { 3.0 };
+    for f in stair.flights.iter().take(stair.flights.len().saturating_sub(1)) {
+        let (depth, walk) = match f.landing {
+            Landing::Straight => (w, w),
+            Landing::Left | Landing::Right => (w, std::f64::consts::FRAC_PI_2 * w / 2.0),
+            Landing::BackLeft | Landing::BackRight => (w, std::f64::consts::PI * w / 2.0),
+            _ => continue,
+        };
+        if depth < limits.width - 1e-9 {
+            problems.push(format!(
+                "Podesttiefe {} cm unter {} cm (DIN 18065:2020-08, Tabelle 1, Nr. 6.3.1)",
+                cm(depth),
+                cm(limits.width)
+            ));
+        }
+        if walk < factor * layout.tread - 1e-9 {
+            problems.push(format!(
+                "Podestauftritt {} cm unter {} · a = {} cm (DIN 18065:2020-08, Tabelle 1, Nr. 6.3.3)",
+                cm(walk),
+                lot_format(factor, 1),
+                cm(factor * layout.tread)
+            ));
+        }
+    }
 }
 
 /// Punkt `a`, um `t` in Richtung `b` gerückt.

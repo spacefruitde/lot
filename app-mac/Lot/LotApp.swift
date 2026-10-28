@@ -125,6 +125,7 @@ struct LotApp: App {
                 Button("Notüberlauf setzen (NU)") { model.run("OverflowTool") }
                 Menu("Treppe zeichnen (TP)") {
                     Button("Gerade") { model.run("StairTool(Straight)") }
+                    Button("Gerade mit Zwischenpodest") { model.run("StairTool(Landing)") }
                     Button("Zweiläufig mit Halbpodest") { model.run("StairTool(HalfLanding)") }
                     Button("L-Form mit Viertelpodest") { model.run("StairTool(QuarterLanding)") }
                     Button("Viertelgewendelt") { model.run("StairTool(QuarterWinder)") }

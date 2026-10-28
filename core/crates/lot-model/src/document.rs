@@ -534,6 +534,10 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                         Some(s) if s.storey == r.storey && *flight < s.flights.len() => {}
                         _ => return Err(invalid("Geländer: Treppe oder Lauf fehlt")),
                     },
+                    crate::RailingPath::Steps { stair, .. } => match project.stair(*stair) {
+                        Some(s) if s.storey == r.storey => {}
+                        _ => return Err(invalid("Geländer: Die Treppe fehlt")),
+                    },
                 }
             }
             Element::Plot(p) => {
