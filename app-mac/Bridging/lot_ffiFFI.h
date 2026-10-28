@@ -330,6 +330,11 @@ RustBuffer uniffi_lot_ffi_fn_method_lotdocument_element_phase(uint64_t ptr, uint
 RustBuffer uniffi_lot_ffi_fn_method_lotdocument_name(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_OPENINGS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_OPENINGS
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_openings(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_PARAMETERS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_PARAMETERS
 RustBuffer uniffi_lot_ffi_fn_method_lotdocument_parameters(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
@@ -338,6 +343,11 @@ RustBuffer uniffi_lot_ffi_fn_method_lotdocument_parameters(uint64_t ptr, RustBuf
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_REDO
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_REDO
 int8_t uniffi_lot_ffi_fn_method_lotdocument_redo(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_ROUGH_SILL_NOTICES
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_ROUGH_SILL_NOTICES
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_rough_sill_notices(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SAVE
@@ -363,6 +373,11 @@ void uniffi_lot_ffi_fn_method_lotdocument_set_param(uint64_t ptr, uint64_t eleme
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_PARAMS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_PARAMS
 void uniffi_lot_ffi_fn_method_lotdocument_set_params(uint64_t ptr, RustBuffer elements, RustBuffer kind, RustBuffer values, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_ROUGH_SILL
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_ROUGH_SILL
+void uniffi_lot_ffi_fn_method_lotdocument_set_rough_sill(uint64_t ptr, uint64_t element, double value, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_SPACE
@@ -545,6 +560,12 @@ void uniffi_lot_ffi_fn_method_viewport_zoom_to_fit(uint64_t ptr, RustCallStatus 
 void uniffi_lot_ffi_fn_func_install_office_standard(RustBuffer text, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_OPENING_FILLS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_OPENING_FILLS
+RustBuffer uniffi_lot_ffi_fn_func_opening_fills(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_SPACE_USAGES
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_SPACE_USAGES
 RustBuffer uniffi_lot_ffi_fn_func_space_usages(RustCallStatus *_Nonnull out_status
@@ -554,6 +575,12 @@ RustBuffer uniffi_lot_ffi_fn_func_space_usages(RustCallStatus *_Nonnull out_stat
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_WALL_ALIGNMENTS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_WALL_ALIGNMENTS
 RustBuffer uniffi_lot_ffi_fn_func_wall_alignments(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_WALL_TOPS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_WALL_TOPS
+RustBuffer uniffi_lot_ffi_fn_func_wall_tops(RustCallStatus *_Nonnull out_status
     
 );
 #endif
@@ -823,6 +850,12 @@ uint16_t uniffi_lot_ffi_checksum_func_install_office_standard(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_OPENING_FILLS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_OPENING_FILLS
+uint16_t uniffi_lot_ffi_checksum_func_opening_fills(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_SPACE_USAGES
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_SPACE_USAGES
 uint16_t uniffi_lot_ffi_checksum_func_space_usages(void
@@ -832,6 +865,12 @@ uint16_t uniffi_lot_ffi_checksum_func_space_usages(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_WALL_ALIGNMENTS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_WALL_ALIGNMENTS
 uint16_t uniffi_lot_ffi_checksum_func_wall_alignments(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_WALL_TOPS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_WALL_TOPS
+uint16_t uniffi_lot_ffi_checksum_func_wall_tops(void
     
 );
 #endif
@@ -901,6 +940,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_name(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_OPENINGS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_OPENINGS
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_openings(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_PARAMETERS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_PARAMETERS
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_parameters(void
@@ -910,6 +955,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_parameters(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_REDO
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_REDO
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_redo(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ROUGH_SILL_NOTICES
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ROUGH_SILL_NOTICES
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_rough_sill_notices(void
     
 );
 #endif
@@ -940,6 +991,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_param(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_PARAMS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_PARAMS
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_params(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_ROUGH_SILL
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_ROUGH_SILL
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_rough_sill(void
     
 );
 #endif

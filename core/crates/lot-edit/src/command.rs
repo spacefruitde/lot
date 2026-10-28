@@ -57,6 +57,10 @@ pub enum Command {
     DetectSpaces,
     SetWallType(u64),
     SetAlignment(WallAlignment),
+    /// Füllung der gewählten Öffnungen: 0 Durchgang, 1 Tür, 2 Fenster (ADR 0047).
+    SetOpeningFill(u32),
+    /// Unterer Anschluss am Typ der gewählten Öffnungen, in Metern.
+    SetSillConnection(f64),
     /// Oberkante der gewählten Wände: Index in `Top::TITLES` (Geschoss, Decke, Dach, fest).
     SetWallTop(u32),
     /// Ausnahme am Anschluss eines Wandendes: Wand, Ende, Regel (ADR 0045).

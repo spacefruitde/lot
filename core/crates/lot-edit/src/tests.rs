@@ -153,6 +153,7 @@ fn delete_removes_wall_with_openings() {
     let (mut doc, mut ed) = house();
     let inner = wall_with(&doc, Point2::new(3.0, 0.0), Point2::new(3.0, 4.0));
     doc.insert(lot_model::Element::Opening(Opening {
+        opening_type: None,
         phase: Default::default(),
         host: inner,
         offset: 1.0,
@@ -179,6 +180,7 @@ fn flip_keeps_openings_in_place() {
     let bottom = wall_with(&doc, Point2::new(6.0, 0.0), Point2::new(0.0, 0.0));
     let id = doc
         .insert(lot_model::Element::Opening(Opening {
+            opening_type: None,
             phase: Default::default(),
             host: bottom,
             offset: 1.0,
@@ -1304,6 +1306,7 @@ fn flip_keeps_the_wall_and_swaps_its_layers() {
         doc.project().walls().find(|(_, w)| w.start.y.abs() < 1.0 && w.end.y.abs() < 1.0).map(|(id, _)| id).unwrap();
     let door = doc
         .insert(lot_model::Element::Opening(Opening {
+            opening_type: None,
             phase: Default::default(),
             host: bottom,
             offset: 1.0,
@@ -1385,4 +1388,77 @@ fn wall_top_mode_keeps_the_height_when_fixed() {
     }
     ed.run(&mut doc, &Command::SetWallTop(1));
     assert!(doc.project().walls().all(|(_, w)| w.top == lot_model::Top::Slab { offset: 0.0 }));
+}
+
+/// Haus mit Bodenplatte im EG (Estrich 6 cm, Dämmung 10 cm über der Platte) und
+/// einem Fenster mit BRH 0,90 in der unteren Außenwand.
+fn house_with_window() -> (Document, Editor, ElementId) {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::SlabFromWalls);
+    let bottom =
+        doc.project().walls().find(|(_, w)| w.start.y.abs() < 1e-9 && w.end.y.abs() < 1e-9).map(|(id, _)| id).unwrap();
+    let id = doc
+        .insert(lot_model::Element::Opening(Opening {
+            phase: Default::default(),
+            host: bottom,
+            offset: 1.0,
+            width: 1.26,
+            height: 1.385,
+            sill_height: 0.9,
+            kind: lot_model::OpeningKind::Window,
+            opening_type: None,
+        }))
+        .unwrap();
+    (doc, ed, id)
+}
+
+fn opening(doc: &Document, id: ElementId) -> Opening {
+    match &doc.project().elements[&id] {
+        lot_model::Element::Opening(o) => o.clone(),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn rough_sill_follows_floor_build_up_and_sill_connection() {
+    let (mut doc, mut ed, id) = house_with_window();
+    let o = opening(&doc, id);
+    // Bodenplatte: Estrich 6 cm und Dämmung 10 cm über der Tragschicht.
+    assert!((doc.project().floor_build_up(&o).unwrap() - 0.16).abs() < 1e-9);
+    assert!((doc.project().rough_sill(&o).unwrap() - 1.06).abs() < 1e-9);
+    // Unterer Anschluss 3 cm am neuen Typ F1: Rohbaubrüstung 1,03, die Rohbauöffnung beginnt 0,87 über OKFF.
+    ed.selection = vec![id];
+    ed.run(&mut doc, &Command::SetSillConnection(0.03));
+    let o = opening(&doc, id);
+    let ty = doc.project().opening_type(o.opening_type.unwrap()).unwrap();
+    assert_eq!((ty.mark.as_str(), ty.name.as_str()), ("F1", "Fenster"));
+    assert!((doc.project().rough_sill(&o).unwrap() - 1.03).abs() < 1e-9);
+    assert!((doc.project().opening_span(&o).unwrap().0 - 0.87).abs() < 1e-9);
+    // Die Rohbaubrüstung getippt: die BRH folgt.
+    assert!((openings::sill_for_rough(doc.project(), &o, 1.10).unwrap() - 0.97).abs() < 1e-9);
+    // Der Fußbodenaufbau wird dicker: BRH bleibt, die Rohbaubrüstung wandert und wird gemeldet.
+    let before = doc.project().rough_sills();
+    let slab_type = doc.project().slab_types().find(|(_, t)| t.name.contains("Bodenplatte")).unwrap().0;
+    let mut t = doc.project().slab_type(slab_type).unwrap().clone();
+    t.layers[0].thickness = 0.08;
+    doc.replace(slab_type, lot_model::Element::SlabType(t)).unwrap();
+    let changes = lot_model::rough_sill_changes(&before, &doc.project().rough_sills());
+    assert_eq!(changes.len(), 1);
+    assert!((changes[0].1 - 1.03).abs() < 1e-9 && (changes[0].2 - 1.05).abs() < 1e-9, "{changes:?}");
+}
+
+#[test]
+fn fill_changes_without_touching_the_opening() {
+    let (mut doc, mut ed, id) = house_with_window();
+    let before = opening(&doc, id);
+    ed.selection = vec![id];
+    ed.run(&mut doc, &Command::SetOpeningFill(0));
+    let plain = opening(&doc, id);
+    assert_eq!(plain.kind, lot_model::OpeningKind::Plain);
+    assert_eq!(
+        (plain.offset, plain.width, plain.height, plain.sill_height),
+        (before.offset, before.width, before.height, before.sill_height)
+    );
+    ed.run(&mut doc, &Command::SetOpeningFill(1));
+    assert!(matches!(opening(&doc, id).kind, lot_model::OpeningKind::Door(_)));
 }

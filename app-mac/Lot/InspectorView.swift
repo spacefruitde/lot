@@ -7,6 +7,12 @@ struct InspectorView: View {
 
     var body: some View {
         Form {
+            if !model.notices.isEmpty {
+                Section("Hinweis") {
+                    ForEach(model.notices, id: \.self) { Text($0).foregroundStyle(.orange) }
+                    Button("Gelesen") { model.notices.removeAll() }
+                }
+            }
             if let junction = model.junction {
                 JunctionSection(junction: junction)
             } else if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty {
@@ -53,6 +59,9 @@ struct InspectorView: View {
                     ForEach(groups, id: \.0) { element, parameters in
                         Section(model.label(for: element)) {
                             ForEach(parameters, id: \.kind) { ParameterRow(parameter: $0) }
+                            if let opening = model.openings.first(where: { $0.element == element }) {
+                                OpeningRows(opening: opening)
+                            }
                             if let door = model.doors.first(where: { $0.element == element }) {
                                 DoorRows(door: door)
                             }
@@ -266,6 +275,70 @@ private struct JunctionSection: View {
     }
 }
 
+/// Füllung und die zweite Brüstungshöhe einer Öffnung (ADR 0047): Die fertige
+/// BRH über OKFF ist führend, die Rohbaubrüstung über Rohdecke ergibt sich aus
+/// Fußbodenaufbau und unterem Anschluss und lässt sich ebenso tippen.
+private struct OpeningRows: View {
+    @Environment(AppModel.self) private var model
+    let opening: OpeningInfo
+    @State private var rough = ""
+    @State private var connection = ""
+
+    var body: some View {
+        Picker("Füllung", selection: Binding(get: { Int(opening.fill) }, set: { model.run(AppModel.fills[$0].command) })) {
+            ForEach(Array(AppModel.fills.enumerated()), id: \.offset) { index, item in
+                Text(item.title).tag(index)
+            }
+        }
+        if opening.roughSill != nil {
+            LabeledContent("Rohbaubrüstung über Rohdecke") {
+                HStack(spacing: 4) {
+                    TextField("", text: $rough)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 64)
+                        .onSubmit {
+                            if let v = number(rough) { model.setRoughSill(v, for: opening.element) }
+                        }
+                    Text("m").foregroundStyle(.secondary)
+                }
+            }
+        }
+        LabeledContent("Fußbodenaufbau", value: opening.floorBuildUp.map { german($0) + " m" } ?? "keine Decke davor")
+        LabeledContent("Unterer Anschluss") {
+            HStack(spacing: 4) {
+                TextField("", text: $connection)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 64)
+                    .onSubmit {
+                        if let v = number(connection) { model.run("SetSillConnection(\(v))") }
+                    }
+                Text("m").foregroundStyle(.secondary)
+            }
+        }
+        Text(opening.typeName.isEmpty
+             ? "Der untere Anschluss gehört zum Typ; ohne Typ legt Lot einen an."
+             : "Typ \(opening.typeName), wirkt auf \(opening.typeUses) Öffnung\(opening.typeUses == 1 ? "" : "en")")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .onAppear(perform: load)
+            .onChange(of: opening.roughSill) { load() }
+            .onChange(of: opening.sillConnection) { load() }
+    }
+
+    private func load() {
+        rough = opening.roughSill.map(german) ?? ""
+        connection = german(opening.sillConnection)
+    }
+
+    private func number(_ text: String) -> Double? {
+        Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+    }
+
+    private func german(_ v: Double) -> String {
+        v.formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "de_DE")))
+    }
+}
+
 /// Anschlag und Aufschlag einer Tür. Die Knöpfe wirken auf alle gewählten Türen.
 private struct DoorRows: View {
     @Environment(AppModel.self) private var model
@@ -394,9 +467,9 @@ extension ParamKind {
         case .wallTopOffset: "Versatz Oberkante"
         case .baseOffset: "Unterkante über OKFF"
         case .openingOffset: "Abstand vom Wandanfang"
-        case .openingWidth: "Breite"
-        case .openingHeight: "Höhe"
-        case .openingSillHeight: "Brüstungshöhe"
+        case .openingWidth: "Breite (Rohbau)"
+        case .openingHeight: "Höhe (Rohbau)"
+        case .openingSillHeight: "BRH über OKFF (fertig)"
         case .storeyElevation: "OKFF über ±0,00"
         case .storeyHeight: "Geschosshöhe"
         case .columnWidth: "Breite"

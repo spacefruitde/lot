@@ -172,6 +172,86 @@ impl Project {
         Some((bottom, top))
     }
 
+    pub fn opening_type(&self, id: ElementId) -> Option<&crate::OpeningType> {
+        match self.elements.get(&id) {
+            Some(Element::OpeningType(t)) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// Tür- und Fenstertypen.
+    pub fn opening_types(&self) -> impl Iterator<Item = (ElementId, &crate::OpeningType)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::OpeningType(t) => Some((*id, t)),
+            _ => None,
+        })
+    }
+
+    /// Unterer Anschluss einer Öffnung aus ihrem Typ; ohne Typ 0.
+    pub fn sill_connection(&self, opening: &Opening) -> f64 {
+        opening.opening_type.and_then(|t| self.opening_type(t)).map_or(0.0, |t| t.sill_connection)
+    }
+
+    /// Unter- und Oberkante der Rohbauöffnung über ±0,00: Die fertige
+    /// Brüstung liegt `sill_height` über OKFF, die Rohbaubrüstung um den
+    /// unteren Anschluss tiefer (ADR 0047).
+    pub fn opening_span(&self, opening: &Opening) -> Option<(f64, f64)> {
+        let wall = self.wall(opening.host)?;
+        let okff = self.storey(wall.storey)?.elevation;
+        let bottom = okff + opening.sill_height - self.sill_connection(opening);
+        Some((bottom, bottom + opening.height))
+    }
+
+    /// Fußbodenaufbau vor einer Öffnung: von der Oberkante der Rohdecke bis
+    /// OKFF, aus der Decke des Geschosses auf der Raumseite. `None`, wenn auf
+    /// keiner Seite eine Decke liegt.
+    pub fn floor_build_up(&self, opening: &Opening) -> Option<f64> {
+        let wall = self.wall(opening.host)?;
+        let t = self.wall_type(wall.wall_type)?;
+        let offsets = wall.layer_offsets(t);
+        let (left, right) = (offsets[0].0, offsets[offsets.len() - 1].1);
+        let along = opening.offset + opening.width / 2.0;
+        [left + 0.2, right - 0.2]
+            .into_iter()
+            .filter_map(|across| {
+                let p = wall.point_at(along, across);
+                self.elements.values().find_map(|e| match e {
+                    Element::Slab(s) if s.storey == wall.storey && contains(&s.outline, p) => {
+                        let st = self.slab_type(s.slab_type)?;
+                        let above: f64 = st
+                            .layers
+                            .iter()
+                            .take_while(|l| l.function != crate::LayerFunction::Structure)
+                            .map(|l| l.thickness)
+                            .sum();
+                        // OK Rohdecke liegt `above` unter der Oberkante der Decke.
+                        Some(above - s.top_offset)
+                    }
+                    _ => None,
+                })
+            })
+            .reduce(f64::max)
+    }
+
+    /// Rohbaubrüstung über Oberkante Rohdecke (ADR 0047): fertige Brüstung plus
+    /// Fußbodenaufbau, minus unterer Anschluss. `None` ohne Decke vor der Öffnung.
+    pub fn rough_sill(&self, opening: &Opening) -> Option<f64> {
+        Some(opening.sill_height + self.floor_build_up(opening)? - self.sill_connection(opening))
+    }
+
+    /// Alle Öffnungen.
+    pub fn openings(&self) -> impl Iterator<Item = (ElementId, &Opening)> {
+        self.elements.iter().filter_map(|(id, e)| match e {
+            Element::Opening(o) => Some((*id, o)),
+            _ => None,
+        })
+    }
+
+    /// Fertige Brüstung und Rohbaubrüstung aller Öffnungen mit Decke davor.
+    pub fn rough_sills(&self) -> BTreeMap<ElementId, (f64, f64)> {
+        self.openings().filter_map(|(id, o)| Some((id, (o.sill_height, self.rough_sill(o)?)))).collect()
+    }
+
     /// Oberkante der niedrigsten Decke, die an der Stelle `p` höher als 10 cm über `z` liegt.
     pub fn slab_above(&self, p: Point2, z: f64) -> Option<f64> {
         self.elements
@@ -562,6 +642,7 @@ impl Project {
         p.elements.insert(
             ElementId(4),
             Element::Opening(Opening {
+                opening_type: None,
                 phase: Default::default(),
                 host: ElementId(3),
                 offset: 1.75,
@@ -600,4 +681,20 @@ fn contains(ring: &[Point2], p: Point2) -> bool {
         }
     }
     inside
+}
+
+/// Öffnungen, deren Rohbaubrüstung sich geändert hat, obwohl die fertige
+/// Brüstung blieb, etwa weil der Fußbodenaufbau dicker wurde (ADR 0047):
+/// (Öffnung, vorher, nachher).
+pub fn rough_sill_changes(
+    before: &BTreeMap<ElementId, (f64, f64)>,
+    after: &BTreeMap<ElementId, (f64, f64)>,
+) -> Vec<(ElementId, f64, f64)> {
+    after
+        .iter()
+        .filter_map(|(id, (brh, rough))| {
+            let (old_brh, old_rough) = before.get(id)?;
+            ((old_brh - brh).abs() < 1e-6 && (old_rough - rough).abs() > 0.0005).then_some((*id, *old_rough, *rough))
+        })
+        .collect()
 }

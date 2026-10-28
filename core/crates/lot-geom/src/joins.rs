@@ -204,9 +204,8 @@ fn regions_at(project: &Project, storey: ElementId, z: f64, with_openings: bool)
 
     // Öffnungen in Schnitthöhe.
     for (id, wall, left_face, right_face) in present.into_iter().filter(|_| with_openings) {
-        let Some((bottom, _)) = project.wall_extent(wall) else { continue };
         for (_, o) in project.openings_in(id) {
-            let (o0, o1) = (bottom + o.sill_height, bottom + o.sill_height + o.height);
+            let Some((o0, o1)) = project.opening_span(o) else { continue };
             if o0 <= z && z < o1 {
                 let hole = wall_section(wall, (o.offset, o.offset + o.width), (left_face + 0.01, right_face - 0.01));
                 for r in regions.iter_mut() {

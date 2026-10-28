@@ -165,6 +165,36 @@ pub fn wall_tops() -> Vec<ChoiceItem> {
         .collect()
 }
 
+/// Füllungen einer Öffnung zur Auswahl (ADR 0047), in der Reihenfolge von `OpeningInfo::fill`.
+#[uniffi::export]
+pub fn opening_fills() -> Vec<ChoiceItem> {
+    lot_edit::openings::FILLS
+        .iter()
+        .enumerate()
+        .map(|(i, t)| ChoiceItem { title: (*t).into(), command: lot_edit::Command::SetOpeningFill(i as u32).id() })
+        .collect()
+}
+
+/// Eine Öffnung mit beiden Brüstungshöhen für den Inspektor (ADR 0047).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OpeningInfo {
+    pub element: u64,
+    /// Index in [`opening_fills`].
+    pub fill: u32,
+    /// Fertige Brüstung (BRH) über OKFF, führend.
+    pub sill: f64,
+    /// Rohbaubrüstung über Oberkante Rohdecke; fehlt ohne Decke vor der Öffnung.
+    pub rough_sill: Option<f64>,
+    /// Fußbodenaufbau vor der Öffnung, von der Rohdecke bis OKFF.
+    pub floor_build_up: Option<f64>,
+    /// Unterer Anschluss aus dem Typ.
+    pub sill_connection: f64,
+    /// Typ mit Kennzeichen, etwa „F1 · Fenster“; leer ohne Typ.
+    pub type_name: String,
+    /// Wie viele Öffnungen den Typ nutzen.
+    pub type_uses: u32,
+}
+
 /// Eine Wand für den Inspektor.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct WallInfo {
@@ -250,6 +280,9 @@ pub struct LotDocument {
     inner: Mutex<Document>,
     /// Dateien im Projekt, etwa Unterlagen (6.05).
     attachments: Mutex<lot_io::project_file::Attachments>,
+    /// Fertige Brüstung und Rohbaubrüstung je Öffnung beim letzten Blick,
+    /// für den Hinweis, wenn sich die Rohbaubrüstung von selbst ändert (ADR 0047).
+    sills: Mutex<std::collections::BTreeMap<ElementId, (f64, f64)>>,
 }
 
 impl LotDocument {
@@ -259,7 +292,8 @@ impl LotDocument {
     }
 
     fn with(doc: Document, attachments: lot_io::project_file::Attachments) -> Arc<Self> {
-        Arc::new(Self { inner: Mutex::new(doc), attachments: Mutex::new(attachments) })
+        let sills = Mutex::new(doc.project().rough_sills());
+        Arc::new(Self { inner: Mutex::new(doc), attachments: Mutex::new(attachments), sills })
     }
 
     pub(crate) fn attachment_bytes(&self, name: &str) -> Option<Vec<u8>> {
@@ -399,6 +433,63 @@ impl LotDocument {
                 }
             })
             .collect()
+    }
+
+    /// Die Öffnungen unter den Elementen `ids`.
+    pub fn openings(&self, ids: Vec<u64>) -> Vec<OpeningInfo> {
+        let doc = self.lock();
+        let p = doc.project();
+        ids.iter()
+            .filter_map(|id| {
+                let Some(lot_model::Element::Opening(o)) = p.elements.get(&ElementId(*id)) else { return None };
+                let ty = o.opening_type.and_then(|t| p.opening_type(t));
+                Some(OpeningInfo {
+                    element: *id,
+                    fill: lot_edit::openings::fill_index(&o.kind) as u32,
+                    sill: o.sill_height,
+                    rough_sill: p.rough_sill(o),
+                    floor_build_up: p.floor_build_up(o),
+                    sill_connection: p.sill_connection(o),
+                    type_name: ty.map(|t| format!("{} · {}", t.mark, t.name)).unwrap_or_default(),
+                    type_uses: o
+                        .opening_type
+                        .map_or(0, |t| p.openings().filter(|(_, x)| x.opening_type == Some(t)).count())
+                        as u32,
+                })
+            })
+            .collect()
+    }
+
+    /// Setzt die Rohbaubrüstung über Rohdecke; gespeichert wird die fertige Brüstung (ADR 0047).
+    pub fn set_rough_sill(&self, element: u64, value: f64) -> Result<(), LotError> {
+        let mut doc = self.lock();
+        let Some(lot_model::Element::Opening(o)) = doc.project().elements.get(&ElementId(element)).cloned() else {
+            return Err(LotError::Failed("Das ist keine Öffnung".into()));
+        };
+        let sill = lot_edit::openings::sill_for_rough(doc.project(), &o, value)
+            .ok_or_else(|| LotError::Failed("Vor der Öffnung liegt keine Decke, die Rohbaubrüstung fehlt".into()))?;
+        doc.set_param(ElementId(element), lot_model::Param::OpeningSillHeight, sill).map_err(LotError::from_display)
+    }
+
+    /// Hinweise auf Rohbaubrüstungen, die sich seit dem letzten Aufruf von
+    /// selbst geändert haben, weil der Fußbodenaufbau anders wurde.
+    pub fn rough_sill_notices(&self) -> Vec<String> {
+        let doc = self.lock();
+        let now = doc.project().rough_sills();
+        let mut sills = self.sills.lock().unwrap_or_else(|e| e.into_inner());
+        let notices = lot_model::rough_sill_changes(&sills, &now)
+            .into_iter()
+            .map(|(id, before, after)| {
+                format!(
+                    "{}: Rohbaubrüstung {} statt {}, weil sich der Fußbodenaufbau geändert hat. Die BRH bleibt.",
+                    lot_edit::select::label(doc.project(), id),
+                    lot_edit::format_m(after),
+                    lot_edit::format_m(before)
+                )
+            })
+            .collect();
+        *sills = now;
+        notices
     }
 
     /// Die Wände unter den Elementen `ids`.

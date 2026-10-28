@@ -253,7 +253,7 @@ pub(crate) fn draw_openings(
             {
                 continue;
             }
-            let (o0, o1) = (bottom + o.sill_height, bottom + o.sill_height + o.height);
+            let Some((o0, o1)) = project.opening_span(o) else { continue };
             let (a, b) = (o.offset, o.offset + o.width);
             if o0 > z_cut {
                 // Über der Schnittebene: Umriss gestrichelt.
@@ -578,14 +578,11 @@ pub(crate) fn draw_cut_for(
     }
     if let Some((storey, z)) = opening_cut {
         for (wall_id, wall) in project.walls_on(storey) {
-            let (Some(wall_type), Some((bottom, _))) = (project.wall_type(wall.wall_type), project.wall_extent(wall))
-            else {
-                continue;
-            };
+            let Some(wall_type) = project.wall_type(wall.wall_type) else { continue };
             let offsets = wall.layer_offsets(wall_type);
             let (left, right) = (offsets[0].0, offsets[offsets.len() - 1].1);
             for (id, o) in project.openings_in(wall_id) {
-                let spans = bottom + o.sill_height <= z && z < bottom + o.sill_height + o.height;
+                let spans = project.opening_span(o).is_some_and(|(o0, o1)| o0 <= z && z < o1);
                 if project.opening_cuts_in_plan(id) || !spans {
                     continue;
                 }

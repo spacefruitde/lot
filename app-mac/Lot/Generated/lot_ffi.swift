@@ -683,11 +683,22 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     func name()  -> String
     
     /**
+     * Die Öffnungen unter den Elementen `ids`.
+     */
+    func openings(ids: [UInt64])  -> [OpeningInfo]
+    
+    /**
      * Alle änderbaren Parameter der Elemente `ids`, oder aller Elemente, wenn `ids` leer ist.
      */
     func parameters(ids: [UInt64])  -> [ParamValue]
     
     func redo() throws  -> Bool
+    
+    /**
+     * Hinweise auf Rohbaubrüstungen, die sich seit dem letzten Aufruf von
+     * selbst geändert haben, weil der Fußbodenaufbau anders wurde.
+     */
+    func roughSillNotices()  -> [String]
     
     func save(path: String) throws 
     
@@ -708,6 +719,11 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
      * `values` gehört der Reihe nach zu `elements`.
      */
     func setParams(elements: [UInt64], kind: ParamKind, values: [Double]) throws 
+    
+    /**
+     * Setzt die Rohbaubrüstung über Rohdecke; gespeichert wird die fertige Brüstung (ADR 0047).
+     */
+    func setRoughSill(element: UInt64, value: Double) throws 
     
     /**
      * Ändert Nummer, Name, Nutzung und Wohnflächen-Merkmal eines Raums, als eine Operation.
@@ -960,6 +976,19 @@ open func name() -> String  {
 }
     
     /**
+     * Die Öffnungen unter den Elementen `ids`.
+     */
+open func openings(ids: [UInt64]) -> [OpeningInfo]  {
+    return try!  FfiConverterSequenceTypeOpeningInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_openings(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
+}
+    
+    /**
      * Alle änderbaren Parameter der Elemente `ids`, oder aller Elemente, wenn `ids` leer ist.
      */
 open func parameters(ids: [UInt64]) -> [ParamValue]  {
@@ -976,6 +1005,19 @@ open func redo()throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLotError_lift) {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_lotdocument_redo(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Hinweise auf Rohbaubrüstungen, die sich seit dem letzten Aufruf von
+     * selbst geändert haben, weil der Fußbodenaufbau anders wurde.
+     */
+open func roughSillNotices() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_rough_sill_notices(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -1039,6 +1081,19 @@ open func setParams(elements: [UInt64], kind: ParamKind, values: [Double])throws
         FfiConverterSequenceUInt64.lower(elements),
         FfiConverterTypeParamKind_lower(kind),
         FfiConverterSequenceDouble.lower(values),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Setzt die Rohbaubrüstung über Rohdecke; gespeichert wird die fertige Brüstung (ADR 0047).
+     */
+open func setRoughSill(element: UInt64, value: Double)throws   {try rustCallWithError(FfiConverterTypeLotError_lift) {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_set_rough_sill(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(element),
+        FfiConverterDouble.lower(value),uniffiCallStatus
     )
 }
 }
@@ -2251,6 +2306,129 @@ public func FfiConverterTypeJunctionInfo_lower(_ value: JunctionInfo) -> RustBuf
 
 
 /**
+ * Eine Öffnung mit beiden Brüstungshöhen für den Inspektor (ADR 0047).
+ */
+public struct OpeningInfo: Equatable, Hashable {
+    public var element: UInt64
+    /**
+     * Index in [`opening_fills`].
+     */
+    public var fill: UInt32
+    /**
+     * Fertige Brüstung (BRH) über OKFF, führend.
+     */
+    public var sill: Double
+    /**
+     * Rohbaubrüstung über Oberkante Rohdecke; fehlt ohne Decke vor der Öffnung.
+     */
+    public var roughSill: Double?
+    /**
+     * Fußbodenaufbau vor der Öffnung, von der Rohdecke bis OKFF.
+     */
+    public var floorBuildUp: Double?
+    /**
+     * Unterer Anschluss aus dem Typ.
+     */
+    public var sillConnection: Double
+    /**
+     * Typ mit Kennzeichen, etwa „F1 · Fenster“; leer ohne Typ.
+     */
+    public var typeName: String
+    /**
+     * Wie viele Öffnungen den Typ nutzen.
+     */
+    public var typeUses: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, 
+        /**
+         * Index in [`opening_fills`].
+         */fill: UInt32, 
+        /**
+         * Fertige Brüstung (BRH) über OKFF, führend.
+         */sill: Double, 
+        /**
+         * Rohbaubrüstung über Oberkante Rohdecke; fehlt ohne Decke vor der Öffnung.
+         */roughSill: Double?, 
+        /**
+         * Fußbodenaufbau vor der Öffnung, von der Rohdecke bis OKFF.
+         */floorBuildUp: Double?, 
+        /**
+         * Unterer Anschluss aus dem Typ.
+         */sillConnection: Double, 
+        /**
+         * Typ mit Kennzeichen, etwa „F1 · Fenster“; leer ohne Typ.
+         */typeName: String, 
+        /**
+         * Wie viele Öffnungen den Typ nutzen.
+         */typeUses: UInt32) {
+        self.element = element
+        self.fill = fill
+        self.sill = sill
+        self.roughSill = roughSill
+        self.floorBuildUp = floorBuildUp
+        self.sillConnection = sillConnection
+        self.typeName = typeName
+        self.typeUses = typeUses
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension OpeningInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOpeningInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OpeningInfo {
+        return
+            try OpeningInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                fill: FfiConverterUInt32.read(from: &buf), 
+                sill: FfiConverterDouble.read(from: &buf), 
+                roughSill: FfiConverterOptionDouble.read(from: &buf), 
+                floorBuildUp: FfiConverterOptionDouble.read(from: &buf), 
+                sillConnection: FfiConverterDouble.read(from: &buf), 
+                typeName: FfiConverterString.read(from: &buf), 
+                typeUses: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OpeningInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterUInt32.write(value.fill, into: &buf)
+        FfiConverterDouble.write(value.sill, into: &buf)
+        FfiConverterOptionDouble.write(value.roughSill, into: &buf)
+        FfiConverterOptionDouble.write(value.floorBuildUp, into: &buf)
+        FfiConverterDouble.write(value.sillConnection, into: &buf)
+        FfiConverterString.write(value.typeName, into: &buf)
+        FfiConverterUInt32.write(value.typeUses, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpeningInfo_lift(_ buf: RustBuffer) throws -> OpeningInfo {
+    return try FfiConverterTypeOpeningInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpeningInfo_lower(_ value: OpeningInfo) -> RustBuffer {
+    return FfiConverterTypeOpeningInfo.lower(value)
+}
+
+
+/**
  * Ein Parameterwert eines Elements, in Metern.
  */
 public struct ParamValue: Equatable, Hashable {
@@ -2738,15 +2916,31 @@ public struct WallInfo: Equatable, Hashable {
      * Index in [`wall_alignments`].
      */
     public var alignment: UInt32
+    /**
+     * Index in [`wall_tops`].
+     */
+    public var top: UInt32
+    /**
+     * Oberkante über OKFF des Geschosses, wie sie sich ergibt.
+     */
+    public var topHeight: Double
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
     public init(element: UInt64, 
         /**
          * Index in [`wall_alignments`].
-         */alignment: UInt32) {
+         */alignment: UInt32, 
+        /**
+         * Index in [`wall_tops`].
+         */top: UInt32, 
+        /**
+         * Oberkante über OKFF des Geschosses, wie sie sich ergibt.
+         */topHeight: Double) {
         self.element = element
         self.alignment = alignment
+        self.top = top
+        self.topHeight = topHeight
     }
 
     
@@ -2766,13 +2960,17 @@ public struct FfiConverterTypeWallInfo: FfiConverterRustBuffer {
         return
             try WallInfo(
                 element: FfiConverterUInt64.read(from: &buf), 
-                alignment: FfiConverterUInt32.read(from: &buf)
+                alignment: FfiConverterUInt32.read(from: &buf), 
+                top: FfiConverterUInt32.read(from: &buf), 
+                topHeight: FfiConverterDouble.read(from: &buf)
         )
     }
 
     public static func write(_ value: WallInfo, into buf: inout [UInt8]) {
         FfiConverterUInt64.write(value.element, into: &buf)
         FfiConverterUInt32.write(value.alignment, into: &buf)
+        FfiConverterUInt32.write(value.top, into: &buf)
+        FfiConverterDouble.write(value.topHeight, into: &buf)
     }
 }
 
@@ -3547,6 +3745,31 @@ fileprivate struct FfiConverterSequenceTypeJunctionArmInfo: FfiConverterRustBuff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeOpeningInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [OpeningInfo]
+
+    public static func write(_ value: [OpeningInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOpeningInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OpeningInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OpeningInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOpeningInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeParamValue: FfiConverterRustBuffer {
     typealias SwiftType = [ParamValue]
 
@@ -3731,6 +3954,16 @@ public func installOfficeStandard(text: String)throws   {try rustCallWithError(F
 }
 }
 /**
+ * Füllungen einer Öffnung zur Auswahl (ADR 0047), in der Reihenfolge von `OpeningInfo::fill`.
+ */
+public func openingFills() -> [ChoiceItem]  {
+    return try!  FfiConverterSequenceTypeChoiceItem.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_opening_fills(uniffiCallStatus
+    )
+})
+}
+/**
  * Die Nutzungsgruppen nach DIN 277:2021-08, in der Reihenfolge der Norm.
  */
 public func spaceUsages() -> [SpaceUsageItem]  {
@@ -3747,6 +3980,16 @@ public func wallAlignments() -> [ChoiceItem]  {
     return try!  FfiConverterSequenceTypeChoiceItem.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_func_wall_alignments(uniffiCallStatus
+    )
+})
+}
+/**
+ * Die Arten der Oberkante einer Wand, in der Reihenfolge von `WallInfo::top`.
+ */
+public func wallTops() -> [ChoiceItem]  {
+    return try!  FfiConverterSequenceTypeChoiceItem.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_wall_tops(uniffiCallStatus
     )
 })
 }
@@ -3769,10 +4012,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_func_install_office_standard() != 65201) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_func_opening_fills() != 62212) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_func_space_usages() != 26934) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_func_wall_alignments() != 7115) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_wall_tops() != 866) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_add_attachment() != 53219) {
@@ -3808,10 +4057,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_name() != 35177) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_openings() != 2150) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_lotdocument_parameters() != 55506) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_redo() != 6291) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_rough_sill_notices() != 14517) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_save() != 29734) {
@@ -3827,6 +4082,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_set_params() != 48911) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_set_rough_sill() != 3050) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_set_space() != 41848) {

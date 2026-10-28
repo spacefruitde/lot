@@ -17,6 +17,12 @@ final class AppModel {
     private(set) var spaces: [SpaceInfo] = []
     /// Gewählte Türen.
     private(set) var doors: [DoorInfo] = []
+    /// Gewählte Öffnungen mit beiden Brüstungshöhen (ADR 0047).
+    private(set) var openings: [OpeningInfo] = []
+    /// Hinweise, die nicht stören sollen, etwa eine gewanderte Rohbaubrüstung.
+    var notices: [String] = []
+    /// Füllungen einer Öffnung: Durchgang, Tür, Fenster.
+    static let fills = openingFills()
     /// Gewählte Wände mit Lage der Bezugslinie.
     private(set) var walls: [WallInfo] = []
     /// Gewählter Anschluss (Doppelklick an einem Wandknoten), ADR 0045.
@@ -120,6 +126,7 @@ final class AppModel {
         spaces = state.selection.isEmpty ? [] : document.spaces(ids: state.selection)
         doors = state.selection.isEmpty ? [] : document.doors(ids: state.selection)
         walls = state.selection.isEmpty ? [] : document.walls(ids: state.selection)
+        openings = state.selection.isEmpty ? [] : document.openings(ids: state.selection)
         junction = viewport.junction()
         let phases = Set(state.selection.compactMap { document.elementPhase(element: $0) })
         selectionPhase = phases.isEmpty ? nil : (phases.count == 1 ? Int(phases.first!) : -1)
@@ -149,6 +156,21 @@ final class AppModel {
     func set(_ values: [Double], for elements: [UInt64], kind: ParamKind) {
         do {
             try document.setParams(elements: elements, kind: kind, values: values)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+        if let viewport {
+            stats.rebuildMs = viewport.refresh()
+        }
+        refresh()
+        updateViewState()
+        requestRedraw?()
+    }
+
+    /// Setzt die Rohbaubrüstung; Lot rechnet die fertige Brüstung zurück.
+    func setRoughSill(_ value: Double, for element: UInt64) {
+        do {
+            try document.setRoughSill(element: element, value: value)
         } catch {
             errorMessage = Self.message(for: error)
         }
@@ -289,6 +311,7 @@ final class AppModel {
         canUndo = document.canUndo()
         canRedo = document.canRedo()
         storeyAreas = document.storeyAreas()
+        notices += document.roughSillNotices()
     }
 
     static func message(for error: Error) -> String {

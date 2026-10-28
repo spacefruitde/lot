@@ -31,6 +31,7 @@ pub enum Element {
     WallType(WallType),
     Wall(Wall),
     Opening(Opening),
+    OpeningType(OpeningType),
     Column(Column),
     Space(Space),
     DimensionChain(DimensionChain),
@@ -62,6 +63,7 @@ pub enum ElementKind {
     WallType,
     Wall,
     Opening,
+    OpeningType,
     Column,
     Space,
     DimensionChain,
@@ -93,6 +95,7 @@ impl Element {
             Element::WallType(_) => ElementKind::WallType,
             Element::Wall(_) => ElementKind::Wall,
             Element::Opening(_) => ElementKind::Opening,
+            Element::OpeningType(_) => ElementKind::OpeningType,
             Element::Column(_) => ElementKind::Column,
             Element::Space(_) => ElementKind::Space,
             Element::DimensionChain(_) => ElementKind::DimensionChain,
@@ -657,13 +660,31 @@ pub struct Opening {
     pub offset: f64,
     pub width: f64,
     pub height: f64,
-    /// Brüstungshöhe über Unterkante Wand.
+    /// Fertige Brüstungshöhe (BRH) über OKFF des Geschosses; führend (ADR 0047).
+    /// Die Rohbaubrüstung ergibt sich daraus (`Project::rough_sill`).
     pub sill_height: f64,
     #[serde(default, skip_serializing_if = "OpeningKind::is_plain")]
     pub kind: OpeningKind,
+    /// Tür- oder Fenstertyp, der die Öffnung füllt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opening_type: Option<ElementId>,
     /// Bestand, Abbruch oder Neubau (2.05).
     #[serde(default, skip_serializing_if = "Phase::is_new")]
     pub phase: Phase,
+}
+
+/// Tür- oder Fenstertyp (IfcDoorType, IfcWindowType). Er füllt eine Öffnung,
+/// die Öffnung behält ihr Rohbaumaß (ADR 0047).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OpeningType {
+    pub name: String,
+    /// Kennzeichen in Plänen und Listen, etwa „F1“.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mark: String,
+    /// Unterer Anschluss: von der Rohbaubrüstung bis zur fertigen Brüstung
+    /// (Fensterbank, Ausgleich), in Metern.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub sill_connection: f64,
 }
 
 /// Was in einer Öffnung sitzt.

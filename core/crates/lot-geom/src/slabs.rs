@@ -86,13 +86,11 @@ pub fn slab_solids(project: &Project, id: ElementId, slab: &Slab) -> Vec<(usize,
         .map(|(k, _)| k)
         .collect();
     let (first, last) = (structure.first().copied(), structure.last().copied());
-    let walls_at = |storeys: &mut dyn Iterator<Item = ElementId>, z: f64| {
-        let regions: Vec<_> = storeys.flat_map(|s| solid_regions(project, s, z)).collect();
-        Area::union_all(regions.iter().map(|r| &r.area))
-    };
+    let union = |regions: Vec<crate::LayerRegion>| Area::union_all(regions.iter().map(|r| &r.area));
     let mut top = storey.elevation + slab.top_offset;
-    // Wände, die auf der Decke stehen, und Wände des Geschosses darunter, die bis unter sie reichen.
-    let standing = first.filter(|f| *f > 0).map(|_| walls_at(&mut std::iter::once(slab.storey), top + FLOOR_CUT));
+    // Wände, die auf der Decke stehen; in Türöffnungen läuft der Estrich durch.
+    let standing = first.filter(|f| *f > 0).map(|_| union(crate::layer_regions(project, slab.storey, top + FLOOR_CUT)));
+    // Wände des Geschosses darunter, die bis unter die Decke reichen.
     let below = project
         .storeys()
         .into_iter()
@@ -108,7 +106,7 @@ pub fn slab_solids(project: &Project, id: ElementId, slab: &Slab) -> Vec<(usize,
             let layer_area = match (first, last) {
                 (Some(f), _) if k < f => standing.as_ref().map_or_else(|| area.clone(), |w| area.difference(w)),
                 (_, Some(l)) if k > l => match below {
-                    Some(b) => area.difference(&walls_at(&mut std::iter::once(b), (top + bottom) / 2.0)),
+                    Some(b) => area.difference(&union(solid_regions(project, b, (top + bottom) / 2.0))),
                     None => area.clone(),
                 },
                 _ => area.clone(),

@@ -328,7 +328,7 @@ pub fn heights(project: &Project, storey: ElementId) -> Vec<f64> {
         if let Some((bottom, top)) = project.wall_extent(w) {
             z.extend([bottom, top]);
             for (_, o) in project.openings_in(id) {
-                z.extend([bottom + o.sill_height, bottom + o.sill_height + o.height]);
+                z.extend(project.opening_span(o).map(|(a, b)| [a, b]).into_iter().flatten());
             }
         }
     }

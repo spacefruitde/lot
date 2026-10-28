@@ -25,14 +25,14 @@ pub use annotation::{Annotation, AnnotationShape, AnnotationView};
 pub use document::{Document, ModelError};
 pub use element::{
     BuildingClass, CircularArc, Column, ColumnProfile, DimRef, DimensionChain, Door, Element, ElementId, ElementKind,
-    GridLine, Handing, JoinRule, Layer, LayerFunction, Opening, OpeningKind, Param, Phase, PhaseFilter, PlacedView,
-    PlanSheet, Point2, ProjectInfo, SectionKind, SectionView, Slab, SlabKind, SlabOpening, SlabType, Space, SpaceUsage,
-    Storey, Top, ViewContent, Wall, WallAlignment, WallEnd, WallSide, WallType,
+    GridLine, Handing, JoinRule, Layer, LayerFunction, Opening, OpeningKind, OpeningType, Param, Phase, PhaseFilter,
+    PlacedView, PlanSheet, Point2, ProjectInfo, SectionKind, SectionView, Slab, SlabKind, SlabOpening, SlabType, Space,
+    SpaceUsage, Storey, Top, ViewContent, Wall, WallAlignment, WallEnd, WallSide, WallType,
 };
 pub use elevator::Elevator;
 pub use operation::Operation;
 pub use plot::{Plot, PublicEdge, PublicKind};
-pub use project::Project;
+pub use project::{Project, rough_sill_changes};
 pub use roof::{Dormer, DormerWindow, EavePlane, Roof, RoofEdge, RoofFace, RoofWindow};
 pub use stair::{FlightLayout, Landing, Railing, RailingPath, Stair, StairFlight, StairLayout, Tread};
 pub use terrain::{Terrain, TerrainPoint};

@@ -9,6 +9,7 @@ mod command;
 pub mod entry;
 pub mod geometry;
 pub mod modify;
+pub mod openings;
 pub mod select;
 pub mod snap;
 pub mod tempdims;
@@ -1099,6 +1100,20 @@ impl Editor {
                     return Response::redraw();
                 }
                 Response::from_result(doc.apply(Operation::Group { label: "Bezugslinie ändern".into(), ops }))
+            }
+            Command::SetOpeningFill(fill) => {
+                let ops = openings::set_fill_ops(doc.project(), &self.selection, *fill as usize);
+                if ops.is_empty() {
+                    return Response::redraw();
+                }
+                Response::from_result(doc.apply(Operation::Group { label: "Füllung ändern".into(), ops }))
+            }
+            Command::SetSillConnection(value) => {
+                let ops = openings::set_sill_connection_ops(doc.project(), &self.selection, *value);
+                if ops.is_empty() {
+                    return Response::redraw();
+                }
+                Response::from_result(doc.apply(Operation::Group { label: "Unterer Anschluss".into(), ops }))
             }
             Command::SetWallTop(mode) => {
                 let ops = walls::set_top_ops(doc.project(), &self.selection, *mode as usize);
@@ -2491,7 +2506,16 @@ impl Editor {
         } else {
             OpeningKind::Window
         };
-        Some(Opening { phase: Default::default(), host, offset, width, height, sill_height: sill, kind })
+        Some(Opening {
+            opening_type: None,
+            phase: Default::default(),
+            host,
+            offset,
+            width,
+            height,
+            sill_height: sill,
+            kind,
+        })
     }
 
     /// Maßketten außen an den gewählten geraden Wänden (Vorschlag): in 1,00 m

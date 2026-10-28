@@ -32,7 +32,12 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Tür | `Door` | IfcDoor | |
 | Fenster | `Window` | IfcWindow | |
 | Laibung | `Reveal` | | |
-| Brüstung, Brüstungshöhe | `sill_height` | | Höhe über Fertigfußboden |
+| Brüstung, Brüstungshöhe (BRH) | `sill_height` | | fertige Brüstung über OKFF, führend (ADR 0047) |
+| Rohbaubrüstung | `Project::rough_sill` | | über Oberkante Rohdecke: BRH plus Fußbodenaufbau minus unterer Anschluss |
+| Fußbodenaufbau | `Project::floor_build_up` | | Schichten der Decke über der Rohdecke, bis OKFF |
+| Unterer Anschluss | `OpeningType::sill_connection` | | von der Rohbaubrüstung bis zur fertigen Brüstung (Fensterbank, Ausgleich) |
+| Tür- und Fenstertyp | `OpeningType` | IfcDoorType, IfcWindowType | füllt eine Öffnung, mit Kennzeichen wie F1 |
+| Rohbauöffnung | `Project::opening_span` | | Unter- und Oberkante der Öffnung im Rohbau |
 | Sturz, Sturzhöhe | `head_height` | | |
 | Anschlag (Fenster, Tür) | `Rebate` | | Falz, an dem der Flügel anschlägt |
 | Anschlag DIN links, DIN rechts | `Handing` | | nach DIN 107: Bänder links oder rechts, gesehen von der Seite, zu der die Tür aufschlägt |
