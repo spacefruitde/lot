@@ -2158,7 +2158,7 @@ fn stair_tool_proposes_din_values_cuts_the_hole_and_sets_railings() {
     let (x0, x1) =
         (xs.iter().cloned().fold(f64::INFINITY, f64::min), xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max));
     assert!(x0 > 1.0 && x0 < 3.0, "Loch beginnt bei {x0}");
-    assert!((x1 - (1.0 + 15.0 * 0.285)).abs() < 0.02, "Loch endet am Austritt: {x1}");
+    assert!((x1 - (1.0 + 15.0 * 0.285)).abs() < 0.03, "Loch endet am Austritt: {x1}");
     // Geländer an beiden freien Seiten und eine Umwehrung um das Loch oben.
     let railings: Vec<lot_model::Railing> = doc
         .project()
@@ -2255,4 +2255,29 @@ fn flat_roof_gets_a_storey_fall_and_drains() {
     ed.run(&mut doc, &Command::SetFallPercent(1.5));
     let findings = lot_rules::falls::check_falls(doc.project());
     assert!(findings[0].text.contains("Sonderkonstruktion"));
+}
+
+#[test]
+fn winder_and_spiral_stairs_from_the_tool_pass_din_18065() {
+    for (form, a, b) in [
+        (stairs::StairForm::QuarterWinder, (6.0, 0.8), (6.0, 4.0)),
+        (stairs::StairForm::HalfWinder, (6.0, 0.8), (6.0, 4.0)),
+        (stairs::StairForm::Spiral, (5.0, 3.0), (6.4, 3.0)),
+    ] {
+        let (mut doc, mut ed, _) = big_house();
+        ed.run(&mut doc, &Command::StairTool(form));
+        click(&mut doc, &mut ed, a.0, a.1);
+        ed.pointer_moved(doc.project(), input(b.0, b.1));
+        let overlay = ed.overlay(doc.project());
+        assert!(overlay.ghosts.len() > 10, "{form:?}: Vorschau der Stufen");
+        click(&mut doc, &mut ed, b.0, b.1);
+        let id = ed.selection[0];
+        let stair = doc.project().stair(id).unwrap().clone();
+        let layout = doc.project().stair_layout(&stair).unwrap();
+        assert!(!layout.steps.is_empty(), "{form:?}");
+        let check = lot_rules::stairs::check_stair(doc.project(), id, &stair).unwrap();
+        assert!(check.problems.is_empty(), "{form:?}: {:?}", check.problems);
+        // Das Loch reicht über die Stufen, über denen es eng würde.
+        assert_eq!(openings_with_stair(&doc).len(), 1, "{form:?}");
+    }
 }

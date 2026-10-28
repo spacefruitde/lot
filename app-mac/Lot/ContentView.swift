@@ -147,6 +147,9 @@ struct ContentView: View {
                 Button("Gerade") { model.run("StairTool(Straight)") }
                 Button("Zweiläufig mit Halbpodest") { model.run("StairTool(HalfLanding)") }
                 Button("L-Form mit Viertelpodest") { model.run("StairTool(QuarterLanding)") }
+                Button("Viertelgewendelt") { model.run("StairTool(QuarterWinder)") }
+                Button("Halbgewendelt") { model.run("StairTool(HalfWinder)") }
+                Button("Spindeltreppe") { model.run("StairTool(Spiral)") }
             } label: {
                 Label("Treppe", systemImage: "stairs")
             }

@@ -21,16 +21,32 @@ pub enum StairForm {
     HalfLanding,
     /// L-Form mit Viertelpodest.
     QuarterLanding,
+    /// Viertelgewendelt: L-Form mit Wendelstufen statt Podest.
+    QuarterWinder,
+    /// Halbgewendelt: zurück mit Wendelstufen um ein Treppenauge.
+    HalfWinder,
+    /// Spindeltreppe: erster Klick Mittelpunkt, zweiter Antritt und Radius.
+    Spiral,
 }
 
 impl StairForm {
-    pub const ALL: [StairForm; 3] = [StairForm::Straight, StairForm::HalfLanding, StairForm::QuarterLanding];
+    pub const ALL: [StairForm; 6] = [
+        StairForm::Straight,
+        StairForm::HalfLanding,
+        StairForm::QuarterLanding,
+        StairForm::QuarterWinder,
+        StairForm::HalfWinder,
+        StairForm::Spiral,
+    ];
 
     pub fn title(self) -> &'static str {
         match self {
             StairForm::Straight => "gerade",
             StairForm::HalfLanding => "zweiläufig mit Halbpodest",
             StairForm::QuarterLanding => "L-Form mit Viertelpodest",
+            StairForm::QuarterWinder => "viertelgewendelt",
+            StairForm::HalfWinder => "halbgewendelt",
+            StairForm::Spiral => "Spindeltreppe",
         }
     }
 }
@@ -40,6 +56,11 @@ pub const HEADROOM: f64 = 2.00;
 /// Höhe eines Geländers über der Stufenvorderkante und an der Umwehrung,
 /// Vorschlag nach MBO § 38 (Umwehrungen 0,90 m bis 12 m Absturzhöhe).
 pub const RAILING_HEIGHT: f64 = 0.90;
+/// Treppenauge halbgewendelter Treppen, Vorschlag.
+pub const EYE: f64 = 0.20;
+/// Spindelradius neuer Spindeltreppen, Vorschlag.
+pub const SPINDLE: f64 = 0.10;
+
 /// Gewünschte Steigung für den Vorschlag: Wohngebäude bequem, sonst flacher.
 fn target_rise(building: BuildingClass) -> f64 {
     match building {
@@ -83,6 +104,28 @@ pub fn new_stair(
     if len < 1e-6 {
         return None;
     }
+    if form == StairForm::Spiral {
+        // Spindeltreppe: `start` ist der Mittelpunkt, `toward` der Antritt außen; Steigung
+        // steiler als sonst, wie bei Spindeltreppen üblich.
+        let radius = ((len / 0.05).round() * 0.05).max(0.6);
+        let limits = lot_rules::stairs::limits(building, true);
+        let risers = (s.height / limits.rise.1.min(0.19)).ceil().max(2.0) as u32;
+        let rise = s.height / risers as f64;
+        let tread = (((0.63 - 2.0 * rise) / 0.005).round() * 0.005).clamp(limits.tread.0, limits.tread.1);
+        return Some(Stair {
+            phase: Default::default(),
+            storey,
+            start: toward,
+            direction: Point2::new(toward.x - start.x, toward.y - start.y),
+            width: radius - SPINDLE,
+            tread,
+            flights: vec![StairFlight { risers, landing: Landing::Straight }],
+            thickness: 0.18,
+            necessary: true,
+            spiral: Some(lot_model::Spiral { center: start, radius, spindle: SPINDLE, clockwise: !left }),
+            eye: 0.0,
+        });
+    }
     let direction = Point2::new((toward.x - start.x) / len, (toward.y - start.y) / len);
     let first = risers.div_ceil(2);
     let flights = match form {
@@ -95,6 +138,18 @@ pub fn new_stair(
             StairFlight { risers: first, landing: if left { Landing::Left } else { Landing::Right } },
             StairFlight { risers: risers - first, landing: Landing::Straight },
         ],
+        StairForm::QuarterWinder => vec![
+            StairFlight { risers: first, landing: if left { Landing::WinderLeft } else { Landing::WinderRight } },
+            StairFlight { risers: risers - first, landing: Landing::Straight },
+        ],
+        StairForm::HalfWinder => vec![
+            StairFlight {
+                risers: first,
+                landing: if left { Landing::WinderBackLeft } else { Landing::WinderBackRight },
+            },
+            StairFlight { risers: risers - first, landing: Landing::Straight },
+        ],
+        StairForm::Spiral => Vec::new(),
     };
     Some(Stair {
         phase: Default::default(),
@@ -106,6 +161,8 @@ pub fn new_stair(
         flights,
         thickness: 0.18,
         necessary: true,
+        spiral: None,
+        eye: if form == StairForm::HalfWinder { EYE } else { 0.0 },
     })
 }
 
@@ -128,7 +185,7 @@ pub fn verdict(project: &Project, stair: &Stair) -> Option<(String, Vec<String>)
 fn slab_above(project: &Project, stair: &Stair) -> Option<(ElementId, f64)> {
     let above = crate::navigation::storey_step(project, stair.storey, true)?;
     let layout = project.stair_layout(stair)?;
-    let probe = layout.flights.last().map(|f| layout.end(f))?;
+    let probe = exit_point(&layout)?;
     project.slabs_on(above).find(|(_, s)| contains(&s.outline, probe)).and_then(|(id, s)| {
         let levels = lot_geom::slabs::floor_levels(project, s)?;
         Some((id, levels.bottom))
@@ -171,7 +228,14 @@ pub fn hole_outline(project: &Project, stair: &Stair) -> Option<Vec<Point2>> {
             parts.push(ring(outline));
         }
     }
-    let union = Area::union_all(parts.iter());
+    // Wendel- und Spindelstufen: jede, über der weniger als die Durchgangshöhe frei wäre.
+    for step in &layout.steps {
+        if z0 + step.top + HEADROOM > bottom + 1e-9 {
+            parts.push(ring(&step.outline));
+        }
+    }
+    // 1 cm größer, damit die Vorderkante der ersten Stufe darunter eindeutig im Loch liegt.
+    let union = Area::union_all(parts.iter()).offset(0.01);
     let outer = union
         .rings()
         .into_iter()
@@ -183,7 +247,7 @@ pub fn hole_outline(project: &Project, stair: &Stair) -> Option<Vec<Point2>> {
 /// Umwehrung um das Loch: alle Kanten außer der am Austritt, als offener Linienzug.
 pub fn guard_points(project: &Project, stair: &Stair, hole: &[Point2]) -> Option<Vec<Point2>> {
     let layout = project.stair_layout(stair)?;
-    let exit = layout.flights.last().map(|f| layout.end(f))?;
+    let exit = exit_point(&layout)?;
     let n = hole.len();
     if n < 3 {
         return None;
@@ -333,4 +397,12 @@ pub fn follow_ops(project: &Project) -> Vec<Operation> {
 
 fn same(a: &[Point2], b: &[Point2]) -> bool {
     a.len() == b.len() && a.iter().zip(b).all(|(p, q)| p.distance(*q) < 1e-3)
+}
+
+/// Wo die Treppe oben ankommt: Mitte der Vorderkante des Austritts.
+fn exit_point(layout: &lot_model::StairLayout) -> Option<Point2> {
+    match layout.flights.last() {
+        Some(f) => Some(layout.end(f)),
+        None => layout.walking.last().copied(),
+    }
 }

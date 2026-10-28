@@ -24,6 +24,23 @@ pub fn stair_solids(project: &Project, stair: &Stair) -> Vec<(usize, String, Man
     };
     let z0 = storey.elevation;
     let mut parts: Vec<Manifold> = Vec::new();
+    // Wendel- und Spindelstufen als Blöcke, die bis unter die Stufe davor reichen (ADR 0051).
+    for step in &layout.steps {
+        let ring: Vec<[f64; 2]> = step.outline.iter().map(|p| [p.x, p.y]).collect();
+        let bottom = (step.top - layout.rise - stair.thickness).max(0.0);
+        parts.push(extrude(&Area::from_ring(&ring), z0 + bottom, z0 + step.top));
+    }
+    if let Some(spiral) = stair.spiral
+        && spiral.spindle > 0.0
+    {
+        let ring: Vec<[f64; 2]> = (0..24)
+            .map(|i| {
+                let a = i as f64 / 24.0 * std::f64::consts::TAU;
+                [spiral.center.x + spiral.spindle * a.cos(), spiral.center.y + spiral.spindle * a.sin()]
+            })
+            .collect();
+        parts.push(extrude(&Area::from_ring(&ring), z0, z0 + storey.height));
+    }
     for (i, f) in layout.flights.iter().enumerate() {
         // Der erste Lauf steht auf dem Boden, die weiteren auf einem Podest.
         let floor = if i == 0 { f.base } else { f.base - stair.thickness };
@@ -234,6 +251,8 @@ mod tests {
             ],
             thickness: 0.18,
             necessary: true,
+            spiral: None,
+            eye: 0.0,
         };
         p.elements.insert(ElementId(900), Element::Stair(stair.clone()));
         (p, stair)

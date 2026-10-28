@@ -33,6 +33,29 @@ pub struct Stair {
     /// Bestand, Abbruch oder Neubau (2.05).
     #[serde(default, skip_serializing_if = "crate::Phase::is_new")]
     pub phase: crate::Phase,
+    /// Spindeltreppe (ADR 0051): die Stufen laufen um die Spindel; `start`
+    /// gibt die Richtung des Antritts vom Mittelpunkt aus.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spiral: Option<Spiral>,
+    /// Treppenauge bei halbgewendelten Läufen: Abstand der Läufe in m (ADR 0051).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub eye: f64,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+/// Spindeltreppe: Mittelpunkt, Außenradius, Spindelradius, Drehsinn nach oben.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Spiral {
+    pub center: Point2,
+    /// Radius der äußeren Begrenzung der Laufbreite, in m.
+    pub radius: f64,
+    /// Radius der Spindel, in m.
+    pub spindle: f64,
+    #[serde(default)]
+    pub clockwise: bool,
 }
 
 fn default_thickness() -> f64 {
@@ -67,6 +90,30 @@ pub enum Landing {
     BackLeft,
     /// Halbpodest, der nächste Lauf liegt rechts daneben und läuft zurück.
     BackRight,
+    /// Viertelgewendelt nach links: Wendelstufen statt Podest (ADR 0051).
+    WinderLeft,
+    WinderRight,
+    /// Halbgewendelt, der nächste Lauf liegt links daneben und läuft zurück.
+    WinderBackLeft,
+    WinderBackRight,
+}
+
+impl Landing {
+    /// Wendelstufen statt Podest.
+    pub fn is_winder(self) -> bool {
+        matches!(self, Landing::WinderLeft | Landing::WinderRight | Landing::WinderBackLeft | Landing::WinderBackRight)
+    }
+
+    /// Das Podest, dessen Platz die Wendelung einnimmt.
+    fn as_landing(self) -> Landing {
+        match self {
+            Landing::WinderLeft => Landing::Left,
+            Landing::WinderRight => Landing::Right,
+            Landing::WinderBackLeft => Landing::BackLeft,
+            Landing::WinderBackRight => Landing::BackRight,
+            l => l,
+        }
+    }
 }
 
 /// Lage eines Laufs, abgeleitet.
@@ -99,6 +146,23 @@ pub struct StairLayout {
     pub flights: Vec<FlightLayout>,
     /// Podeste: Umriss und Höhe der Oberfläche über OKFF.
     pub landings: Vec<(Vec<Point2>, f64)>,
+    /// Bei gewendelten und Spindeltreppen alle Stufen; dann sind `flights` und
+    /// `landings` leer (ADR 0051).
+    pub steps: Vec<Step>,
+    /// Lauflinie bei gewendelten und Spindeltreppen.
+    pub walking: Vec<Point2>,
+}
+
+/// Eine Stufe beliebiger Form (Wendel- oder Spindelstufe).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Step {
+    pub outline: Vec<Point2>,
+    /// Höhe der Trittfläche über OKFF.
+    pub top: f64,
+    /// Vorderkante von der inneren zur äußeren Begrenzung.
+    pub front: (Point2, Point2),
+    /// Auftritt an der inneren Begrenzung der Laufbreite, als Sehne (DIN 18065:2020-08, 6.2.2).
+    pub inner: f64,
 }
 
 impl Stair {
@@ -108,6 +172,24 @@ impl Stair {
 
     /// Form der Treppe bei der Geschosshöhe `height`.
     pub fn layout(&self, height: f64) -> StairLayout {
+        self.layout_with(height, crate::stair_winders::MIN_INNER_GENERAL)
+    }
+
+    /// Wie [`Stair::layout`]; Wendelstufen werden so weit verzogen, dass ihr
+    /// Auftritt an der inneren Begrenzung mindestens `min_inner` beträgt.
+    pub fn layout_with(&self, height: f64, min_inner: f64) -> StairLayout {
+        if let Some(spiral) = self.spiral {
+            // Spindeltreppen: 10 cm innen in sonstigen Gebäuden, in Wohngebäuden keine Anforderung (6.2.4).
+            let spiral_min = if min_inner >= crate::stair_winders::MIN_INNER_GENERAL - 1e-9 {
+                crate::stair_winders::MIN_INNER_GENERAL
+            } else {
+                0.0
+            };
+            return self.spiral_layout(spiral, height, spiral_min);
+        }
+        if self.flights.iter().any(|f| f.landing.is_winder()) {
+            return self.winder_layout(height, min_inner);
+        }
         let rise = height / self.risers().max(1) as f64;
         let h = self.width / 2.0;
         let w = self.width;
@@ -125,7 +207,7 @@ impl Stair {
                 break;
             }
             let left = Point2::new(-dir.y, dir.x);
-            let (outline, next_start, next_dir) = match f.landing {
+            let (outline, next_start, next_dir) = match f.landing.as_landing() {
                 Landing::Straight => (rect(end, dir, left, w, -h, h), add(end, dir, w), dir),
                 Landing::Left => (rect(end, dir, left, w, -h, h), add(add(end, dir, h), left, h), left),
                 Landing::Right => {
@@ -138,12 +220,21 @@ impl Stair {
                 Landing::BackRight => {
                     (rect(end, dir, left, w, -h - w, h), add(end, left, -w), Point2::new(-dir.x, -dir.y))
                 }
+                _ => (rect(end, dir, left, w, -h, h), add(end, dir, w), dir),
             };
             landings.push((outline, base));
             start = next_start;
             dir = next_dir;
         }
-        StairLayout { width: self.width, tread: self.tread, rise, flights, landings }
+        StairLayout {
+            width: self.width,
+            tread: self.tread,
+            rise,
+            flights,
+            landings,
+            steps: Vec::new(),
+            walking: Vec::new(),
+        }
     }
 }
 
@@ -274,7 +365,7 @@ fn side_of(dir: Point2, end: Point2, next_start: Point2) -> f64 {
     cross.signum()
 }
 
-fn add(p: Point2, d: Point2, t: f64) -> Point2 {
+pub(crate) fn add(p: Point2, d: Point2, t: f64) -> Point2 {
     Point2::new(p.x + d.x * t, p.y + d.y * t)
 }
 
@@ -306,6 +397,8 @@ mod tests {
             ],
             thickness: 0.18,
             necessary: true,
+            spiral: None,
+            eye: 0.0,
         }
     }
 

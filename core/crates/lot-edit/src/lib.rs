@@ -1914,6 +1914,9 @@ impl Editor {
                 "Treppe zeichnen, L-Form mit Viertelpodest",
                 "Werkzeug",
             ),
+            info(Command::StairTool(stairs::StairForm::QuarterWinder), "Treppe zeichnen, viertelgewendelt", "Werkzeug"),
+            info(Command::StairTool(stairs::StairForm::HalfWinder), "Treppe zeichnen, halbgewendelt", "Werkzeug"),
+            info(Command::StairTool(stairs::StairForm::Spiral), "Spindeltreppe zeichnen", "Werkzeug"),
             info(Command::RoofEdgeTool, "Dachkante umschalten (Traufe, Giebel)", "Werkzeug"),
             info(Command::HipRoofFromWalls, "Walmdach über dem Geschoss", "Werkzeug"),
             info(Command::FlatRoofFromWalls, "Flachdach über dem Geschoss", "Werkzeug"),
@@ -2075,6 +2078,9 @@ impl Editor {
                 }
                 for (outline, _) in &layout.landings {
                     overlay.ghosts.push(outline.iter().map(|q| [q.x, q.y]).collect());
+                }
+                for step in &layout.steps {
+                    overlay.ghosts.push(step.outline.iter().map(|q| [q.x, q.y]).collect());
                 }
                 if let Some((text, problems)) = stairs::verdict(project_now, &stair) {
                     let detail =
@@ -2487,6 +2493,13 @@ impl Editor {
                 "Stich ziehen und klicken oder tippen, ⏎ übernimmt. Esc: Endpunkt neu.".into()
             }
             (Tool::ArcWall, Some(_), _) => "Bogenwand: Endpunkt klicken oder Sehne tippen.".into(),
+            (Tool::Stair, None, _) if self.stair_form == stairs::StairForm::Spiral => {
+                "Spindeltreppe: Mittelpunkt klicken. Esc: zurück zum Auswählen.".into()
+            }
+            (Tool::Stair, Some(_), _) if self.stair_form == stairs::StairForm::Spiral => {
+                let turn = if self.stair_left { "gegen den Uhrzeigersinn" } else { "im Uhrzeigersinn" };
+                format!("Spindeltreppe: Antritt außen klicken, der Abstand ist der Radius. Sie dreht {turn}, Leertaste wechselt.")
+            }
             (Tool::Stair, None, _) => format!(
                 "Treppe {}: Antritt klicken (Mitte der ersten Stufe). Esc: zurück zum Auswählen.",
                 self.stair_form.title()
