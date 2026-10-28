@@ -2,7 +2,7 @@
 //! „KI-Assistent“). Die Befehlspalette (8.04) zeigt sie, später ruft die KI
 //! dieselben Befehle auf.
 
-use lot_model::{JoinRule, Phase, Property, WallAlignment, WallEnd, WallSide};
+use lot_model::{JoinRule, Phase, Property, ViewContent, WallAlignment, WallEnd, WallSide};
 use serde::{Deserialize, Serialize};
 
 /// Ein Befehl des Editors. Die Kennung ist seine RON-Schreibweise, etwa
@@ -147,6 +147,24 @@ pub enum Command {
     SetStoreyHeight(u64, f64),
     /// OKFF eines Geschosses; die Geschosse darüber rücken mit.
     SetStoreyElevation(u64, f64),
+    /// Ansichtsvorlage einer Ansicht wählen oder keine (ADR 0050).
+    SetViewTemplate(ViewContent, Option<String>),
+    /// Eine Einstellung der Ansicht setzen oder wieder übernehmen.
+    SetViewField(ViewContent, crate::visibility::ViewField),
+    /// Regel des Themas in der Ansicht ein- oder abschalten.
+    SetRuleOn(ViewContent, String, bool),
+    AddViewRule(ViewContent, lot_model::Rule),
+    RemoveViewRule(ViewContent, String),
+    /// Gewählte Bauteile in der Ansicht ausblenden.
+    HideInView(ViewContent),
+    /// Ausgeblendete Bauteile der Ansicht wieder zeigen; leer zeigt alle.
+    ShowInView(ViewContent, Vec<u64>),
+    /// H: Auswahl vorübergehend ausblenden; ohne Auswahl wieder alles zeigen.
+    TempHide,
+    /// I: Auswahl isolieren; ohne Auswahl wieder alles zeigen.
+    TempIsolate,
+    /// Vorübergehend Ausgeblendetes und Isoliertes zurücksetzen.
+    TempReset,
 }
 
 impl Command {
