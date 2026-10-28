@@ -139,6 +139,30 @@ pub fn space_usages() -> Vec<SpaceUsageItem> {
         .collect()
 }
 
+/// Eine Lage der Bezugslinie zur Auswahl, mit dem Befehl, der sie setzt.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ChoiceItem {
+    pub title: String,
+    pub command: String,
+}
+
+/// Die sechs Lagen der Bezugslinie (ADR 0045), in der Reihenfolge von `WallInfo::alignment`.
+#[uniffi::export]
+pub fn wall_alignments() -> Vec<ChoiceItem> {
+    lot_model::WallAlignment::ALL
+        .iter()
+        .map(|a| ChoiceItem { title: a.title().into(), command: lot_edit::Command::SetAlignment(*a).id() })
+        .collect()
+}
+
+/// Eine Wand für den Inspektor.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct WallInfo {
+    pub element: u64,
+    /// Index in [`wall_alignments`].
+    pub alignment: u32,
+}
+
 /// Flächen eines Geschosses in m².
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct StoreyAreaInfo {
@@ -359,6 +383,18 @@ impl LotDocument {
                     net_area: area.and_then(|a| a.net),
                     living_area: area.and_then(|a| a.living),
                 }
+            })
+            .collect()
+    }
+
+    /// Die Wände unter den Elementen `ids`.
+    pub fn walls(&self, ids: Vec<u64>) -> Vec<WallInfo> {
+        let doc = self.lock();
+        ids.iter()
+            .filter_map(|id| {
+                let w = doc.project().wall(ElementId(*id))?;
+                let alignment = lot_model::WallAlignment::ALL.iter().position(|a| *a == w.alignment)? as u32;
+                Some(WallInfo { element: *id, alignment })
             })
             .collect()
     }

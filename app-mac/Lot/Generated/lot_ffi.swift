@@ -726,6 +726,11 @@ public protocol LotDocumentProtocol: AnyObject, Sendable {
     
     func undo() throws  -> Bool
     
+    /**
+     * Die Wände unter den Elementen `ids`.
+     */
+    func walls(ids: [UInt64])  -> [WallInfo]
+    
 }
 open class LotDocument: LotDocumentProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -1088,6 +1093,19 @@ open func undo()throws  -> Bool  {
 })
 }
     
+    /**
+     * Die Wände unter den Elementen `ids`.
+     */
+open func walls(ids: [UInt64]) -> [WallInfo]  {
+    return try!  FfiConverterSequenceTypeWallInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_lotdocument_walls(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
+}
+    
 
     
 }
@@ -1170,6 +1188,11 @@ public protocol ViewportProtocol: AnyObject, Sendable {
      * Zeigt einen Ort: wechselt ins Geschoss und schiebt den Plan dorthin.
      */
     func focus(storey: UInt64, x: Double, y: Double) 
+    
+    /**
+     * Der gewählte Anschluss mit Erklärung und Ausnahmen; `None`, wenn keiner gewählt ist.
+     */
+    func junction()  -> JunctionInfo?
     
     func key(key: KeyInput)  -> EventResult
     
@@ -1392,6 +1415,18 @@ open func focus(storey: UInt64, x: Double, y: Double)  {try! rustCall() {
         FfiConverterDouble.lower(y),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * Der gewählte Anschluss mit Erklärung und Ausnahmen; `None`, wenn keiner gewählt ist.
+     */
+open func junction() -> JunctionInfo?  {
+    return try!  FfiConverterOptionTypeJunctionInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_junction(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
 }
     
 open func key(key: KeyInput) -> EventResult  {
@@ -1687,6 +1722,63 @@ public func FfiConverterTypeViewport_lower(_ value: Viewport) -> UInt64 {
 }
 
 
+
+
+/**
+ * Eine Lage der Bezugslinie zur Auswahl, mit dem Befehl, der sie setzt.
+ */
+public struct ChoiceItem: Equatable, Hashable {
+    public var title: String
+    public var command: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(title: String, command: String) {
+        self.title = title
+        self.command = command
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ChoiceItem: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChoiceItem: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChoiceItem {
+        return
+            try ChoiceItem(
+                title: FfiConverterString.read(from: &buf), 
+                command: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ChoiceItem, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterString.write(value.command, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChoiceItem_lift(_ buf: RustBuffer) throws -> ChoiceItem {
+    return try FfiConverterTypeChoiceItem.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChoiceItem_lower(_ value: ChoiceItem) -> RustBuffer {
+    return FfiConverterTypeChoiceItem.lower(value)
+}
 
 
 public struct CommandItem: Equatable, Hashable {
@@ -1995,6 +2087,166 @@ public func FfiConverterTypeFindingInfo_lift(_ buf: RustBuffer) throws -> Findin
 #endif
 public func FfiConverterTypeFindingInfo_lower(_ value: FindingInfo) -> RustBuffer {
     return FfiConverterTypeFindingInfo.lower(value)
+}
+
+
+/**
+ * Eine Wand an einem Anschluss.
+ */
+public struct JunctionArmInfo: Equatable, Hashable {
+    public var wall: UInt64
+    public var label: String
+    /**
+     * Etwa „läuft durch (Ausnahme)“.
+     */
+    public var role: String
+    /**
+     * 0 automatisch, 1 läuft durch, 2 nicht verbinden.
+     */
+    public var rule: UInt32
+    /**
+     * Befehle für die drei Regeln; leer bei der Wand, die an einem T-Stoß durchläuft.
+     */
+    public var commands: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(wall: UInt64, label: String, 
+        /**
+         * Etwa „läuft durch (Ausnahme)“.
+         */role: String, 
+        /**
+         * 0 automatisch, 1 läuft durch, 2 nicht verbinden.
+         */rule: UInt32, 
+        /**
+         * Befehle für die drei Regeln; leer bei der Wand, die an einem T-Stoß durchläuft.
+         */commands: [String]) {
+        self.wall = wall
+        self.label = label
+        self.role = role
+        self.rule = rule
+        self.commands = commands
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension JunctionArmInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeJunctionArmInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> JunctionArmInfo {
+        return
+            try JunctionArmInfo(
+                wall: FfiConverterUInt64.read(from: &buf), 
+                label: FfiConverterString.read(from: &buf), 
+                role: FfiConverterString.read(from: &buf), 
+                rule: FfiConverterUInt32.read(from: &buf), 
+                commands: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: JunctionArmInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.wall, into: &buf)
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterString.write(value.role, into: &buf)
+        FfiConverterUInt32.write(value.rule, into: &buf)
+        FfiConverterSequenceString.write(value.commands, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeJunctionArmInfo_lift(_ buf: RustBuffer) throws -> JunctionArmInfo {
+    return try FfiConverterTypeJunctionArmInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeJunctionArmInfo_lower(_ value: JunctionArmInfo) -> RustBuffer {
+    return FfiConverterTypeJunctionArmInfo.lower(value)
+}
+
+
+/**
+ * Der gewählte Anschluss für den Inspektor (ADR 0045).
+ */
+public struct JunctionInfo: Equatable, Hashable {
+    /**
+     * Etwa „Ecke“ oder „T-Stoß“.
+     */
+    public var title: String
+    /**
+     * Warum es so aussieht, etwa „Kalksandstein schneidet Innenputz“.
+     */
+    public var lines: [String]
+    public var arms: [JunctionArmInfo]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Etwa „Ecke“ oder „T-Stoß“.
+         */title: String, 
+        /**
+         * Warum es so aussieht, etwa „Kalksandstein schneidet Innenputz“.
+         */lines: [String], arms: [JunctionArmInfo]) {
+        self.title = title
+        self.lines = lines
+        self.arms = arms
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension JunctionInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeJunctionInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> JunctionInfo {
+        return
+            try JunctionInfo(
+                title: FfiConverterString.read(from: &buf), 
+                lines: FfiConverterSequenceString.read(from: &buf), 
+                arms: FfiConverterSequenceTypeJunctionArmInfo.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: JunctionInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterSequenceString.write(value.lines, into: &buf)
+        FfiConverterSequenceTypeJunctionArmInfo.write(value.arms, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeJunctionInfo_lift(_ buf: RustBuffer) throws -> JunctionInfo {
+    return try FfiConverterTypeJunctionInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeJunctionInfo_lower(_ value: JunctionInfo) -> RustBuffer {
+    return FfiConverterTypeJunctionInfo.lower(value)
 }
 
 
@@ -2474,6 +2726,69 @@ public func FfiConverterTypeViewState_lift(_ buf: RustBuffer) throws -> ViewStat
 #endif
 public func FfiConverterTypeViewState_lower(_ value: ViewState) -> RustBuffer {
     return FfiConverterTypeViewState.lower(value)
+}
+
+
+/**
+ * Eine Wand für den Inspektor.
+ */
+public struct WallInfo: Equatable, Hashable {
+    public var element: UInt64
+    /**
+     * Index in [`wall_alignments`].
+     */
+    public var alignment: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, 
+        /**
+         * Index in [`wall_alignments`].
+         */alignment: UInt32) {
+        self.element = element
+        self.alignment = alignment
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension WallInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWallInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WallInfo {
+        return
+            try WallInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                alignment: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WallInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterUInt32.write(value.alignment, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWallInfo_lift(_ buf: RustBuffer) throws -> WallInfo {
+    return try FfiConverterTypeWallInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWallInfo_lower(_ value: WallInfo) -> RustBuffer {
+    return FfiConverterTypeWallInfo.lower(value)
 }
 
 
@@ -3008,6 +3323,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeJunctionInfo: FfiConverterRustBuffer {
+    typealias SwiftType = JunctionInfo?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeJunctionInfo.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeJunctionInfo.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceUInt64: FfiConverterRustBuffer {
     typealias SwiftType = [UInt64]
 
@@ -3050,6 +3389,56 @@ fileprivate struct FfiConverterSequenceDouble: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterDouble.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
+    typealias SwiftType = [String]
+
+    public static func write(_ value: [String], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterString.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [String] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [String]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterString.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeChoiceItem: FfiConverterRustBuffer {
+    typealias SwiftType = [ChoiceItem]
+
+    public static func write(_ value: [ChoiceItem], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeChoiceItem.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ChoiceItem] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ChoiceItem]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeChoiceItem.read(from: &buf))
         }
         return seq
     }
@@ -3125,6 +3514,31 @@ fileprivate struct FfiConverterSequenceTypeFindingInfo: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeFindingInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeJunctionArmInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [JunctionArmInfo]
+
+    public static func write(_ value: [JunctionArmInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeJunctionArmInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [JunctionArmInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [JunctionArmInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeJunctionArmInfo.read(from: &buf))
         }
         return seq
     }
@@ -3279,6 +3693,31 @@ fileprivate struct FfiConverterSequenceTypeUnderlayRef: FfiConverterRustBuffer {
         return seq
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeWallInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [WallInfo]
+
+    public static func write(_ value: [WallInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeWallInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [WallInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [WallInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeWallInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
 /**
  * Setzt den Bürostandard für die Sitzung: der eingebaute mit den
  * Abweichungen aus `text` (Inhalt von `buerostandard.ron`). Einmal beim Start,
@@ -3298,6 +3737,16 @@ public func spaceUsages() -> [SpaceUsageItem]  {
     return try!  FfiConverterSequenceTypeSpaceUsageItem.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_func_space_usages(uniffiCallStatus
+    )
+})
+}
+/**
+ * Die sechs Lagen der Bezugslinie (ADR 0045), in der Reihenfolge von `WallInfo::alignment`.
+ */
+public func wallAlignments() -> [ChoiceItem]  {
+    return try!  FfiConverterSequenceTypeChoiceItem.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_wall_alignments(uniffiCallStatus
     )
 })
 }
@@ -3321,6 +3770,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_func_space_usages() != 26934) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_wall_alignments() != 7115) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_add_attachment() != 53219) {
@@ -3389,6 +3841,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_lotdocument_undo() != 9472) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_lotdocument_walls() != 16345) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_viewport_add_cad_underlay() != 38521) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3402,6 +3857,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_focus() != 45613) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_junction() != 31303) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_key() != 43844) {

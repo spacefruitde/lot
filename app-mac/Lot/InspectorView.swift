@@ -7,7 +7,9 @@ struct InspectorView: View {
 
     var body: some View {
         Form {
-            if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty {
+            if let junction = model.junction {
+                JunctionSection(junction: junction)
+            } else if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty {
                 Section {
                     Text("Nichts gewählt. Eine Wand oder einen Raumstempel anklicken zeigt die Eigenschaften.")
                         .foregroundStyle(.secondary)
@@ -40,6 +42,9 @@ struct InspectorView: View {
                         .pickerStyle(.segmented)
                         .labelsHidden()
                     }
+                }
+                if !model.walls.isEmpty {
+                    WallSection()
                 }
                 if model.groups.count > 0 {
                     SelectionGroupsSection()
@@ -79,6 +84,7 @@ struct InspectorView: View {
                     Text("Kürzel wie Revit: WA Wand, DR Tür, WN Fenster, RM Raum, GR Achse, CL Stütze, DI Bemaßen, LI Linie, TX Text, SA Gleiche wählen, Esc Auswählen, ⌘K Befehle")
                     Text("Auswählen: Klick, Ziehen ergibt einen Rahmen (nach links auch Angeschnittenes), ⌥ ein Lasso, ⇧ fügt hinzu, ⇥ blättert unter dem Zeiger, ⌘← vorige Auswahl")
                     Text("Bearbeiten: Ziehen verschiebt die Auswahl, mit ⌥ als Kopie, Pfeile 1 cm (⇧ 10 cm), Leertaste dreht um")
+                    Text("Wände: Bezugslinie im Inspektor wechseln, die Wand bleibt liegen; Doppelklick auf eine Ecke zeigt den Anschluss mit Ausnahmen")
                     Text("Ändern: MV verschieben, CO kopieren, RO drehen, MM spiegeln, AR Reihe, OF versetzen, AL ausrichten, TR stutzen, SL teilen; ⏎ wiederholt")
                     Text("Fangen: Name am Zeiger, ⇥ nächster Fangpunkt, Q Bezugspunkt mit Spurlinien (Länge tippen setzt den Punkt), SE SM SI SP SN SO für einen Klick, ZR Zeichenrichtung von einer Kante, WR Wandrechteck")
                     Text("Zeichnen: klicken oder tippen, etwa 3,65 · <30 · 3,65<30 · @1,20;0,80 · 2*1,25+0,115, dann ⏎; ⇧ rechtwinklig")
@@ -191,6 +197,60 @@ private struct TextSection: View {
     private func commit() {
         guard text != info.text, !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         model.setText(info, text: text)
+    }
+}
+
+/// Bezugslinie und Umdrehen der gewählten Wände (ADR 0045). Ein Wechsel verschiebt keine Wand.
+private struct WallSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let lines = Set(model.walls.map(\.alignment))
+        let current = lines.count == 1 ? Int(lines.first!) : -1
+        Section(model.walls.count == 1 ? "Wand" : "Wände · \(model.walls.count)") {
+            Picker("Bezugslinie", selection: Binding(get: { current }, set: { i in
+                if i >= 0 { model.run(AppModel.alignments[i].command) }
+            })) {
+                if current < 0 { Text("verschieden").tag(-1) }
+                ForEach(Array(AppModel.alignments.enumerated()), id: \.offset) { index, item in
+                    Text(item.title).tag(index)
+                }
+            }
+            LabeledContent("Innen und außen") {
+                Button("Umdrehen") { model.run("FlipWalls") }
+            }
+            Text("Die Bezugslinie ist eine Lesart: Ein Wechsel verschiebt die Wand nicht. Doppelklick auf eine Ecke zeigt den Anschluss.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Ein Anschluss: wie jede Wand anschließt, welche Schicht welche schneidet,
+/// und Ausnahmen je Wandende (ADR 0045).
+private struct JunctionSection: View {
+    @Environment(AppModel.self) private var model
+    let junction: JunctionInfo
+
+    var body: some View {
+        Section("Anschluss · \(junction.title)") {
+            ForEach(junction.lines, id: \.self) { Text($0) }
+            if junction.lines.isEmpty {
+                Text("Keine Schichten berühren sich.").foregroundStyle(.secondary)
+            }
+        }
+        ForEach(junction.arms, id: \.wall) { arm in
+            Section(arm.label) {
+                LabeledContent("Anschluss", value: arm.role)
+                if arm.commands.count == 3 {
+                    Picker("Ausnahme", selection: Binding(get: { Int(arm.rule) }, set: { model.run(arm.commands[$0]) })) {
+                        Text("keine").tag(0)
+                        Text("läuft durch").tag(1)
+                        Text("nicht verbinden").tag(2)
+                    }
+                }
+            }
+        }
     }
 }
 

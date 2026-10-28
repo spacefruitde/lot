@@ -385,6 +385,11 @@ RustBuffer uniffi_lot_ffi_fn_method_lotdocument_storey_areas(uint64_t ptr, RustC
 int8_t uniffi_lot_ffi_fn_method_lotdocument_undo(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_WALLS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_WALLS
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_walls(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_CLONE_VIEWPORT
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_CLONE_VIEWPORT
 uint64_t uniffi_lot_ffi_fn_clone_viewport(uint64_t handle, RustCallStatus *_Nonnull out_status
@@ -423,6 +428,11 @@ RustBuffer uniffi_lot_ffi_fn_method_viewport_commands(uint64_t ptr, RustCallStat
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_FOCUS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_FOCUS
 void uniffi_lot_ffi_fn_method_viewport_focus(uint64_t ptr, uint64_t storey, double x, double y, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_JUNCTION
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_JUNCTION
+RustBuffer uniffi_lot_ffi_fn_method_viewport_junction(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_KEY
@@ -538,6 +548,12 @@ void uniffi_lot_ffi_fn_func_install_office_standard(RustBuffer text, RustCallSta
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_SPACE_USAGES
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_SPACE_USAGES
 RustBuffer uniffi_lot_ffi_fn_func_space_usages(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_WALL_ALIGNMENTS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_WALL_ALIGNMENTS
+RustBuffer uniffi_lot_ffi_fn_func_wall_alignments(RustCallStatus *_Nonnull out_status
     
 );
 #endif
@@ -813,6 +829,12 @@ uint16_t uniffi_lot_ffi_checksum_func_space_usages(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_WALL_ALIGNMENTS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_WALL_ALIGNMENTS
+uint16_t uniffi_lot_ffi_checksum_func_wall_alignments(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ADD_ATTACHMENT
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ADD_ATTACHMENT
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_add_attachment(void
@@ -945,6 +967,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_undo(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_WALLS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_WALLS
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_walls(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_ADD_CAD_UNDERLAY
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_ADD_CAD_UNDERLAY
 uint16_t uniffi_lot_ffi_checksum_method_viewport_add_cad_underlay(void
@@ -972,6 +1000,12 @@ uint16_t uniffi_lot_ffi_checksum_method_viewport_commands(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_FOCUS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_FOCUS
 uint16_t uniffi_lot_ffi_checksum_method_viewport_focus(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_JUNCTION
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_JUNCTION
+uint16_t uniffi_lot_ffi_checksum_method_viewport_junction(void
     
 );
 #endif

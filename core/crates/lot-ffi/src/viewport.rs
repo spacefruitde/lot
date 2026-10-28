@@ -75,6 +75,29 @@ pub enum KeyInput {
     },
 }
 
+/// Der gewählte Anschluss für den Inspektor (ADR 0045).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct JunctionInfo {
+    /// Etwa „Ecke“ oder „T-Stoß“.
+    pub title: String,
+    /// Warum es so aussieht, etwa „Kalksandstein schneidet Innenputz“.
+    pub lines: Vec<String>,
+    pub arms: Vec<JunctionArmInfo>,
+}
+
+/// Eine Wand an einem Anschluss.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct JunctionArmInfo {
+    pub wall: u64,
+    pub label: String,
+    /// Etwa „läuft durch (Ausnahme)“.
+    pub role: String,
+    /// 0 automatisch, 1 läuft durch, 2 nicht verbinden.
+    pub rule: u32,
+    /// Befehle für die drei Regeln; leer bei der Wand, die an einem T-Stoß durchläuft.
+    pub commands: Vec<String>,
+}
+
 /// Zustand für Werkzeugleiste und Statuszeile.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct ViewState {
@@ -541,6 +564,16 @@ impl Viewport {
         ViewState { view, tool, storey, scale: s.plan_scale, wall_type, selection, hint }
     }
 
+    /// Der gewählte Anschluss mit Erklärung und Ausnahmen; `None`, wenn keiner gewählt ist.
+    pub fn junction(&self) -> Option<JunctionInfo> {
+        let s = self.lock();
+        let (Some(editor), Some(doc)) = (&s.editor, &s.document) else { return None };
+        let doc = doc.lock();
+        let project = doc.project();
+        let j = editor.selected_junction(project)?;
+        Some(junction_info(project, editor.storey, &j))
+    }
+
     /// Zeichnet ein Bild. `false`, wenn das Fenster gerade verdeckt ist; dann erneut versuchen.
     pub fn render(&self) -> Result<bool, LotError> {
         self.lock().renderer.render().map_err(LotError::from_display)
@@ -848,6 +881,21 @@ fn update_overlay(s: &mut State) {
             width_px: 2.0,
         });
     }
+    // Gewählter Anschluss: ein Kreis um den Knoten.
+    if let Some((p, r)) = overlay.junction {
+        let points: Vec<[f64; 2]> = (0..48)
+            .map(|i| {
+                let a = i as f64 / 48.0 * std::f64::consts::TAU;
+                paper([p.x + r * a.cos(), p.y + r * a.sin()])
+            })
+            .collect();
+        items.push(OverlayItem::Polygon {
+            points,
+            fill: linear([0.10, 0.45, 0.95], 0.12),
+            stroke: blue,
+            width_px: 2.0,
+        });
+    }
     for h in overlay.handles {
         items.push(OverlayItem::Square { center: paper([h.x, h.y]), size_px: 9.0, color: blue });
     }
@@ -923,6 +971,65 @@ fn update_overlay(s: &mut State) {
         });
     }
     s.renderer.set_overlay(items);
+}
+
+/// Anschluss in Worten: welche Wand wie anschließt und welche Schicht welche schneidet.
+fn junction_info(project: &Project, storey: lot_model::ElementId, j: &lot_geom::Junction) -> JunctionInfo {
+    use lot_geom::{ArmRole, Cause};
+    use lot_model::JoinRule;
+    let standard = OfficeStandard::default_standard();
+    let title = if j.arms.iter().any(|a| a.end.is_none()) {
+        "T-Stoß".to_string()
+    } else if j.arms.len() == 2 {
+        "Ecke".to_string()
+    } else {
+        format!("Knoten aus {} Wänden", j.arms.len())
+    };
+    let mut lines = Vec::new();
+    for c in lot_geom::contacts(project, storey, j) {
+        let (a, b) = (standard.material(&c.first.material).name, standard.material(&c.second.material).name);
+        let line = if c.cuts { format!("{a} schneidet {b}") } else { format!("{a} stößt an {b}") };
+        if !lines.contains(&line) {
+            lines.push(line);
+        }
+    }
+    let arms = j
+        .arms
+        .iter()
+        .map(|a| {
+            let role = match a.role {
+                ArmRole::Mitre => "auf Gehrung",
+                ArmRole::Through => "läuft durch",
+                ArmRole::Butts => "stößt an, Schichten greifen ein",
+                ArmRole::Separate => "stößt stumpf an, nicht verbunden",
+            };
+            let cause = match a.cause {
+                Some(Cause::Exception) => " (Ausnahme)",
+                Some(Cause::Phase) => " (Neubau an Bestand)",
+                Some(Cause::Height) => " (höhere Wand)",
+                None => "",
+            };
+            let rule = a.end.and_then(|e| project.wall(a.wall).map(|w| w.joins[e.index()]));
+            JunctionArmInfo {
+                wall: a.wall.0,
+                label: lot_edit::select::label(project, a.wall),
+                role: format!("{role}{cause}"),
+                rule: match rule {
+                    Some(JoinRule::Through) => 1,
+                    Some(JoinRule::Butt) => 2,
+                    _ => 0,
+                },
+                commands: match a.end {
+                    Some(e) => [JoinRule::Auto, JoinRule::Through, JoinRule::Butt]
+                        .into_iter()
+                        .map(|r| Command::SetJoinRule(a.wall.0, e, r).id())
+                        .collect(),
+                    None => Vec::new(),
+                },
+            }
+        })
+        .collect();
+    JunctionInfo { title, lines, arms }
 }
 
 fn linear(srgb: [f32; 3], alpha: f32) -> [f32; 4] {

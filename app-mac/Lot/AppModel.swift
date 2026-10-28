@@ -17,6 +17,12 @@ final class AppModel {
     private(set) var spaces: [SpaceInfo] = []
     /// Gewählte Türen.
     private(set) var doors: [DoorInfo] = []
+    /// Gewählte Wände mit Lage der Bezugslinie.
+    private(set) var walls: [WallInfo] = []
+    /// Gewählter Anschluss (Doppelklick an einem Wandknoten), ADR 0045.
+    private(set) var junction: JunctionInfo?
+    /// Die sechs Lagen der Bezugslinie.
+    static let alignments = wallAlignments()
     /// Gewählte 2D-Texte.
     private(set) var texts: [TextInfo] = []
     /// Bauzustand der Auswahl: 0 Bestand, 1 Abbruch, 2 Neubau; `nil` ohne Bauteile mit Bauzustand,
@@ -111,6 +117,8 @@ final class AppModel {
         groups = state.selection.count > 1 ? document.selectionGroups(ids: state.selection) : []
         spaces = state.selection.isEmpty ? [] : document.spaces(ids: state.selection)
         doors = state.selection.isEmpty ? [] : document.doors(ids: state.selection)
+        walls = state.selection.isEmpty ? [] : document.walls(ids: state.selection)
+        junction = viewport.junction()
         let phases = Set(state.selection.compactMap { document.elementPhase(element: $0) })
         selectionPhase = phases.isEmpty ? nil : (phases.count == 1 ? Int(phases.first!) : -1)
         texts = state.selection.compactMap { id in
