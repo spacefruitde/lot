@@ -1197,6 +1197,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "lot-edit",
  "lot-geom",
  "lot-io",
  "lot-model",

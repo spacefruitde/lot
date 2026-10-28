@@ -12,6 +12,13 @@ struct ProjectSidebar: View {
         List(selection: selection) {
             if query.isEmpty {
                 Section {
+                    HStack(spacing: 6) {
+                        Spacer()
+                        Text("OKFF").frame(width: 44, alignment: .trailing)
+                        Text("Höhe").frame(width: 44, alignment: .trailing)
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                     ForEach(model.storeys, id: \.element) { StoreyRowView(row: $0).tag("storey/\($0.element)") }
                     if model.viewState?.hasBelow == true {
                         Toggle("Geschoss darunter blass", isOn: Binding(

@@ -123,7 +123,8 @@ pub struct Entry {
     pub detail: String,
     /// Bei Ansichten auf einem Planblatt: Blatt und Stelle in seiner Liste.
     pub placement: Option<(ElementId, usize)>,
-    /// Diese Platzierung ist die Heimat der Ansicht (Schnittmarken verweisen hierher).
+    /// Diese Platzierung ist die Heimat der Ansicht, die auf mehreren Blättern liegt
+    /// (Schnittmarken verweisen hierher).
     pub home: bool,
     /// Ansichten auf einem Planblatt.
     pub children: Vec<Entry>,
@@ -200,12 +201,10 @@ pub fn tree(project: &Project) -> Vec<Group> {
                     if let ViewContent::Presentation { .. } = placed.content {
                         title = format!("{title} (Präsentation)");
                     }
-                    let is_home = home(project, view) == Some((id, i));
-                    let detail = if is_home && placements(project, view).len() > 1 {
-                        format!("1:{} · Heimat", placed.scale)
-                    } else {
-                        format!("1:{}", placed.scale)
-                    };
+                    // Heimat zählt nur, wenn die Ansicht auf mehreren Blättern liegt.
+                    let is_home = home(project, view) == Some((id, i)) && placements(project, view).len() > 1;
+                    let detail =
+                        if is_home { format!("1:{} · Heimat", placed.scale) } else { format!("1:{}", placed.scale) };
                     Entry { placement: Some((id, i)), home: is_home, ..Entry::new(view, title, detail) }
                 })
                 .collect();

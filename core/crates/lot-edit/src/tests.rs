@@ -1792,6 +1792,9 @@ fn sheets_take_views_several_times_and_one_is_home() {
     };
     assert_eq!((number(&doc, s1), number(&doc, s2)), ("101".to_string(), "102".to_string()));
     ed.run(&mut doc, &Command::PlaceView(s1, view, 100.0, 150.0));
+    let only_once = navigation::tree(doc.project());
+    let sheets_once = only_once.iter().find(|g| g.title == "Planblätter").expect("Planblätter");
+    assert!(!sheets_once.entries[0].children[0].home, "auf einem Blatt keine Heimat zeigen");
     ed.run(&mut doc, &Command::PlaceView(s2, view, 200.0, 150.0));
     // 3D und Listen gehören nicht aufs Blatt.
     let r = ed.run(&mut doc, &Command::PlaceView(s1, navigation::ViewRef::Model, 0.0, 0.0));

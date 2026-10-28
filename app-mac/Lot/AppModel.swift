@@ -104,6 +104,14 @@ final class AppModel {
 
     init() {
         document = LotDocument.newEmpty()
+        #if DEBUG
+            // Zum Testen ohne Öffnen-Dialog: Testprojekt aus einem Ordner außerhalb von ~/Documents.
+            if let path = ProcessInfo.processInfo.environment["LOT_OPEN_TESTPROJECT"],
+               let doc = try? LotDocument.openTestproject(path: path)
+            {
+                document = doc
+            }
+        #endif
         refresh()
     }
 

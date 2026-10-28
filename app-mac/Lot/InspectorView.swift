@@ -21,9 +21,11 @@ struct InspectorView: View {
             if let junction = model.junction {
                 JunctionSection(junction: junction)
             } else if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty && model.sections.isEmpty {
-                Section {
-                    Text("Nichts gewählt. Eine Wand oder einen Raumstempel anklicken zeigt die Eigenschaften.")
-                        .foregroundStyle(.secondary)
+                if model.viewState?.view == .plan || model.viewState?.view == .section {
+                    Section {
+                        Text("Nichts gewählt. Eine Wand oder einen Raumstempel anklicken zeigt die Eigenschaften.")
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 if model.storeyAreas.contains(where: { $0.net > 0 }) {
                     Section("Flächen") {

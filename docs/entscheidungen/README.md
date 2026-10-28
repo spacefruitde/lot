@@ -52,6 +52,6 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0046](0046-zeichnen-und-fangen.md) | Zeichnen mit Zahleneingabe und Fangen | umgesetzt, Teile offen |
 | [0047](0047-oeffnungen.md) | Öffnungen: Rohbauöffnung zuerst, zwei Brüstungshöhen | umgesetzt, Teile offen, Ben testet |
 | [0048](0048-typen-und-eigenschaften.md) | Typen und Eigenschaften | umgesetzt, Teile offen, Ben testet |
-| [0049](0049-navigation.md) | Navigation: Seitenleiste, Geschosse, Schnitte und Blätter | entschieden, Ben testet |
+| [0049](0049-navigation.md) | Navigation: Seitenleiste, Geschosse, Schnitte und Blätter | umgesetzt, Teile offen, Ben testet |
 | [0050](0050-sichtbarkeit.md) | Sichtbarkeit und Ansichtsvorlagen | entschieden |
 | [0051](0051-decken-daecher-treppen.md) | Decken, Dächer und Treppen in der App | entschieden |
