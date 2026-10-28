@@ -260,3 +260,35 @@ pub fn edge_ops(
     }
     vec![Operation::Replace { id: roof_id, old: Element::Roof(old.clone()), new: Element::Roof(new) }]
 }
+
+/// Neigungsgriffe eines Dachs: je Traufe einer, so weit innen, wie das Dach
+/// auf 1 m Höhe steigt. Zieht man ihn zur Traufe, wird das Dach steiler.
+pub fn slope_grips(roof: &Roof) -> Vec<(usize, Point2)> {
+    let n = roof.outline.len();
+    roof.edges
+        .iter()
+        .enumerate()
+        .filter_map(|(i, e)| match *e {
+            RoofEdge::Eave { slope, .. } if slope > 0.5 => {
+                let (a, b) = (roof.outline[i], roof.outline[(i + 1) % n]);
+                let (ix, iy) = roof.inward(i);
+                let d = (1.0 / slope.to_radians().tan()).clamp(0.25, 6.0);
+                Some((i, Point2::new((a.x + b.x) / 2.0 + ix * d, (a.y + b.y) / 2.0 + iy * d)))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Neigung in Grad, wenn der Griff der Traufe `edge` nach `p` gezogen wird; auf 0,5° gerundet.
+pub fn slope_from_grip(roof: &Roof, edge: usize, p: Point2) -> Option<f64> {
+    let n = roof.outline.len();
+    let (a, b) = (*roof.outline.get(edge)?, roof.outline[(edge + 1) % n]);
+    let (ix, iy) = roof.inward(edge);
+    let d = (p.x - (a.x + b.x) / 2.0) * ix + (p.y - (a.y + b.y) / 2.0) * iy;
+    if d <= 0.05 {
+        return Some(75.0);
+    }
+    let slope = (1.0 / d).atan().to_degrees();
+    Some(((slope * 2.0).round() / 2.0).clamp(5.0, 75.0))
+}

@@ -193,6 +193,8 @@ pub enum Command {
     SetFallLayer(u32),
     /// Abläufe und Notüberläufe der gewählten Decken entfernen.
     ClearDrains,
+    /// Eine Treppe ändern: Form, Wendung, Maße, Vorschlag nach DIN 18065.
+    SetStair(u64, crate::stairs::StairEdit),
 }
 
 impl Command {

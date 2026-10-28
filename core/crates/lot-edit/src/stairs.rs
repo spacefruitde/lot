@@ -17,6 +17,8 @@ pub enum StairForm {
     /// Ein gerader Lauf.
     #[default]
     Straight,
+    /// Gerade mit Zwischenpodest.
+    Landing,
     /// Zweiläufig mit Halbpodest.
     HalfLanding,
     /// L-Form mit Viertelpodest.
@@ -30,8 +32,9 @@ pub enum StairForm {
 }
 
 impl StairForm {
-    pub const ALL: [StairForm; 6] = [
+    pub const ALL: [StairForm; 7] = [
         StairForm::Straight,
+        StairForm::Landing,
         StairForm::HalfLanding,
         StairForm::QuarterLanding,
         StairForm::QuarterWinder,
@@ -42,6 +45,7 @@ impl StairForm {
     pub fn title(self) -> &'static str {
         match self {
             StairForm::Straight => "gerade",
+            StairForm::Landing => "gerade mit Zwischenpodest",
             StairForm::HalfLanding => "zweiläufig mit Halbpodest",
             StairForm::QuarterLanding => "L-Form mit Viertelpodest",
             StairForm::QuarterWinder => "viertelgewendelt",
@@ -130,6 +134,10 @@ pub fn new_stair(
     let first = risers.div_ceil(2);
     let flights = match form {
         StairForm::Straight => vec![StairFlight { risers, landing: Landing::Straight }],
+        StairForm::Landing => vec![
+            StairFlight { risers: first, landing: Landing::Straight },
+            StairFlight { risers: risers - first, landing: Landing::Straight },
+        ],
         StairForm::HalfLanding => vec![
             StairFlight { risers: first, landing: if left { Landing::BackLeft } else { Landing::BackRight } },
             StairFlight { risers: risers - first, landing: Landing::Straight },
@@ -269,22 +277,49 @@ fn segment_distance(a: Point2, b: Point2, p: Point2) -> f64 {
 }
 
 /// Seiten der Läufe, an denen keine Wand steht: dort kommt ein Geländer hin.
-pub fn free_sides(project: &Project, stair: &Stair) -> Vec<(usize, WallSide)> {
+/// Bei gewendelten Treppen die innere und äußere Begrenzung, bei
+/// Spindeltreppen nur die äußere.
+pub fn free_sides(project: &Project, stair: &Stair) -> Vec<RailingPath> {
     let Some(layout) = project.stair_layout(stair) else { return Vec::new() };
     let z = project.storey(stair.storey).map_or(0.0, |s| s.elevation) + 1.0;
     let walls = lot_geom::solid_regions(project, stair.storey, z);
     let in_wall = |p: Point2| walls.iter().any(|r| project.wall(r.element).is_some() && r.area.contains([p.x, p.y]));
+    let id = ElementId(0);
     let mut out = Vec::new();
     for (i, f) in layout.flights.iter().enumerate() {
         for side in [WallSide::Left, WallSide::Right] {
             let [(a, _), (b, _)] = layout.flight_side(f, side, -0.05);
             let samples = [a, Point2::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0), b];
             if !samples.iter().any(|p| in_wall(*p)) {
-                out.push((i, side));
+                out.push(RailingPath::Flight { stair: id, flight: i, side });
+            }
+        }
+    }
+    if !layout.steps.is_empty() {
+        let sides: &[bool] = if stair.spiral.is_some() { &[true] } else { &[false, true] };
+        for &outer in sides {
+            let points = layout.steps_side(outer, -0.05);
+            if !points.iter().any(|(p, _)| in_wall(*p)) {
+                out.push(RailingPath::Steps { stair: id, outer });
             }
         }
     }
     out
+}
+
+/// Die Geländer einer Treppe an ihren freien Seiten, für die Treppe `id`.
+fn railings_for(project: &Project, id: ElementId, stair: &Stair) -> Vec<Railing> {
+    free_sides(project, stair)
+        .into_iter()
+        .map(|path| {
+            let path = match path {
+                RailingPath::Flight { flight, side, .. } => RailingPath::Flight { stair: id, flight, side },
+                RailingPath::Steps { outer, .. } => RailingPath::Steps { stair: id, outer },
+                p => p,
+            };
+            Railing { storey: stair.storey, path, height: RAILING_HEIGHT, phase: Default::default(), around: None }
+        })
+        .collect()
 }
 
 /// Operationen für eine neue Treppe mit Loch, Umwehrung und Geländern, und die Kennung der Treppe.
@@ -299,14 +334,7 @@ pub fn create_ops(project: &Project, stair: Stair) -> (ElementId, Vec<Operation>
     let mut scratch = project.clone();
     scratch.elements.insert(id, Element::Stair(stair.clone()));
     let mut ops = vec![Operation::Insert { id, element: Element::Stair(stair.clone()) }];
-    for (flight, side) in free_sides(&scratch, &stair) {
-        let railing = Railing {
-            storey: stair.storey,
-            path: RailingPath::Flight { stair: id, flight, side },
-            height: RAILING_HEIGHT,
-            phase: Default::default(),
-            around: None,
-        };
+    for railing in railings_for(&scratch, id, &stair) {
         ops.push(Operation::Insert { id: fresh(), element: Element::Railing(railing) });
     }
     if let (Some((host, _)), Some(outline)) = (slab_above(&scratch, &stair), hole_outline(&scratch, &stair)) {
@@ -404,5 +432,289 @@ fn exit_point(layout: &lot_model::StairLayout) -> Option<Point2> {
     match layout.flights.last() {
         Some(f) => Some(layout.end(f)),
         None => layout.walking.last().copied(),
+    }
+}
+
+/// Eine Änderung an einer Treppe aus dem Inspektor oder an einem Griff.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum StairEdit {
+    Form(StairForm),
+    /// Wendung oder Drehsinn nach links (gegen den Uhrzeigersinn).
+    TurnLeft(bool),
+    Width(f64),
+    Tread(f64),
+    /// Steigungen des ersten Laufs bei zwei Läufen; der zweite bekommt den Rest.
+    FirstRisers(u32),
+    Necessary(bool),
+    /// Treppenauge halbgewendelter Treppen.
+    Eye(f64),
+    /// Außenradius einer Spindeltreppe; der Antritt rückt mit.
+    Radius(f64),
+    Spindle(f64),
+    /// Steigungen und Auftritt neu nach DIN 18065 vorschlagen.
+    Propose,
+    /// Antritt verschieben (Griff).
+    Start(Point2),
+}
+
+/// Form einer bestehenden Treppe.
+pub fn form_of(stair: &Stair) -> StairForm {
+    if stair.spiral.is_some() {
+        return StairForm::Spiral;
+    }
+    match (stair.flights.len(), stair.flights.first().map(|f| f.landing)) {
+        (0 | 1, _) => StairForm::Straight,
+        (_, Some(Landing::Left | Landing::Right)) => StairForm::QuarterLanding,
+        (_, Some(Landing::BackLeft | Landing::BackRight)) => StairForm::HalfLanding,
+        (_, Some(Landing::WinderLeft | Landing::WinderRight)) => StairForm::QuarterWinder,
+        (_, Some(Landing::WinderBackLeft | Landing::WinderBackRight)) => StairForm::HalfWinder,
+        _ => StairForm::Landing,
+    }
+}
+
+/// Wendet die Treppe nach links (oder dreht gegen den Uhrzeigersinn)?
+pub fn turns_left(stair: &Stair) -> bool {
+    match (stair.spiral, stair.flights.first().map(|f| f.landing)) {
+        (Some(s), _) => !s.clockwise,
+        (None, Some(Landing::Right | Landing::BackRight | Landing::WinderRight | Landing::WinderBackRight)) => false,
+        _ => true,
+    }
+}
+
+/// Laufrichtung am Antritt, Länge 1.
+fn heading(stair: &Stair) -> Point2 {
+    match stair.spiral {
+        Some(sp) => {
+            // Tangente am Antritt in Drehrichtung.
+            let (rx, ry) = (stair.start.x - sp.center.x, stair.start.y - sp.center.y);
+            let len = rx.hypot(ry).max(1e-12);
+            if sp.clockwise { Point2::new(ry / len, -rx / len) } else { Point2::new(-ry / len, rx / len) }
+        }
+        None => {
+            let len = stair.direction.x.hypot(stair.direction.y).max(1e-12);
+            Point2::new(stair.direction.x / len, stair.direction.y / len)
+        }
+    }
+}
+
+/// Die Treppe nach der Änderung.
+pub fn edited(project: &Project, stair: &Stair, edit: &StairEdit) -> Option<Stair> {
+    let mut s = stair.clone();
+    let total = stair.risers();
+    let left = turns_left(stair);
+    let rebuild = |s: &Stair, form: StairForm, left: bool| -> Option<Stair> {
+        let dir = heading(s);
+        // Neu aufbauen an Antritt und Richtung, Maße der bisherigen Treppe behalten.
+        let start = s.start;
+        let toward = Point2::new(start.x + dir.x, start.y + dir.y);
+        let mut n = if form == StairForm::Spiral {
+            let w = s.width.max(0.6);
+            let r = w + SPINDLE;
+            let normal = if left { Point2::new(-dir.y, dir.x) } else { Point2::new(dir.y, -dir.x) };
+            let center = Point2::new(start.x + normal.x * r, start.y + normal.y * r);
+            new_stair(project, s.storey, center, start, form, left)?
+        } else {
+            new_stair(project, s.storey, start, toward, form, left)?
+        };
+        if form != StairForm::Spiral {
+            n.width = s.width;
+            n.tread = s.tread;
+            let first = total.div_ceil(2);
+            if n.flights.len() == 2 {
+                n.flights[0].risers = first;
+                n.flights[1].risers = total - first;
+            } else if let Some(f) = n.flights.first_mut() {
+                f.risers = total;
+            }
+        }
+        n.necessary = s.necessary;
+        n.phase = s.phase;
+        n.thickness = s.thickness;
+        Some(n)
+    };
+    match edit {
+        StairEdit::Form(form) => s = rebuild(stair, *form, left)?,
+        StairEdit::TurnLeft(l) => {
+            if let Some(sp) = s.spiral.as_mut() {
+                sp.clockwise = !l;
+            } else {
+                for f in &mut s.flights {
+                    f.landing = match (f.landing, l) {
+                        (Landing::Left | Landing::Right, true) => Landing::Left,
+                        (Landing::Left | Landing::Right, false) => Landing::Right,
+                        (Landing::BackLeft | Landing::BackRight, true) => Landing::BackLeft,
+                        (Landing::BackLeft | Landing::BackRight, false) => Landing::BackRight,
+                        (Landing::WinderLeft | Landing::WinderRight, true) => Landing::WinderLeft,
+                        (Landing::WinderLeft | Landing::WinderRight, false) => Landing::WinderRight,
+                        (Landing::WinderBackLeft | Landing::WinderBackRight, true) => Landing::WinderBackLeft,
+                        (Landing::WinderBackLeft | Landing::WinderBackRight, false) => Landing::WinderBackRight,
+                        (l, _) => l,
+                    };
+                }
+            }
+        }
+        StairEdit::Width(w) => {
+            if *w < 0.4 {
+                return None;
+            }
+            match s.spiral.as_mut() {
+                Some(sp) => sp.radius = sp.spindle + w,
+                None => s.width = *w,
+            }
+            s.width = *w;
+        }
+        StairEdit::Tread(a) => s.tread = a.clamp(0.15, 0.45),
+        StairEdit::FirstRisers(r) => {
+            if s.flights.len() < 2 || *r < 2 || *r + 2 > total {
+                return None;
+            }
+            s.flights[0].risers = *r;
+            s.flights[1].risers = total - r;
+        }
+        StairEdit::Necessary(n) => s.necessary = *n,
+        StairEdit::Eye(e) => s.eye = e.clamp(0.0, 1.0),
+        StairEdit::Radius(r) => {
+            let sp = s.spiral.as_mut()?;
+            if *r < sp.spindle + 0.4 {
+                return None;
+            }
+            let (dx, dy) = (s.start.x - sp.center.x, s.start.y - sp.center.y);
+            let len = dx.hypot(dy).max(1e-12);
+            s.start = Point2::new(sp.center.x + dx / len * r, sp.center.y + dy / len * r);
+            sp.radius = *r;
+            s.width = r - sp.spindle;
+        }
+        StairEdit::Spindle(r) => {
+            let sp = s.spiral.as_mut()?;
+            sp.spindle = r.clamp(0.0, sp.radius - 0.4);
+            s.width = sp.radius - sp.spindle;
+        }
+        StairEdit::Propose => {
+            let storey = project.storey(s.storey)?;
+            let (risers, tread) = propose(storey.height, project.info().building, s.necessary);
+            s.tread = tread;
+            match s.flights.len() {
+                0 => {}
+                1 => s.flights[0].risers = risers,
+                _ => {
+                    let first = risers.div_ceil(2);
+                    s.flights[0].risers = first;
+                    s.flights[1].risers = risers - first;
+                    for f in s.flights.iter_mut().skip(2) {
+                        f.risers = 0;
+                    }
+                    s.flights.truncate(2);
+                }
+            }
+        }
+        StairEdit::Start(p) => {
+            if let Some(sp) = s.spiral.as_mut() {
+                let (dx, dy) = (p.x - s.start.x, p.y - s.start.y);
+                sp.center = Point2::new(sp.center.x + dx, sp.center.y + dy);
+            }
+            s.start = *p;
+        }
+    }
+    Some(s)
+}
+
+/// Operationen für eine Änderung an einer Treppe; die Geländer an den Läufen
+/// setzt Lot danach neu an die freien Seiten, Loch und Umwehrung folgen.
+pub fn edit_ops(project: &Project, id: ElementId, edit: &StairEdit) -> Result<Vec<Operation>, String> {
+    let stair = project.stair(id).ok_or("Diese Treppe gibt es nicht")?;
+    let new = edited(project, stair, edit).ok_or("Das geht mit dieser Treppe nicht")?;
+    if new == *stair {
+        return Ok(Vec::new());
+    }
+    let mut ops = vec![Operation::Replace { id, old: Element::Stair(stair.clone()), new: Element::Stair(new.clone()) }];
+    for (rid, e) in &project.elements {
+        if let Element::Railing(r) = e
+            && matches!(r.path, RailingPath::Flight { stair, .. } | RailingPath::Steps { stair, .. } if stair == id)
+        {
+            ops.push(Operation::Delete { id: *rid, element: e.clone() });
+        }
+    }
+    let mut scratch = project.clone();
+    scratch.elements.insert(id, Element::Stair(new.clone()));
+    for (next, railing) in (project.next_id().0..).zip(railings_for(&scratch, id, &new)) {
+        ops.push(Operation::Insert { id: ElementId(next), element: Element::Railing(railing) });
+    }
+    Ok(ops)
+}
+
+/// Griffe an einer gewählten Treppe: Laufbreite, Aufteilung der Läufe, Radius.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StairGrip {
+    /// Außen am Antritt: Laufbreite ziehen.
+    Width,
+    /// Mitte des Podests oder der Wendelung: verschiebt die Aufteilung der Läufe.
+    Split,
+    /// Bei Spindeltreppen außen am Antritt: Radius ziehen.
+    Radius,
+    /// Am Antritt: Treppe verschieben.
+    Start,
+}
+
+/// Lage der Griffe einer Treppe.
+pub fn grips(stair: &Stair) -> Vec<(StairGrip, Point2)> {
+    if let Some(sp) = stair.spiral {
+        // Der Antritt liegt außen: dort zieht man den Radius; am Mittelpunkt verschiebt man.
+        return vec![(StairGrip::Start, sp.center), (StairGrip::Radius, stair.start)];
+    }
+    let mut out = vec![(StairGrip::Start, stair.start)];
+    let dir = heading(stair);
+    let left = turns_left(stair);
+    let outer = if left { Point2::new(dir.y, -dir.x) } else { Point2::new(-dir.y, dir.x) };
+    let h = stair.width / 2.0;
+    out.push((StairGrip::Width, Point2::new(stair.start.x + outer.x * h, stair.start.y + outer.y * h)));
+    if stair.flights.len() >= 2
+        && let Some(f) = stair.flights.first()
+    {
+        let along = (f.risers as f64 - 0.5) * stair.tread;
+        let along = match f.landing {
+            Landing::Straight | Landing::Left | Landing::Right | Landing::BackLeft | Landing::BackRight => {
+                (f.risers.max(1) - 1) as f64 * stair.tread + stair.width / 2.0
+            }
+            _ => along,
+        };
+        out.push((StairGrip::Split, Point2::new(stair.start.x + dir.x * along, stair.start.y + dir.y * along)));
+    }
+    out
+}
+
+/// Was ein Griff, gezogen nach `p`, an der Treppe ändert.
+pub fn grip_edit(stair: &Stair, grip: StairGrip, p: Point2) -> Option<StairEdit> {
+    let round = |v: f64, step: f64| (v / step).round() * step;
+    match grip {
+        StairGrip::Start => match stair.spiral {
+            Some(sp) => {
+                let (dx, dy) = (p.x - sp.center.x, p.y - sp.center.y);
+                Some(StairEdit::Start(Point2::new(stair.start.x + dx, stair.start.y + dy)))
+            }
+            None => Some(StairEdit::Start(p)),
+        },
+        StairGrip::Radius => {
+            let sp = stair.spiral?;
+            Some(StairEdit::Radius(round(p.distance(sp.center), 0.05)))
+        }
+        StairGrip::Width => {
+            let dir = heading(stair);
+            let left = turns_left(stair);
+            let outer = if left { Point2::new(dir.y, -dir.x) } else { Point2::new(-dir.y, dir.x) };
+            let d = (p.x - stair.start.x) * outer.x + (p.y - stair.start.y) * outer.y;
+            Some(StairEdit::Width(round(2.0 * d, 0.05).max(0.5)))
+        }
+        StairGrip::Split => {
+            let dir = heading(stair);
+            let f = stair.flights.first()?;
+            let along = (p.x - stair.start.x) * dir.x + (p.y - stair.start.y) * dir.y;
+            let risers = match f.landing {
+                Landing::Straight | Landing::Left | Landing::Right | Landing::BackLeft | Landing::BackRight => {
+                    ((along - stair.width / 2.0) / stair.tread).round() + 1.0
+                }
+                _ => (along / stair.tread + 0.5).round(),
+            };
+            Some(StairEdit::FirstRisers(risers.max(2.0) as u32))
+        }
     }
 }

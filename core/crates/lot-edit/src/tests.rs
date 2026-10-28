@@ -2281,3 +2281,131 @@ fn winder_and_spiral_stairs_from_the_tool_pass_din_18065() {
         assert_eq!(openings_with_stair(&doc).len(), 1, "{form:?}");
     }
 }
+
+fn drag_grip(doc: &mut Document, ed: &mut Editor, from: Point2, to: Point2) {
+    ed.pointer_moved(doc.project(), input(from.x, from.y));
+    ed.pointer_down(doc, input(from.x, from.y), 1);
+    ed.pointer_dragged(doc.project(), input((from.x + to.x) / 2.0, (from.y + to.y) / 2.0));
+    ed.pointer_dragged(doc.project(), input(to.x, to.y));
+    ed.pointer_up(doc);
+}
+
+fn stair_in_big_house(form: stairs::StairForm, a: (f64, f64), b: (f64, f64)) -> (Document, Editor, ElementId) {
+    let (mut doc, mut ed, _) = big_house();
+    ed.run(&mut doc, &Command::StairTool(form));
+    click(&mut doc, &mut ed, a.0, a.1);
+    click(&mut doc, &mut ed, b.0, b.1);
+    let id = ed.selection[0];
+    ed.run(&mut doc, &Command::SelectTool);
+    ed.run(&mut doc, &Command::SetSelection(vec![id.0]));
+    (doc, ed, id)
+}
+
+fn railings_of(doc: &Document, id: ElementId) -> Vec<lot_model::RailingPath> {
+    doc.project()
+        .elements
+        .values()
+        .filter_map(|e| match e {
+            lot_model::Element::Railing(r) => match r.path {
+                lot_model::RailingPath::Flight { stair, .. } | lot_model::RailingPath::Steps { stair, .. }
+                    if stair == id =>
+                {
+                    Some(r.path.clone())
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn stairs_change_form_and_side_and_railings_follow() {
+    let (mut doc, mut ed, id) = stair_in_big_house(stairs::StairForm::HalfLanding, (6.0, 0.8), (6.0, 4.0));
+    assert!(railings_of(&doc, id).iter().all(|r| matches!(r, lot_model::RailingPath::Flight { .. })));
+    // Halbpodest wird halbgewendelt: Geländer jetzt über die Stufen.
+    ed.run(&mut doc, &Command::SetStair(id.0, stairs::StairEdit::Form(stairs::StairForm::HalfWinder)));
+    let s = doc.project().stair(id).unwrap().clone();
+    assert_eq!(stairs::form_of(&s), stairs::StairForm::HalfWinder);
+    assert_eq!(s.risers(), 16, "Steigungen bleiben");
+    assert!((s.eye - stairs::EYE).abs() < 1e-9);
+    assert!(railings_of(&doc, id).iter().any(|r| matches!(r, lot_model::RailingPath::Steps { .. })));
+    // Seite wechseln.
+    assert!(stairs::turns_left(&s));
+    ed.run(&mut doc, &Command::SetStair(id.0, stairs::StairEdit::TurnLeft(false)));
+    assert!(!stairs::turns_left(doc.project().stair(id).unwrap()));
+    // Ein Schritt zurück stellt die Wendung wieder her.
+    doc.undo().unwrap();
+    assert!(stairs::turns_left(doc.project().stair(id).unwrap()));
+}
+
+#[test]
+fn stair_grips_change_width_split_and_radius() {
+    let (mut doc, mut ed, id) = stair_in_big_house(stairs::StairForm::HalfLanding, (6.0, 0.8), (6.0, 4.0));
+    let s = doc.project().stair(id).unwrap().clone();
+    let grips = stairs::grips(&s);
+    let width = grips.iter().find(|(g, _)| *g == stairs::StairGrip::Width).unwrap().1;
+    // Laufbreite am Griff: 10 cm weiter nach außen ergibt 20 cm mehr Breite.
+    let dir = (width.x - s.start.x, width.y - s.start.y);
+    let len = dir.0.hypot(dir.1);
+    let to = Point2::new(width.x + dir.0 / len * 0.1, width.y + dir.1 / len * 0.1);
+    drag_grip(&mut doc, &mut ed, width, to);
+    let s2 = doc.project().stair(id).unwrap().clone();
+    assert!((s2.width - (s.width + 0.2)).abs() < 1e-6, "{} -> {}", s.width, s2.width);
+    // Aufteilung: das Podest um zwei Auftritte nach vorn.
+    let split = stairs::grips(&s2).into_iter().find(|(g, _)| *g == stairs::StairGrip::Split).unwrap().1;
+    drag_grip(&mut doc, &mut ed, split, Point2::new(split.x, split.y + 2.0 * s2.tread));
+    let s3 = doc.project().stair(id).unwrap().clone();
+    assert_eq!(s3.flights[0].risers, s2.flights[0].risers + 2);
+    assert_eq!(s3.risers(), 16);
+    // Spindeltreppe: Radius am Antritt.
+    let (mut doc, mut ed, id) = stair_in_big_house(stairs::StairForm::Spiral, (5.0, 3.0), (6.4, 3.0));
+    let s = doc.project().stair(id).unwrap().clone();
+    let r0 = s.spiral.unwrap().radius;
+    drag_grip(&mut doc, &mut ed, s.start, Point2::new(s.start.x + 0.2, s.start.y));
+    let r1 = doc.project().stair(id).unwrap().spiral.unwrap().radius;
+    assert!((r1 - r0 - 0.2).abs() < 1e-6, "{r0} -> {r1}");
+}
+
+#[test]
+fn landings_follow_din_18065_rules() {
+    let (mut doc, mut ed, id) = stair_in_big_house(stairs::StairForm::Straight, (1.0, 2.0), (8.0, 2.0));
+    // 20 Steigungen in einem Lauf: Hinweis nach Nr. 6.3.2.
+    let mut s = doc.project().stair(id).unwrap().clone();
+    s.flights[0].risers = 20;
+    let check = lot_rules::stairs::check_stair(doc.project(), id, &s).unwrap();
+    assert!(check.notes.iter().any(|n| n.contains("6.3.2")), "{:?}", check.notes);
+    // Zwischenpodest einfügen: Form „gerade mit Zwischenpodest“, der Hinweis ist weg.
+    ed.run(&mut doc, &Command::SetStair(id.0, stairs::StairEdit::Form(stairs::StairForm::Landing)));
+    let s = doc.project().stair(id).unwrap().clone();
+    assert_eq!(s.flights.len(), 2);
+    let check = lot_rules::stairs::check_stair(doc.project(), id, &s).unwrap();
+    assert!(check.notes.is_empty() && check.problems.is_empty(), "{:?} {:?}", check.notes, check.problems);
+    // Schmales Viertelpodest: Podestauftritt unter 3 · a (Nr. 6.3.3).
+    let mut narrow = s.clone();
+    narrow.flights[0].landing = lot_model::Landing::Left;
+    narrow.width = 0.9;
+    narrow.tread = 0.32;
+    let check = lot_rules::stairs::check_stair(doc.project(), id, &narrow).unwrap();
+    assert!(check.problems.iter().any(|p| p.contains("6.3.3")), "{:?}", check.problems);
+}
+
+#[test]
+fn roof_slope_grip_sets_the_slope() {
+    let (mut doc, mut ed) = house();
+    ed.run(&mut doc, &Command::GableRoofFromWalls);
+    let (roof_id, roof) = doc.project().roofs_on(ed.storey).next().map(|(id, r)| (id, r.clone())).unwrap();
+    ed.run(&mut doc, &Command::SetSelection(vec![roof_id.0]));
+    let (edge, grip) = roofs::slope_grips(&roof)[0];
+    // Der Griff liegt, wo das Dach 1 m steigt; nach außen bis 0,5 m vor der Traufe: 63,5°.
+    let n = roof.outline.len();
+    let (a, b) = (roof.outline[edge], roof.outline[(edge + 1) % n]);
+    let (ix, iy) = roof.inward(edge);
+    let to = Point2::new((a.x + b.x) / 2.0 + ix * 0.5, (a.y + b.y) / 2.0 + iy * 0.5);
+    drag_grip(&mut doc, &mut ed, grip, to);
+    let slope = match doc.project().roof(roof_id).unwrap().edges[edge] {
+        lot_model::RoofEdge::Eave { slope, .. } => slope,
+        _ => 0.0,
+    };
+    assert!((slope - 63.5).abs() < 1e-9, "{slope}");
+}
