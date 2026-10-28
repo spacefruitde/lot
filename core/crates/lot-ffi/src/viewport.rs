@@ -801,16 +801,14 @@ impl Viewport {
         run_editor(&mut s, &command)
     }
 
+    /// Art der gezeigten Ansicht, ohne den übrigen Zustand: für jedes Zeigerereignis.
+    pub fn kind(&self) -> ViewKind {
+        view_kind(self.lock().shown)
+    }
+
     pub fn state(&self) -> ViewState {
         let s = self.lock();
-        let view = match s.shown {
-            ViewRef::FloorPlan(_) => ViewKind::Plan,
-            ViewRef::Model => ViewKind::Model,
-            ViewRef::Section(_) => ViewKind::Section,
-            ViewRef::SitePlan => ViewKind::SitePlan,
-            ViewRef::Sheet(_) => ViewKind::Sheet,
-            ViewRef::Schedule(_) => ViewKind::Schedule,
-        };
+        let view = view_kind(s.shown);
         let (title, has_below) = match &s.document {
             Some(doc) => {
                 let doc = doc.lock();
@@ -999,6 +997,17 @@ impl Viewport {
             update_overlay(&mut s);
         }
         response.into()
+    }
+}
+
+fn view_kind(view: ViewRef) -> ViewKind {
+    match view {
+        ViewRef::FloorPlan(_) => ViewKind::Plan,
+        ViewRef::Model => ViewKind::Model,
+        ViewRef::Section(_) => ViewKind::Section,
+        ViewRef::SitePlan => ViewKind::SitePlan,
+        ViewRef::Sheet(_) => ViewKind::Sheet,
+        ViewRef::Schedule(_) => ViewKind::Schedule,
     }
 }
 

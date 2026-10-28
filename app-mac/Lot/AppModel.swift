@@ -68,10 +68,37 @@ final class AppModel {
     /// Hinweise aus dem Prüfbericht im Grundriss.
     var showFindings = false
 
-    /// Die Ansicht, sobald ihr NSView steht.
-    private(set) weak var viewport: Viewport?
-    /// Bittet die Ansicht, neu zu zeichnen.
-    var requestRedraw: (() -> Void)?
+    /// Die Ansichten, sobald ihr NSView steht: links (0) und, nebeneinander,
+    /// rechts (1). Befehle, Seitenleiste und Inspektor gehören zur aktiven (ADR 0049).
+    private(set) weak var primary: Viewport?
+    private(set) weak var secondary: Viewport?
+    private(set) var activePane = 0
+    /// Zwei Ansichten nebeneinander mit gemeinsamer Auswahl.
+    var showSplit = false
+    /// Was die rechte Ansicht zeigen soll, sobald sie steht.
+    private var pendingSecond: String?
+    /// Titel jeder Ansicht, etwa „Schnitt A-A“.
+    private(set) var paneTitles: [Int: String] = [:]
+    private var redrawers: [Int: () -> Void] = [:]
+
+    /// Die aktive Ansicht.
+    var viewport: Viewport? { activePane == 1 ? (secondary ?? primary) : primary }
+    var viewports: [Viewport] { [primary, secondary].compactMap { $0 } }
+
+    /// Bittet beide Ansichten, neu zu zeichnen.
+    var requestRedraw: (() -> Void)? {
+        { [weak self] in self?.redrawers.values.forEach { $0() } }
+    }
+
+    /// Seitenleiste „Projekt“ und Geschossleiste.
+    private(set) var tree: [NavGroup] = []
+    private(set) var storeys: [StoreyRow] = []
+    /// Gewählte Schnitte und Ansichten.
+    private(set) var sections: [SectionInfo] = []
+    /// Auf dem gezeigten Blatt: das Blatt und die gewählte Ansicht darauf.
+    private(set) var sheet: SheetInfo?
+    private(set) var placed: PlacedInfo?
+    static let formats = sheetFormats()
 
     static let fileType = UTType(filenameExtension: "lot") ?? .data
 
@@ -84,38 +111,146 @@ final class AppModel {
         fileURL?.deletingPathExtension().lastPathComponent ?? document.name()
     }
 
-    var isPlan: Bool { viewState?.view != .model }
+    var isPlan: Bool { viewState?.view == .plan }
 
     // MARK: Ansicht
 
-    func attach(_ viewport: Viewport) {
-        self.viewport = viewport
+    func attach(_ viewport: Viewport, pane: Int) {
+        if pane == 1 {
+            secondary = viewport
+        } else {
+            primary = viewport
+        }
         stats.rebuildMs = viewport.setDocument(document: document)
         loadMissingUnderlays()
+        if pane == 1 {
+            // Rechts zuerst, was gewünscht ist, sonst der erste Schnitt oder 3D.
+            let first = tree.first { $0.title == "Schnitte und Ansichten" }?.entries.first?.view
+            _ = viewport.go(target: pendingSecond ?? first ?? "Model")
+            pendingSecond = nil
+            if let ids = primary?.state().selection { viewport.setSelection(ids: ids) }
+        }
         updateViewState()
     }
 
-    /// Ergebnis eines Ereignisses in der Ansicht verarbeiten.
+    func setRedraw(pane: Int, _ redraw: @escaping () -> Void) {
+        redrawers[pane] = redraw
+    }
+
+    /// Die Ansicht ist weg, etwa nach Schließen der rechten Hälfte.
+    func detach(pane: Int) {
+        redrawers[pane] = nil
+        paneTitles[pane] = nil
+        if pane == 1 {
+            secondary = nil
+            activePane = 0
+            updateViewState()
+        }
+    }
+
+    /// Klick in eine Ansicht macht sie zur aktiven.
+    func activate(pane: Int) {
+        guard pane != activePane, pane == 0 || secondary != nil else { return }
+        activePane = pane
+        updateViewState()
+    }
+
+    private func viewport(_ pane: Int) -> Viewport? { pane == 1 ? secondary : primary }
+
+    /// Ergebnis eines Ereignisses in der aktiven Ansicht verarbeiten.
     func handle(_ result: EventResult) {
+        handle(result, pane: activePane)
+    }
+
+    /// Ergebnis eines Ereignisses in einer Ansicht: Modelländerungen und die
+    /// Auswahl gehen an die andere, „öffnen“ springt zur Ansicht.
+    func handle(_ result: EventResult, pane: Int) {
         if let error = result.error {
             errorMessage = error
         }
+        let other = viewport(pane == 1 ? 0 : 1)
         if result.modelChanged {
+            other?.refresh()
             refresh()
         }
+        if let source = viewport(pane), let other {
+            other.setSelection(ids: source.state().selection)
+        }
+        if let open = result.open, let source = viewport(pane) {
+            let r = source.go(target: open)
+            if let error = r.error { errorMessage = error }
+        }
         updateViewState()
+        requestRedraw?()
     }
 
     func run(_ id: String) {
+        if id.hasPrefix("go:") {
+            go(String(id.dropFirst(3)))
+            return
+        }
         guard let viewport else { return }
         handle(viewport.runCommand(id: id))
-        requestRedraw?()
     }
 
     func setView(_ view: ViewKind) {
         viewport?.setView(view: view)
         updateViewState()
         requestRedraw?()
+    }
+
+    /// Springt zu einer Ansicht oder einem Raum (ADR 0049), in der aktiven Ansicht.
+    func go(_ target: String) {
+        guard let viewport else { return }
+        handle(viewport.go(target: target))
+    }
+
+    /// Öffnet eine Ansicht in der rechten Hälfte; teilt das Fenster, falls nötig.
+    func openBeside(_ target: String) {
+        if let secondary {
+            activePane = 1
+            handle(secondary.go(target: target), pane: 1)
+        } else {
+            pendingSecond = target
+            showSplit = true
+        }
+    }
+
+    func back() {
+        guard let viewport else { return }
+        handle(viewport.back())
+    }
+
+    func forward() {
+        guard let viewport else { return }
+        handle(viewport.forward())
+    }
+
+    /// ⌘↑ und ⌘↓: ein Geschoss höher oder tiefer.
+    func stepStorey(up: Bool) {
+        guard let viewport else { return }
+        handle(viewport.stepStorey(up: up))
+    }
+
+    func setFadedBelow(_ show: Bool) {
+        viewport?.setFadedBelow(showIt: show)
+        updateViewState()
+        requestRedraw?()
+    }
+
+    /// Ansicht aus der Seitenleiste auf das Blatt in dieser Hälfte legen; Lage
+    /// in Punkten von der Mitte, y nach oben.
+    func dropView(_ view: String, pane: Int, x: Double, y: Double) {
+        guard let target = viewport(pane) else { return }
+        activePane = pane
+        handle(target.dropView(view: view, x: Float(x), y: Float(y)), pane: pane)
+    }
+
+    /// Treffer für ⌘K: Ansichten und Räume.
+    func jumps(_ query: String) -> [CommandItem] {
+        document.search(query: query).map {
+            CommandItem(id: "go:" + $0.target, title: $0.title, shortcut: $0.detail, group: "Springen")
+        }
     }
 
     func zoomToFit() {
@@ -128,10 +263,20 @@ final class AppModel {
         document.elementLabel(element: element)
     }
 
-    private func updateViewState() {
+    func updateViewState() {
+        for (pane, v) in [(0, primary), (1, secondary)] {
+            paneTitles[pane] = v?.state().title
+        }
         guard let viewport else { return }
         let state = viewport.state()
         viewState = state
+        sections = state.selection.isEmpty ? [] : document.sections(ids: state.selection)
+        placed = viewport.placedInfo()
+        if state.view == .sheet, let id = UInt64(state.shown.dropFirst("Sheet(".count).dropLast()) {
+            sheet = document.sheetInfo(sheet: id)
+        } else {
+            sheet = nil
+        }
         commands = viewport.commands()
         parameters = state.selection.isEmpty ? [] : document.parameters(ids: state.selection)
         groups = state.selection.count > 1 ? document.selectionGroups(ids: state.selection) : []
@@ -160,9 +305,7 @@ final class AppModel {
         } catch {
             errorMessage = Self.message(for: error)
         }
-        if let viewport {
-            stats.rebuildMs = viewport.refresh()
-        }
+        refreshViews()
         refresh()
         updateViewState()
         requestRedraw?()
@@ -175,9 +318,7 @@ final class AppModel {
         } catch {
             errorMessage = Self.message(for: error)
         }
-        if let viewport {
-            stats.rebuildMs = viewport.refresh()
-        }
+        refreshViews()
         refresh()
         updateViewState()
         requestRedraw?()
@@ -190,9 +331,7 @@ final class AppModel {
         } catch {
             errorMessage = Self.message(for: error)
         }
-        if let viewport {
-            stats.rebuildMs = viewport.refresh()
-        }
+        refreshViews()
         refresh()
         updateViewState()
         requestRedraw?()
@@ -205,9 +344,7 @@ final class AppModel {
         } catch {
             errorMessage = Self.message(for: error)
         }
-        if let viewport {
-            stats.rebuildMs = viewport.refresh()
-        }
+        refreshViews()
         refresh()
         updateViewState()
         requestRedraw?()
@@ -227,9 +364,7 @@ final class AppModel {
         } catch {
             errorMessage = Self.message(for: error)
         }
-        if let viewport {
-            stats.rebuildMs = viewport.refresh()
-        }
+        refreshViews()
         refresh()
         libraryItems = document.libraryItems()
         updateViewState()
@@ -263,9 +398,7 @@ final class AppModel {
         } catch {
             errorMessage = Self.message(for: error)
         }
-        if let viewport {
-            stats.rebuildMs = viewport.refresh()
-        }
+        refreshViews()
         refresh()
         updateViewState()
         requestRedraw?()
@@ -285,9 +418,7 @@ final class AppModel {
         } catch {
             errorMessage = Self.message(for: error)
         }
-        if let viewport {
-            stats.rebuildMs = viewport.refresh()
-        }
+        refreshViews()
         refresh()
         updateViewState()
         requestRedraw?()
@@ -347,15 +478,24 @@ final class AppModel {
         write(to: url)
     }
 
+    /// Nach einer Änderung außerhalb der Ansichten: beide neu rechnen.
+    func refreshViews() {
+        for v in viewports {
+            let ms = v.refresh()
+            if v === viewport { stats.rebuildMs = ms }
+        }
+    }
+
     private func replace(with document: LotDocument, url: URL?) {
         self.document = document
         findings = []
         fileURL = url
         documentGeneration += 1
-        if let viewport {
-            stats.rebuildMs = viewport.setDocument(document: document)
-            loadMissingUnderlays()
+        refresh()
+        for v in viewports {
+            stats.rebuildMs = v.setDocument(document: document)
         }
+        loadMissingUnderlays()
         refresh()
         updateViewState()
         requestRedraw?()
@@ -371,6 +511,8 @@ final class AppModel {
     }
 
     private func refresh() {
+        tree = document.projectTree()
+        storeys = document.storeyRows()
         canUndo = document.canUndo()
         canRedo = document.canRedo()
         storeyAreas = document.storeyAreas()

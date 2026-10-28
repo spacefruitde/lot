@@ -13,9 +13,14 @@ struct InspectorView: View {
                     Button("Gelesen") { model.notices.removeAll() }
                 }
             }
+            if let placed = model.placed {
+                PlacedSection(info: placed)
+            } else if let sheet = model.sheet {
+                SheetSection(info: sheet)
+            }
             if let junction = model.junction {
                 JunctionSection(junction: junction)
-            } else if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty {
+            } else if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty && model.sections.isEmpty {
                 Section {
                     Text("Nichts gewählt. Eine Wand oder einen Raumstempel anklicken zeigt die Eigenschaften.")
                         .foregroundStyle(.secondary)
@@ -35,6 +40,7 @@ struct InspectorView: View {
                     }
                 }
             } else {
+                ForEach(model.sections, id: \.element) { SectionSection(info: $0) }
                 ForEach(model.spaces, id: \.element) { SpaceSection(space: $0) }
                 ForEach(model.texts, id: \.element) { TextSection(info: $0) }
                 if let phase = model.selectionPhase {
@@ -87,7 +93,7 @@ struct InspectorView: View {
                     }
                 }
             }
-            if let state = model.viewState {
+            if let state = model.viewState, state.view == .plan {
                 Section("Zeichnen") {
                     LabeledContent("Geschoss", value: state.storey)
                     LabeledContent("Wandaufbau", value: state.wallType)
@@ -103,6 +109,8 @@ struct InspectorView: View {
                     Text("Ändern: MV verschieben, CO kopieren, RO drehen, MM spiegeln, AR Reihe, OF versetzen, AL ausrichten, TR stutzen, SL teilen; ⏎ wiederholt")
                     Text("Fangen: Name am Zeiger, ⇥ nächster Fangpunkt, Q Bezugspunkt mit Spurlinien (Länge tippen setzt den Punkt), SE SM SI SP SN SO für einen Klick, ZR Zeichenrichtung von einer Kante, WR Wandrechteck")
                     Text("Zeichnen: klicken oder tippen, etwa 3,65 · <30 · 3,65<30 · @1,20;0,80 · 2*1,25+0,115, dann ⏎; ⇧ rechtwinklig")
+                    Text("Navigation: Seitenleiste links (⌃⌘S), ⌘K springt auch zu Ansichten und Räumen, ⌘[ und ⌘] zurück und vor, ⌘↑ und ⌘↓ Geschoss, ⌥⌘N nebeneinander")
+                    Text("Schnitte: SC zeichnen, AN Ansicht, Leertaste dreht den Blick, Doppelklick auf die Marke öffnet den Schnitt; Ansichten aus der Seitenleiste aufs Blatt ziehen")
                     Text("Grundriss: zwei Finger verschieben, spreizen zoomt")
                     Text("3D: zwei Finger drehen, mit ⇧ verschieben")
                 }
@@ -721,6 +729,107 @@ extension ParamKind {
         case .columnDepth: "Tiefe"
         case .roofEaveHeight: "Traufhöhe über OKFF"
         case .roofSlope: "Neigung (Grad)"
+        }
+    }
+}
+
+/// Gewählter Schnitt oder gewählte Ansicht (ADR 0049).
+private struct SectionSection: View {
+    @Environment(AppModel.self) private var model
+    let info: SectionInfo
+    @State private var name = ""
+    @State private var mark = ""
+
+    var body: some View {
+        Section(info.elevation ? "Ansicht" : "Schnitt") {
+            TextField("Name", text: $name).onSubmit(save)
+            if !info.elevation {
+                TextField("Kennbuchstabe", text: $mark).onSubmit(save)
+            }
+            LabeledContent("Blicktiefe") {
+                HStack(spacing: 4) {
+                    TextField("", value: Binding(get: { info.depth }, set: { model.run("SetSectionDepth(\($0))") }),
+                              format: .number.precision(.fractionLength(2)))
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 64)
+                    Text("m").foregroundStyle(.secondary)
+                }
+            }
+            if !info.sheets.isEmpty {
+                LabeledContent("Blätter", value: info.sheets)
+            }
+            HStack {
+                Button("Öffnen") { model.go("Section(\(info.element))") }
+                Button("Rechts daneben") { model.openBeside("Section(\(info.element))") }
+                Button("Blick umdrehen") { model.run("FlipSection") }
+            }
+        }
+        .onAppear { name = info.name; mark = info.mark }
+        .onChange(of: info) { name = info.name; mark = info.mark }
+    }
+
+    private func save() {
+        model.run("SetSectionInfo(\(info.element),\(ron(name)),\(ron(mark)))")
+    }
+}
+
+/// Das gezeigte Planblatt: Plannummer, Planinhalt, Format.
+private struct SheetSection: View {
+    @Environment(AppModel.self) private var model
+    let info: SheetInfo
+    @State private var number = ""
+    @State private var title = ""
+
+    var body: some View {
+        Section("Planblatt") {
+            TextField("Plannummer", text: $number).onSubmit { save(info.format) }
+            TextField("Planinhalt", text: $title).onSubmit { save(info.format) }
+            Picker("Format", selection: Binding(get: { info.format }, set: { save($0) })) {
+                ForEach(AppModel.formats, id: \.self) { Text("\($0) quer").tag($0) }
+            }
+            Text("Ansichten aus der Seitenleiste aufs Blatt ziehen. Ziehen verschiebt, Doppelklick öffnet, ⌫ nimmt vom Blatt.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onAppear { number = info.number; title = info.title }
+        .onChange(of: info) { number = info.number; title = info.title }
+    }
+
+    private func save(_ format: String) {
+        model.run("SetSheetInfo(\(info.element),\(ron(number)),\(ron(title)),\(ron(format)))")
+    }
+}
+
+/// Die gewählte Ansicht auf dem Blatt: Maßstab, Heimat, öffnen, wegnehmen.
+private struct PlacedSection: View {
+    @Environment(AppModel.self) private var model
+    let info: PlacedInfo
+
+    private var scales: [Double] {
+        let common: [Double] = [20, 50, 100, 200, 500, 1000]
+        return common.contains(info.scale) ? common : (common + [info.scale]).sorted()
+    }
+
+    var body: some View {
+        Section("Ansicht auf dem Blatt") {
+            LabeledContent("Ansicht", value: info.title)
+            Picker("Maßstab", selection: Binding(
+                get: { info.scale },
+                set: { model.run("SetPlacedViewScale(\(info.sheet),\(info.index),\($0))") }
+            )) {
+                ForEach(scales, id: \.self) { Text("1:\(Int($0))").tag($0) }
+            }
+            if info.canBeHome {
+                Toggle("Heimat: Schnittmarken verweisen auf dieses Blatt", isOn: Binding(
+                    get: { info.home },
+                    set: { if $0 { model.run("SetHome(\(info.view.dropFirst("Section(".count).dropLast()),\(info.sheet))") } }
+                ))
+                .disabled(info.home)
+            }
+            HStack {
+                Button("Öffnen") { model.go(info.view) }
+                Button("Vom Blatt nehmen") { model.run("RemovePlacedView(\(info.sheet),\(info.index))") }
+            }
         }
     }
 }
