@@ -41,6 +41,8 @@ Anlass: ADR 0051, Gauben sind „in revit sehr schlecht umgesetzt“. Quellen un
 
 ## Fragen an Ben
 
+Die Fragen 1, 3 und 4 stehen auch in der README dieses Prüfpakets; 2 und 5 haben Zeit bis zum Bau der Gauben.
+
 1. **Reihenfolge der Formen.** Vorschlag: zuerst Schlepp, Flach, Satteldach, Walm und Spitz, danach Trapez, Tonne, Fledermaus und Ochsenauge, ohne Änderung am Modell.
 2. **Gaube in der Flucht der Außenwand** (Traufe unterbrochen, auch Zwerchhaus): gehört das zur Gaube? Vorschlag: ja, als Lage „in der Außenwand“; die Außenwand darunter läuft bis unter das Gaubendach durch. Ein Zwerchgiebel mit eigenem First quer zum Hauptfirst kommt später als Dachform.
 3. **Welche Höhe führt?** Vorschlag: Traufhöhe vorn und Neigung wie heute; die Anschlusshöhe am Hauptdach zeigt Lot an, und tippt man sie, ändert sich die Neigung. Bei Satteldachgauben wahlweise die Firsthöhe statt der Neigung.

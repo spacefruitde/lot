@@ -78,6 +78,10 @@ fn mfh_flat_roof() -> (Document, ElementId, ElementId) {
 
 /// Kleines Haus 10 × 6 m mit zwei Geschossen; Treppe mit dem Werkzeug.
 fn stair_house() -> (Document, ElementId, ElementId) {
+    stair_house_with(stairs::StairForm::HalfLanding, (1.2, 0.8), (1.2, 4.0))
+}
+
+fn stair_house_with(form: stairs::StairForm, a: (f64, f64), b: (f64, f64)) -> (Document, ElementId, ElementId) {
     let mut doc = Document::new(Project::template("Treppe"));
     doc.set_follow(lot_edit::follow::follow_ops);
     let mut ed = Editor::new(doc.project());
@@ -95,9 +99,9 @@ fn stair_house() -> (Document, ElementId, ElementId) {
         click(&mut doc, &mut ed, x, y);
     }
     ed.run(&mut doc, &Command::SetStorey(eg.0));
-    ed.run(&mut doc, &Command::StairTool(stairs::StairForm::HalfLanding));
-    click(&mut doc, &mut ed, 1.2, 0.8);
-    click(&mut doc, &mut ed, 1.2, 4.0);
+    ed.run(&mut doc, &Command::StairTool(form));
+    click(&mut doc, &mut ed, a.0, a.1);
+    click(&mut doc, &mut ed, b.0, b.1);
     (doc, eg, og)
 }
 
@@ -184,4 +188,12 @@ fn pruefbilder() {
     let (doc, eg, og) = stair_house();
     write("treppe-eg", &centered("Treppe aus dem Werkzeug, EG 1:50", plan(doc.project(), eg, 50.0)));
     write("treppe-og", &centered("Treppenloch mit Umwehrung, OG 1:50", plan(doc.project(), og, 50.0)));
+    for (form, name, a, b) in [
+        (stairs::StairForm::QuarterWinder, "treppe-viertelgewendelt", (6.0, 0.8), (6.0, 4.0)),
+        (stairs::StairForm::HalfWinder, "treppe-halbgewendelt", (6.0, 0.8), (6.0, 4.0)),
+        (stairs::StairForm::Spiral, "spindeltreppe", (5.0, 3.0), (6.4, 3.0)),
+    ] {
+        let (doc, eg, _) = stair_house_with(form, a, b);
+        write(name, &centered(&format!("{}, EG 1:50", form.title()), plan(doc.project(), eg, 50.0)));
+    }
 }
