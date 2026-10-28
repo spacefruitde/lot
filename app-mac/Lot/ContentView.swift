@@ -143,6 +143,27 @@ struct ContentView: View {
             toolButton("Fenster", systemImage: "squareshape.split.2x2", tool: "window", command: "WindowTool", key: "WN")
             toolButton("Raum", systemImage: "square.dashed", tool: "space", command: "SpaceTool", key: "RM")
             toolButton("Schnitt", systemImage: "rectangle.split.1x2", tool: "section", command: "SectionTool", key: "SC")
+            Menu {
+                Button("Gerade") { model.run("StairTool(Straight)") }
+                Button("Zweiläufig mit Halbpodest") { model.run("StairTool(HalfLanding)") }
+                Button("L-Form mit Viertelpodest") { model.run("StairTool(QuarterLanding)") }
+            } label: {
+                Label("Treppe", systemImage: "stairs")
+            }
+            .help("Treppe (TP): Antritt, dann Richtung; Lot rechnet nach DIN 18065")
+            Menu {
+                Button("Satteldach über dem Geschoss") { model.run("GableRoofFromWalls") }
+                Button("Walmdach über dem Geschoss") { model.run("HipRoofFromWalls") }
+                Button("Flachdach über dem Geschoss") { model.run("FlatRoofFromWalls") }
+                Divider()
+                Button("Dachkante umschalten (DK)") { model.run("RoofEdgeTool") }
+                Button("Decke aus Wänden") { model.run("SlabFromWalls") }
+                Button("Ablauf setzen (AB)") { model.run("DrainTool") }
+                Button("Notüberlauf setzen (NU)") { model.run("OverflowTool") }
+            } label: {
+                Label("Dach und Decke", systemImage: "house")
+            }
+            .help("Dächer, Decken, Gefälle")
             commandMenu("Wandaufbau", systemImage: "square.stack.3d.up", group: "Wandaufbau")
             Button { model.openTypes() } label: { Label("Typen", systemImage: "list.bullet.rectangle") }
                 .help("Typen-Übersicht und Bibliothek des Büros (⇧⌘T)")

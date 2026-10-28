@@ -8,6 +8,7 @@
 //!
 //! Die Swift-Anbindung entsteht mit `app-mac/scripts/build-core.sh`.
 
+mod components;
 mod navigation;
 mod viewport;
 mod visibility;
