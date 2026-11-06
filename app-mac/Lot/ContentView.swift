@@ -6,21 +6,27 @@ struct ContentView: View {
 
     var body: some View {
         @Bindable var model = model
-        ViewportView(generation: model.documentGeneration, onEvent: { model.handle($0) }, onStats: { model.stats = $0 })
-            .overlay(alignment: .bottom) { StatusLine(hint: model.viewState?.hint ?? "", stats: model.stats) }
-            .overlay(alignment: .top) {
-                if model.showPalette {
-                    CommandPalette(commands: model.commands) { id in
-                        model.showPalette = false
-                        if let id { model.run(id) }
+        NavigationSplitView {
+            ProjectSidebar()
+                .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 360)
+        } detail: {
+            workspace
+                .overlay(alignment: .bottom) { StatusLine(hint: model.viewState?.hint ?? "", stats: model.stats) }
+                .overlay(alignment: .top) {
+                    if model.showPalette {
+                        CommandPalette(commands: model.commands, search: { model.jumps($0) }) { id in
+                            model.showPalette = false
+                            if let id { model.run(id) }
+                        }
+                        .padding(.top, 12)
                     }
-                    .padding(.top, 12)
                 }
-            }
-            .inspector(isPresented: $showInspector) {
-                InspectorView()
-                    .inspectorColumnWidth(min: 240, ideal: 280)
-            }
+                .inspector(isPresented: $showInspector) {
+                    InspectorView()
+                        .inspectorColumnWidth(min: 240, ideal: 280)
+                }
+                .toolbar { toolbar }
+        }
             .sheet(isPresented: $model.showReport) {
                 CheckReportView()
             }
@@ -28,7 +34,6 @@ struct ContentView: View {
                 TypesView()
                     .environment(model)
             }
-            .toolbar { toolbar }
             .navigationTitle(model.title)
             .navigationSubtitle(subtitle)
             .alert(
@@ -44,11 +49,63 @@ struct ContentView: View {
 
     private var subtitle: String {
         guard let s = model.viewState else { return "" }
-        return "\(s.storey) · 1:\(Int(s.scale)) · \(s.wallType)"
+        switch s.view {
+        case .plan: return "\(s.title) · 1:\(Int(s.scale)) · \(s.wallType)"
+        case .section: return "\(s.title) · 1:\(Int(s.scale))"
+        default: return s.title
+        }
+    }
+
+    /// Eine Ansicht oder zwei nebeneinander mit gemeinsamer Auswahl (ADR 0049).
+    private var workspace: some View {
+        HSplitView {
+            pane(0)
+            if model.showSplit {
+                pane(1)
+            }
+        }
+    }
+
+    private func pane(_ index: Int) -> some View {
+        GeometryReader { geo in
+            ViewportView(
+                pane: index,
+                generation: model.documentGeneration,
+                onEvent: { model.handle($0, pane: index) },
+                onStats: { model.stats = $0 }
+            )
+            // Ansichten aus der Seitenleiste aufs Blatt ziehen.
+            .dropDestination(for: String.self) { items, location in
+                guard let view = items.first else { return false }
+                model.dropView(view, pane: index, x: location.x - geo.size.width / 2, y: geo.size.height / 2 - location.y)
+                return true
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if model.showSplit, let title = model.paneTitles[index] {
+                Text(title)
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(model.activePane == index ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.5),
+                                in: RoundedRectangle(cornerRadius: 5))
+                    .foregroundStyle(.white)
+                    .padding(8)
+            }
+        }
+        .frame(minWidth: 200)
     }
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
+            Button { model.back() } label: { Label("Zurück", systemImage: "chevron.left") }
+                .disabled(model.viewState?.canGoBack != true)
+                .help("Zurück (⌘[)")
+            Button { model.forward() } label: { Label("Vorwärts", systemImage: "chevron.right") }
+                .disabled(model.viewState?.canGoForward != true)
+                .help("Vorwärts (⌘])")
+        }
         ToolbarItem(placement: .navigation) {
             Picker("Ansicht", selection: Binding(
                 get: { model.viewState?.view ?? .plan },
@@ -69,6 +126,7 @@ struct ContentView: View {
             toolButton("Tür", systemImage: "door.left.hand.open", tool: "door", command: "DoorTool", key: "DR")
             toolButton("Fenster", systemImage: "squareshape.split.2x2", tool: "window", command: "WindowTool", key: "WN")
             toolButton("Raum", systemImage: "square.dashed", tool: "space", command: "SpaceTool", key: "RM")
+            toolButton("Schnitt", systemImage: "rectangle.split.1x2", tool: "section", command: "SectionTool", key: "SC")
             commandMenu("Wandaufbau", systemImage: "square.stack.3d.up", group: "Wandaufbau")
             Button { model.openTypes() } label: { Label("Typen", systemImage: "list.bullet.rectangle") }
                 .help("Typen-Übersicht und Bibliothek des Büros (⇧⌘T)")
@@ -84,6 +142,8 @@ struct ContentView: View {
                 .help("Befehlspalette (⌘K)")
             Button { model.runChecks() } label: { Label("Prüfen", systemImage: "checkmark.seal") }
                 .help("Prüfbericht: Abstandsflächen, Barrierefreiheit, Rettungswege (⇧⌘P)")
+            Button { model.showSplit.toggle() } label: { Label("Nebeneinander", systemImage: "rectangle.split.2x1") }
+                .help("Zwei Ansichten nebeneinander, gemeinsame Auswahl")
             Button { showInspector.toggle() } label: { Label("Eigenschaften", systemImage: "sidebar.right") }
         }
     }
@@ -96,7 +156,6 @@ struct ContentView: View {
         .foregroundStyle(active ? Color.accentColor : Color.primary)
         .help("\(title) (\(key))")
         .accessibilityLabel(title)
-        .disabled(!model.isPlan)
     }
 
     private func commandMenu(_ title: String, systemImage: String, group: String) -> some View {

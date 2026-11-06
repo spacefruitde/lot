@@ -445,6 +445,36 @@ int8_t uniffi_lot_ffi_fn_method_lotdocument_undo(uint64_t ptr, RustCallStatus *_
 RustBuffer uniffi_lot_ffi_fn_method_lotdocument_walls(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_PROJECT_TREE
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_PROJECT_TREE
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_project_tree(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SEARCH
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SEARCH
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_search(uint64_t ptr, RustBuffer query, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SECTIONS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SECTIONS
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_sections(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SHEET_INFO
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SHEET_INFO
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_sheet_info(uint64_t ptr, uint64_t sheet, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_STOREY_ROWS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_STOREY_ROWS
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_storey_rows(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_VIEW_TITLE
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_VIEW_TITLE
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_view_title(uint64_t ptr, RustBuffer view, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_CLONE_VIEWPORT
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_CLONE_VIEWPORT
 uint64_t uniffi_lot_ffi_fn_clone_viewport(uint64_t handle, RustCallStatus *_Nonnull out_status
@@ -475,14 +505,34 @@ uint32_t uniffi_lot_ffi_fn_method_viewport_add_reference_model(uint64_t ptr, Rus
 uint64_t uniffi_lot_ffi_fn_method_viewport_add_underlay(uint64_t ptr, RustBuffer source, uint32_t page, double width, double height, double scale, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_BACK
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_BACK
+RustBuffer uniffi_lot_ffi_fn_method_viewport_back(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_COMMANDS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_COMMANDS
 RustBuffer uniffi_lot_ffi_fn_method_viewport_commands(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_DROP_VIEW
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_DROP_VIEW
+RustBuffer uniffi_lot_ffi_fn_method_viewport_drop_view(uint64_t ptr, RustBuffer view, float x, float y, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_FOCUS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_FOCUS
 void uniffi_lot_ffi_fn_method_viewport_focus(uint64_t ptr, uint64_t storey, double x, double y, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_FORWARD
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_FORWARD
+RustBuffer uniffi_lot_ffi_fn_method_viewport_forward(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_GO
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_GO
+RustBuffer uniffi_lot_ffi_fn_method_viewport_go(uint64_t ptr, RustBuffer target, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_JUNCTION
@@ -493,6 +543,11 @@ RustBuffer uniffi_lot_ffi_fn_method_viewport_junction(uint64_t ptr, RustCallStat
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_KEY
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_KEY
 RustBuffer uniffi_lot_ffi_fn_method_viewport_key(uint64_t ptr, RustBuffer key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_KIND
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_KIND
+RustBuffer uniffi_lot_ffi_fn_method_viewport_kind(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_MISSING_UNDERLAY_IMAGES
@@ -508,6 +563,11 @@ void uniffi_lot_ffi_fn_method_viewport_orbit(uint64_t ptr, float dx, float dy, R
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_PAN
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_PAN
 void uniffi_lot_ffi_fn_method_viewport_pan(uint64_t ptr, float dx, float dy, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_PLACED_INFO
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_PLACED_INFO
+RustBuffer uniffi_lot_ffi_fn_method_viewport_placed_info(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_POINTER_DOWN
@@ -555,9 +615,19 @@ RustBuffer uniffi_lot_ffi_fn_method_viewport_run_command(uint64_t ptr, RustBuffe
 double uniffi_lot_ffi_fn_method_viewport_set_document(uint64_t ptr, uint64_t document, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_SET_FADED_BELOW
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_SET_FADED_BELOW
+void uniffi_lot_ffi_fn_method_viewport_set_faded_below(uint64_t ptr, int8_t show_it, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_SET_PLAN_SCALE
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_SET_PLAN_SCALE
 void uniffi_lot_ffi_fn_method_viewport_set_plan_scale(uint64_t ptr, double scale, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_SET_SELECTION
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_SET_SELECTION
+void uniffi_lot_ffi_fn_method_viewport_set_selection(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_SET_SHOW_FINDINGS
@@ -578,6 +648,11 @@ void uniffi_lot_ffi_fn_method_viewport_set_view(uint64_t ptr, RustBuffer view, R
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_STATE
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_STATE
 RustBuffer uniffi_lot_ffi_fn_method_viewport_state(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_STEP_STOREY
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_STEP_STOREY
+RustBuffer uniffi_lot_ffi_fn_method_viewport_step_storey(uint64_t ptr, int8_t up, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_TRIANGLE_COUNT
@@ -644,6 +719,12 @@ RustBuffer uniffi_lot_ffi_fn_func_wall_alignments(RustCallStatus *_Nonnull out_s
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_WALL_TOPS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_WALL_TOPS
 RustBuffer uniffi_lot_ffi_fn_func_wall_tops(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_SHEET_FORMATS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_SHEET_FORMATS
+RustBuffer uniffi_lot_ffi_fn_func_sheet_formats(RustCallStatus *_Nonnull out_status
     
 );
 #endif
@@ -961,6 +1042,12 @@ uint16_t uniffi_lot_ffi_checksum_func_wall_tops(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_SHEET_FORMATS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_SHEET_FORMATS
+uint16_t uniffi_lot_ffi_checksum_func_sheet_formats(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ADD_ATTACHMENT
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_ADD_ATTACHMENT
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_add_attachment(void
@@ -1165,6 +1252,42 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_walls(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_PROJECT_TREE
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_PROJECT_TREE
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_project_tree(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SEARCH
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SEARCH
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_search(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SECTIONS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SECTIONS
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_sections(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SHEET_INFO
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SHEET_INFO
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_sheet_info(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_STOREY_ROWS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_STOREY_ROWS
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_storey_rows(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_VIEW_TITLE
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_VIEW_TITLE
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_view_title(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_ADD_CAD_UNDERLAY
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_ADD_CAD_UNDERLAY
 uint16_t uniffi_lot_ffi_checksum_method_viewport_add_cad_underlay(void
@@ -1183,15 +1306,39 @@ uint16_t uniffi_lot_ffi_checksum_method_viewport_add_underlay(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_BACK
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_BACK
+uint16_t uniffi_lot_ffi_checksum_method_viewport_back(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_COMMANDS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_COMMANDS
 uint16_t uniffi_lot_ffi_checksum_method_viewport_commands(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_DROP_VIEW
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_DROP_VIEW
+uint16_t uniffi_lot_ffi_checksum_method_viewport_drop_view(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_FOCUS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_FOCUS
 uint16_t uniffi_lot_ffi_checksum_method_viewport_focus(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_FORWARD
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_FORWARD
+uint16_t uniffi_lot_ffi_checksum_method_viewport_forward(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_GO
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_GO
+uint16_t uniffi_lot_ffi_checksum_method_viewport_go(void
     
 );
 #endif
@@ -1204,6 +1351,12 @@ uint16_t uniffi_lot_ffi_checksum_method_viewport_junction(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_KEY
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_KEY
 uint16_t uniffi_lot_ffi_checksum_method_viewport_key(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_KIND
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_KIND
+uint16_t uniffi_lot_ffi_checksum_method_viewport_kind(void
     
 );
 #endif
@@ -1222,6 +1375,12 @@ uint16_t uniffi_lot_ffi_checksum_method_viewport_orbit(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_PAN
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_PAN
 uint16_t uniffi_lot_ffi_checksum_method_viewport_pan(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_PLACED_INFO
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_PLACED_INFO
+uint16_t uniffi_lot_ffi_checksum_method_viewport_placed_info(void
     
 );
 #endif
@@ -1279,9 +1438,21 @@ uint16_t uniffi_lot_ffi_checksum_method_viewport_set_document(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_SET_FADED_BELOW
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_SET_FADED_BELOW
+uint16_t uniffi_lot_ffi_checksum_method_viewport_set_faded_below(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_SET_PLAN_SCALE
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_SET_PLAN_SCALE
 uint16_t uniffi_lot_ffi_checksum_method_viewport_set_plan_scale(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_SET_SELECTION
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_SET_SELECTION
+uint16_t uniffi_lot_ffi_checksum_method_viewport_set_selection(void
     
 );
 #endif
@@ -1306,6 +1477,12 @@ uint16_t uniffi_lot_ffi_checksum_method_viewport_set_view(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_STATE
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_STATE
 uint16_t uniffi_lot_ffi_checksum_method_viewport_state(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_STEP_STOREY
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_VIEWPORT_STEP_STOREY
+uint16_t uniffi_lot_ffi_checksum_method_viewport_step_storey(void
     
 );
 #endif

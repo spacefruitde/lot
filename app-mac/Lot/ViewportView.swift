@@ -6,6 +6,8 @@ import SwiftUI
 /// Rust-Kern über wgpu zeichnet. Maus, Trackpad und Tasten gehen an den Kern.
 struct ViewportView: NSViewRepresentable {
     @Environment(AppModel.self) private var model
+    /// Links 0, rechts 1, wenn zwei Ansichten nebeneinander stehen (ADR 0049).
+    let pane: Int
     /// Zählt neue Dokumente.
     let generation: Int
     let onEvent: (EventResult) -> Void
@@ -13,6 +15,7 @@ struct ViewportView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> MetalViewportNSView {
         let view = MetalViewportNSView(frame: .zero)
+        view.pane = pane
         view.model = model
         view.onEvent = onEvent
         view.onStats = onStats
@@ -28,11 +31,13 @@ struct ViewportView: NSViewRepresentable {
 
     static func dismantleNSView(_ view: MetalViewportNSView, coordinator: ()) {
         view.stop()
+        view.model?.detach(pane: view.pane)
     }
 }
 
 final class MetalViewportNSView: NSView {
     weak var model: AppModel?
+    var pane = 0
     var onEvent: ((EventResult) -> Void)?
     var onStats: ((ViewportStatsDisplay) -> Void)?
 
@@ -136,8 +141,8 @@ final class MetalViewportNSView: NSView {
         do {
             let viewport = try Viewport(nsView: pointer, widthPx: width, heightPx: height, scale: Float(scale))
             self.viewport = viewport
-            model?.requestRedraw = { [weak self] in self?.setNeedsRender() }
-            model?.attach(viewport)
+            model?.setRedraw(pane: pane) { [weak self] in self?.setNeedsRender() }
+            model?.attach(viewport, pane: pane)
         } catch {
             NSLog("Lot: Ansicht konnte nicht starten: %@", AppModel.message(for: error))
             return
@@ -200,7 +205,8 @@ final class MetalViewportNSView: NSView {
         onEvent?(result)
     }
 
-    private var isPlan: Bool { model?.viewState?.view != .model }
+    /// Grundriss, Schnitt, Blatt: alles außer 3D. Je Hälfte, nicht die aktive.
+    private var isPlan: Bool { viewport?.kind() != .model }
 
     override func mouseMoved(with event: NSEvent) {
         guard let viewport, isPlan else { return }
@@ -212,6 +218,7 @@ final class MetalViewportNSView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        model?.activate(pane: pane)
         guard let viewport else { return }
         dragging = true
         if isPlan {

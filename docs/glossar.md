@@ -77,6 +77,8 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Schnitt, Ansicht | `SectionView`, `SectionKind` | | Linie, Blickrichtung, Blicktiefe (ADR 0026) |
 | Blickrichtung | `SectionView::look` | | links oder rechts der Schnittlinie |
 | Blicktiefe | `SectionView::depth` | | |
+| Heimat einer Ansicht | `SectionView::home`, `navigation::home` | | die Platzierung auf einem Planblatt, auf die die Schnittmarke verweist (ADR 0049) |
+| Schnittmarke | `draw_section_marks`, `geometry::views_at` | | breite Enden der Schnittlinie mit Pfeil und Buchstabe; Doppelklick öffnet den Schnitt |
 | Maßkette | `DimensionChain` | IfcAnnotation | speichert Bezüge (`DimRef`), nicht Maße |
 | Stiftset | `PenSet` | | Linienbreiten je Maßstab |
 | Stift | `Pen` | | eine Linienbreite in mm auf dem Papier |
@@ -87,6 +89,12 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Abstand der Öffnung vom Wandanfang | `Opening::offset` | | entlang der Wandachse bis zur Kante der Öffnung |
 | Schraffur | `Hatch` | | |
 | Planblatt | `PlanSheet` | | im Modell; die gezeichnete Seite heißt `Sheet` (ADR 0027) |
+| Platzierung | `PlacedView` | | eine Ansicht auf einem Planblatt mit Maßstab und Mitte; eine Ansicht darf auf mehreren Blättern liegen |
+| Ansicht (in der App) | `navigation::ViewRef` | | was ein Fenster zeigt: Grundriss, 3D, Schnitt, Lageplan, Planblatt, Liste |
+| Seitenleiste „Projekt“ | `navigation::tree` | | Geschosse, Grundrisse, Schnitte und Ansichten, Lageplan, Planblätter, Listen |
+| Sprungziel | `navigation::Target` | | Ansicht oder Element (Raum) für ⌘K |
+| Verlauf | `navigation::History`, `Place` | | Zurück und Vorwärts (⌘[ und ⌘]) mit Ansicht und Kamera |
+| Geschoss darunter (blass) | `faded_storey` | | Grundriss des Geschosses darunter in Hellgrau unter dem aktuellen, je Ansicht abschaltbar |
 | Plankopf, Schriftfeld | `title_block` | | |
 | Projektangaben | `ProjectInfo` | | Bauherr, Bauort, Entwurfsverfasser, Gebäudeart |
 | Gebäudeart | `BuildingClass` | | nach DIN 18065 Tabelle 1 |

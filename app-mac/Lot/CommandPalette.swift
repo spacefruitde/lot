@@ -4,6 +4,8 @@ import SwiftUI
 /// Die Befehle kommen aus dem Kern; dieselben kann später die KI aufrufen.
 struct CommandPalette: View {
     let commands: [CommandItem]
+    /// Sprungziele zur Suche: Geschosse, Schnitte, Blätter, Räume (ADR 0049).
+    let search: (String) -> [CommandItem]
     /// Mit Kennung ausführen, mit `nil` schließen.
     let onDone: (String?) -> Void
 
@@ -13,16 +15,18 @@ struct CommandPalette: View {
 
     private var matches: [CommandItem] {
         let words = query.lowercased().split(separator: " ")
-        guard !words.isEmpty else { return commands }
-        return commands.filter { item in
+        guard !words.isEmpty else { return commands + search("") }
+        let found = commands.filter { item in
             let text = "\(item.group) \(item.title)".lowercased()
             return words.allSatisfy { text.contains($0) }
         }
+        // Ansichten und Räume zuerst, wenn sie passen: ⌘K springt vor allem.
+        return search(query) + found
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            TextField("Befehl suchen …", text: $query)
+            TextField("Befehl, Ansicht oder Raum …", text: $query)
                 .textFieldStyle(.plain)
                 .font(.title3)
                 .padding(12)

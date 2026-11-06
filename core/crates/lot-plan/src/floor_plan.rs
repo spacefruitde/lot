@@ -538,6 +538,35 @@ fn draw_section_marks(objects: &mut Vec<PlanObject>, project: &Project, style: &
     }
 }
 
+/// Grundriss eines Geschosses blass, als Hilfe unter dem aktuellen
+/// (ADR 0049): nur geschnittene Bauteile, Türen, Fenster, Treppen und Aufzüge,
+/// in Hellgrau und dünn, ohne Texte und Schraffuren. Nur am Bildschirm.
+pub fn faded_storey(
+    project: &Project,
+    storey: ElementId,
+    standard: &OfficeStandard,
+    viewport: Viewport,
+) -> Vec<PlanObject> {
+    let fade = |c: Color| Color { r: c.r + (1.0 - c.r) * 0.7, g: c.g + (1.0 - c.g) * 0.7, b: c.b + (1.0 - c.b) * 0.7 };
+    let view = FloorPlanView { storey, cut_height: DEFAULT_CUT_HEIGHT, scale: viewport.scale };
+    floor_plan_layers(project, view, standard, viewport)
+        .into_iter()
+        .filter(|(name, _)| ["A_Bauteile_Schnitt", "A_Tueren_Fenster", "A_Treppen", "A_Aufzuege"].contains(name))
+        .flat_map(|(_, objects)| objects)
+        .filter_map(|o| match o {
+            PlanObject::Line(mut l) => {
+                l.color = fade(l.color);
+                l.pen = Pen::mm(l.pen.width_mm.min(0.18));
+                Some(PlanObject::Line(l))
+            }
+            PlanObject::Area(PlanArea { rings, fill: Fill::Solid(c) }) => {
+                Some(PlanObject::Area(PlanArea { rings, fill: Fill::Solid(fade(c)) }))
+            }
+            PlanObject::Area(_) | PlanObject::Text(_) => None,
+        })
+        .collect()
+}
+
 /// Fläche im deutschen Format, „24,35 m²“.
 pub fn format_area(m2: f64) -> String {
     format!("{} m²", crate::format_de(m2, 2))
@@ -808,6 +837,23 @@ mod tests {
     use lot_model::{Door, Element, ElementId, Handing, OpeningKind, Project, WallSide};
 
     use super::*;
+
+    #[test]
+    fn faded_storey_is_light_thin_and_without_text() {
+        let p = Project::sample();
+        let viewport = Viewport { scale: 100.0, origin: PaperPoint::new(0.0, 0.0) };
+        let objects = faded_storey(&p, ElementId(1), OfficeStandard::default_standard(), viewport);
+        assert!(!objects.is_empty());
+        for o in &objects {
+            match o {
+                PlanObject::Line(l) => {
+                    assert!(l.color.r >= 0.69 && l.pen.width_mm <= 0.18, "{l:?}");
+                }
+                PlanObject::Area(a) => assert!(matches!(a.fill, Fill::Solid(c) if c.r >= 0.69)),
+                PlanObject::Text(t) => panic!("Text im blassen Geschoss: {}", t.text),
+            }
+        }
+    }
 
     /// Beispielwand (5 m nach Osten, 30 cm) mit einer Tür statt des Fensters.
     fn door_project(door: Door) -> Project {

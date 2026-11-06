@@ -53,6 +53,7 @@ struct LotApp: App {
                     .keyboardShortcut("z", modifiers: [.command, .shift])
                     .disabled(!model.canRedo)
             }
+            SidebarCommands()
             CommandGroup(before: .toolbar) {
                 Button("Grundriss") { model.setView(.plan) }
                     .keyboardShortcut("1")
@@ -60,6 +61,24 @@ struct LotApp: App {
                     .keyboardShortcut("2")
                 Button("Alles zeigen") { model.zoomToFit() }
                     .keyboardShortcut("0")
+                Divider()
+                Button("Zurück") { model.back() }
+                    .keyboardShortcut("[")
+                    .disabled(model.viewState?.canGoBack != true)
+                Button("Vorwärts") { model.forward() }
+                    .keyboardShortcut("]")
+                    .disabled(model.viewState?.canGoForward != true)
+                Button("Geschoss höher") { model.stepStorey(up: true) }
+                    .keyboardShortcut(.upArrow)
+                Button("Geschoss tiefer") { model.stepStorey(up: false) }
+                    .keyboardShortcut(.downArrow)
+                Toggle("Geschoss darunter blass", isOn: Binding(
+                    get: { model.viewState?.fadedBelow ?? false },
+                    set: { model.setFadedBelow($0) }
+                ))
+                .disabled(model.viewState?.hasBelow != true)
+                Toggle("Nebeneinander", isOn: Binding(get: { model.showSplit }, set: { model.showSplit = $0 }))
+                    .keyboardShortcut("n", modifiers: [.command, .option])
                 Divider()
             }
             CommandMenu("Prüfen") {
@@ -82,6 +101,9 @@ struct LotApp: App {
                 Button("Wände als Rechteck (WR)") { model.run("WallRectTool") }
                 Button("Bogenwand zeichnen (BW)") { model.run("ArcWallTool") }
                 Button("Achse zeichnen (GR)") { model.run("GridTool") }
+                Button("Schnitt zeichnen (SC)") { model.run("SectionTool") }
+                Button("Ansicht zeichnen (AN)") { model.run("ElevationTool") }
+                Button("Neues Planblatt") { model.run("AddSheet") }
                 Button("Stütze setzen (CL)") { model.run("ColumnTool") }
                 Button("Tür setzen (DR)") { model.run("DoorTool") }
                 Button("Fenster setzen (WN)") { model.run("WindowTool") }

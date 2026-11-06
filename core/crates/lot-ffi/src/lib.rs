@@ -8,6 +8,7 @@
 //!
 //! Die Swift-Anbindung entsteht mit `app-mac/scripts/build-core.sh`.
 
+mod navigation;
 mod viewport;
 
 use std::path::Path;
@@ -966,6 +967,40 @@ impl LotDocument {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn efh_has_a_project_tree_with_sections_sheets_and_rooms() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../testprojekte/efh");
+        let doc = LotDocument::open_testproject(dir.into()).unwrap();
+        let tree = doc.project_tree();
+        let titles: Vec<&str> = tree.iter().map(|g| g.title.as_str()).collect();
+        assert_eq!(titles, ["Geschosse", "Grundrisse", "Schnitte und Ansichten", "Lageplan", "Planblätter", "Listen"]);
+        let sections = &tree[2].entries;
+        assert!(!sections.is_empty());
+        assert!(sections.iter().all(|e| e.view.starts_with("Section(") && e.placeable));
+        // Schlüssel sind eindeutig, auch für Ansichten auf mehreren Blättern.
+        let mut keys: Vec<String> = Vec::new();
+        for g in &tree {
+            for e in &g.entries {
+                keys.push(e.key.clone());
+                keys.extend(e.children.iter().map(|c| c.key.clone()));
+            }
+        }
+        let n = keys.len();
+        keys.sort();
+        keys.dedup();
+        assert_eq!(keys.len(), n);
+        // Geschosse von oben nach unten.
+        let rows = doc.storey_rows();
+        assert!(rows.windows(2).all(|w| w[0].elevation > w[1].elevation));
+        // ⌘K findet Schnitte und Räume.
+        assert!(doc.search("schnitt".into()).iter().any(|h| h.target.starts_with("View(Section(")));
+        assert!(doc.search("bad".into()).iter().any(|h| h.target.starts_with("Element(")));
+        let first = sections[0].view.clone();
+        assert_eq!(doc.view_title(first.clone()), sections[0].title);
+        let id: u64 = first.trim_start_matches("Section(").trim_end_matches(')').parse().unwrap();
+        assert_eq!(doc.sections(vec![id])[0].name, sections[0].title);
+    }
 
     fn value(doc: &LotDocument, kind: ParamKind) -> f64 {
         doc.parameters(Vec::new()).into_iter().find(|p| p.kind == kind).unwrap().value

@@ -10,8 +10,10 @@ pub mod entry;
 pub mod geometry;
 pub mod library;
 pub mod modify;
+pub mod navigation;
 pub mod openings;
 pub mod select;
+pub mod sheets;
 pub mod snap;
 pub mod tempdims;
 pub mod transform;
@@ -19,11 +21,13 @@ pub mod types;
 pub mod walls;
 
 pub use command::{Command, CommandInfo};
-use geometry::{End, as_elements, column_outline, end_point, footprint, moved_elements, moved_endpoint, outline};
+use geometry::{
+    End, as_elements, column_outline, end_point, footprint, moved_elements, moved_endpoint, moved_section_end, outline,
+};
 use lot_model::{
     Annotation, AnnotationShape, AnnotationView, Column, ColumnProfile, Document, Element, ElementId, GridLine,
-    Handing, ModelError, Opening, OpeningKind, Operation, Point2, Project, Space, Storey, Top, Wall, WallAlignment,
-    WallSide,
+    Handing, ModelError, Opening, OpeningKind, Operation, Point2, Project, SectionKind, Space, Storey, Top, Wall,
+    WallAlignment, WallSide,
 };
 pub use select::Candidate;
 pub use snap::{Snap, SnapKind};
@@ -65,6 +69,8 @@ pub struct Response {
     pub model_changed: bool,
     /// Meldung für den Benutzer, wenn eine Änderung nicht ging.
     pub error: Option<String>,
+    /// Diese Ansicht öffnen, etwa nach Doppelklick auf eine Schnittmarke (ADR 0049).
+    pub open: Option<navigation::ViewRef>,
 }
 
 impl Response {
@@ -73,13 +79,13 @@ impl Response {
     }
 
     fn changed() -> Self {
-        Self { redraw: true, model_changed: true, error: None }
+        Self { redraw: true, model_changed: true, ..Default::default() }
     }
 
     fn from_result(result: Result<(), ModelError>) -> Self {
         match result {
             Ok(()) => Self::changed(),
-            Err(e) => Self { redraw: true, model_changed: false, error: Some(e.to_string()) },
+            Err(e) => Self { redraw: true, model_changed: false, error: Some(e.to_string()), open: None },
         }
     }
 }
@@ -132,6 +138,10 @@ pub enum Tool {
     WallRect,
     /// Zeichenrichtung von einer Kante (ZR): Klick auf Wand, Achse oder Linie; ins Leere setzt sie zurück.
     PickDirection,
+    /// Schnitt (SC): zwei Punkte der Schnittlinie, Leertaste dreht die Blickrichtung.
+    Section,
+    /// Ansicht (AN): wie ein Schnitt, die Linie liegt vor der Fassade.
+    Elevation,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -168,6 +178,12 @@ enum Drag {
         end: End,
         current: Point2,
     },
+    /// Ende einer Schnittlinie am Griff ziehen.
+    SectionEnd {
+        view: ElementId,
+        end: End,
+        current: Point2,
+    },
 }
 
 /// Was der Renderer über dem Plan zeigt, in Modellkoordinaten.
@@ -190,6 +206,9 @@ pub struct Overlay {
     pub guides: Vec<(Point2, Point2)>,
     /// Markierte Punkte: Basispunkt, Drehpunkt.
     pub marks: Vec<Point2>,
+    /// Linien von Ansichten und des Schnitts, der gerade gezeichnet wird: Anfang,
+    /// Ende und Spitze des Blickpfeils. Nur am Bildschirm, nie im Druck (ADR 0049).
+    pub view_lines: Vec<[Point2; 3]>,
     /// Bezugspunkte mit ihrer Nummer.
     pub references: Vec<(Point2, String)>,
     /// Temporäre Maße am gewählten Bauteil: Anfang, Ende, Maßzahl, gerade in Bearbeitung.
@@ -266,6 +285,10 @@ pub struct Editor {
     opening_from_after: bool,
     /// Mit der Leertaste gewählte Lage der Tür beim Setzen: Index in [`DOOR_TURNS`].
     door_turn: Option<usize>,
+    /// Maßstab der Planansicht (100 für 1:100), von der Ansicht gesetzt; daraus die Größe der Schnittmarken.
+    pub scale: f64,
+    /// Blickrichtung beim Zeichnen eines Schnitts, die Leertaste dreht sie.
+    section_look: WallSide,
 }
 
 /// Die vier Lagen einer Tür: Aufschlagseite und ob die Bänder am hinteren Ende sitzen.
@@ -314,6 +337,8 @@ impl Editor {
             resume_tool: None,
             opening_from_after: false,
             door_turn: None,
+            scale: 100.0,
+            section_look: WallSide::Left,
         }
     }
 
@@ -338,7 +363,14 @@ impl Editor {
                 self.pointer = Some(Snap { point: input.point, kind: SnapKind::Free });
                 Response::redraw()
             }
-            Tool::Wall | Tool::ArcWall | Tool::Grid | Tool::Column | Tool::SlabOpening | Tool::Line => {
+            Tool::Wall
+            | Tool::ArcWall
+            | Tool::Grid
+            | Tool::Column
+            | Tool::SlabOpening
+            | Tool::Line
+            | Tool::Section
+            | Tool::Elevation => {
                 let mut snapped = self.update_snap(project, input, self.chain_start, &[]);
                 // Ein getippter Winkel hält die Richtung; der Zeiger gibt nur die Länge.
                 if let (Some(a), Some(s)) = (self.angle_lock, self.chain_start) {
@@ -377,7 +409,7 @@ impl Editor {
             }
             Tool::Select => {
                 let shown = project.variant_view();
-                let found = select::candidates_at(&shown, self.storey, input.point, input.tolerance);
+                let found = self.candidates(&shown, input.point, input.tolerance);
                 let same =
                     found.len() == self.hover.len() && found.iter().zip(&self.hover).all(|(a, b)| a.ids == b.ids);
                 if !same {
@@ -493,6 +525,32 @@ impl Editor {
                         Response::from_result(
                             doc.insert(Element::GridLine(GridLine { label, start, end: p })).map(|_| ()),
                         )
+                    }
+                    Some(_) => Response::redraw(),
+                }
+            }
+            Tool::Section | Tool::Elevation => {
+                let p = self
+                    .snap(doc.project(), self.storey, input.point, input.tolerance, self.chain_start, input.shift, &[])
+                    .point;
+                self.pointer = None;
+                match self.chain_start {
+                    None => {
+                        self.chain_start = Some(p);
+                        Response::redraw()
+                    }
+                    Some(start) if start.distance(p) >= 0.1 => {
+                        self.end_chain();
+                        let kind =
+                            if self.tool == Tool::Section { SectionKind::Section } else { SectionKind::Elevation };
+                        let view = navigation::new_section(doc.project(), start, p, self.section_look, kind);
+                        match doc.insert(Element::SectionView(view)) {
+                            Ok(id) => {
+                                self.set_selection(vec![id]);
+                                Response::changed()
+                            }
+                            Err(e) => Response { error: Some(e.to_string()), ..Response::redraw() },
+                        }
                     }
                     Some(_) => Response::redraw(),
                 }
@@ -676,6 +734,24 @@ impl Editor {
             },
             Tool::Select => {
                 let project = doc.project();
+                // Doppelklick auf eine Schnittmarke oder Ansichtslinie öffnet die Ansicht (ADR 0049).
+                if clicks >= 2
+                    && let Some(id) =
+                        geometry::views_at(project, input.point, input.tolerance, self.mark_length()).first()
+                {
+                    self.drag = None;
+                    return Response { open: Some(navigation::ViewRef::Section(id.0)), ..Response::redraw() };
+                }
+                // Griff an einem Ende einer gewählten Schnittlinie?
+                for &id in &self.selection {
+                    let Some(Element::SectionView(v)) = project.elements.get(&id) else { continue };
+                    for (end, p) in [(End::Start, v.start), (End::End, v.end)] {
+                        if p.distance(input.point) <= input.tolerance {
+                            self.drag = Some(Drag::SectionEnd { view: id, end, current: p });
+                            return Response::redraw();
+                        }
+                    }
+                }
                 // Doppelklick an einem Wandknoten wählt den Anschluss (ADR 0045).
                 if clicks >= 2
                     && let Some(j) =
@@ -715,10 +791,7 @@ impl Editor {
                     Some(at) if at.distance(input.point) <= input.tolerance && !self.hover.is_empty() => {
                         self.hover.get(self.hover_index).map(|c| c.ids.clone())
                     }
-                    _ => select::candidates_at(&shown, self.storey, input.point, input.tolerance)
-                        .into_iter()
-                        .next()
-                        .map(|c| c.ids),
+                    _ => self.candidates(&shown, input.point, input.tolerance).into_iter().next().map(|c| c.ids),
                 };
                 self.drag = Some(Drag::Pending {
                     start: input.point,
@@ -768,6 +841,17 @@ impl Editor {
                 let p =
                     self.snap(project, self.storey, input.point, input.tolerance, None, false, &self.selection).point;
                 if let Some(Drag::Selection { current, .. }) = &mut self.drag {
+                    *current = p;
+                }
+                Response::redraw()
+            }
+            Some(Drag::SectionEnd { view, end, .. }) => {
+                let other = match project.elements.get(&view) {
+                    Some(Element::SectionView(v)) => Some(if end == End::Start { v.end } else { v.start }),
+                    _ => None,
+                };
+                let p = self.snap(project, self.storey, input.point, input.tolerance, other, input.shift, &[]).point;
+                if let Some(Drag::SectionEnd { current, .. }) = &mut self.drag {
                     *current = p;
                 }
                 Response::redraw()
@@ -831,6 +915,10 @@ impl Editor {
                 }
                 ("Wandende verschieben", as_elements(moved_endpoint(doc.project(), wall, end, current)))
             }
+            Drag::SectionEnd { view, end, current } => match moved_section_end(doc.project(), view, end, current) {
+                Some(change) => ("Schnittlinie ändern", vec![change]),
+                None => return Response::redraw(),
+            },
         };
         Response::from_result(replace_all(doc, label, changes))
     }
@@ -852,6 +940,9 @@ impl Editor {
                 moved_elements(project, &self.selection, (current.x - start.x, current.y - start.y))
             }
             Drag::Endpoint { wall, end, current } => as_elements(moved_endpoint(project, *wall, *end, *current)),
+            Drag::SectionEnd { view, end, current } => {
+                moved_section_end(project, *view, *end, *current).into_iter().collect()
+            }
             Drag::Pending { .. } | Drag::Frame { .. } | Drag::Lasso { .. } => return None,
         };
         let mut p = project.clone();
@@ -1041,6 +1132,13 @@ impl Editor {
                 if c == ' ' && self.tool == Tool::Select && self.chain_start.is_none() {
                     return self.flip_with_space(doc);
                 }
+                if c == ' ' && matches!(self.tool, Tool::Section | Tool::Elevation) {
+                    self.section_look = match self.section_look {
+                        WallSide::Left => WallSide::Right,
+                        WallSide::Right => WallSide::Left,
+                    };
+                    return Response::redraw();
+                }
                 if c == ' ' && self.tool == Tool::Door {
                     // Leertaste: nächste der vier Lagen von Aufschlag und Anschlag.
                     let now = self
@@ -1074,6 +1172,94 @@ impl Editor {
             Command::WallTool => self.set_tool(Tool::Wall),
             Command::ArcWallTool => self.set_tool(Tool::ArcWall),
             Command::GridTool => self.set_tool(Tool::Grid),
+            Command::SectionTool => self.set_tool(Tool::Section),
+            Command::ElevationTool => self.set_tool(Tool::Elevation),
+            Command::FlipSection => {
+                let changes = self.selected_sections(doc.project(), |v| {
+                    v.look = match v.look {
+                        WallSide::Left => WallSide::Right,
+                        WallSide::Right => WallSide::Left,
+                    }
+                });
+                Response::from_result(replace_all(doc, "Blickrichtung umdrehen", changes))
+            }
+            Command::SetSectionDepth(depth) => {
+                if *depth <= 0.0 {
+                    return Response {
+                        error: Some("Die Blicktiefe muss größer als null sein".into()),
+                        ..Response::redraw()
+                    };
+                }
+                let changes = self.selected_sections(doc.project(), |v| v.depth = *depth);
+                Response::from_result(replace_all(doc, "Blicktiefe", changes))
+            }
+            Command::SetSectionInfo(id, name, mark) => {
+                let Some(Element::SectionView(v)) = doc.project().elements.get(&ElementId(*id)) else {
+                    return Response::redraw();
+                };
+                let mut n = v.clone();
+                n.name = name.trim().to_string();
+                n.mark = mark.trim().to_string();
+                Response::from_result(replace_all(
+                    doc,
+                    "Schnitt umbenennen",
+                    vec![(ElementId(*id), Element::SectionView(n))],
+                ))
+            }
+            Command::AddSheet => {
+                let (id, ops) = sheets::add_sheet_ops(doc.project());
+                let response = self.apply_ops(doc, "Planblatt anlegen", ops);
+                if response.error.is_some() {
+                    return response;
+                }
+                Response { open: Some(navigation::ViewRef::Sheet(id.0)), ..response }
+            }
+            Command::PlaceView(sheet, view, x, y) => {
+                match sheets::place_ops(doc.project(), ElementId(*sheet), *view, Point2::new(*x, *y)) {
+                    Ok(ops) => self.apply_ops(doc, "Ansicht aufs Blatt legen", ops),
+                    Err(e) => Response { error: Some(e), ..Response::redraw() },
+                }
+            }
+            Command::MovePlacedView(sheet, i, x, y) => {
+                let ops = sheets::move_ops(doc.project(), ElementId(*sheet), *i as usize, Point2::new(*x, *y));
+                self.apply_ops(doc, "Ansicht auf dem Blatt verschieben", ops)
+            }
+            Command::RemovePlacedView(sheet, i) => {
+                let ops = sheets::remove_ops(doc.project(), ElementId(*sheet), *i as usize);
+                self.apply_ops(doc, "Ansicht vom Blatt nehmen", ops)
+            }
+            Command::SetPlacedViewScale(sheet, i, scale) => {
+                let ops = sheets::scale_ops(doc.project(), ElementId(*sheet), *i as usize, *scale);
+                self.apply_ops(doc, "Maßstab auf dem Blatt", ops)
+            }
+            Command::SetSheetInfo(sheet, number, title, format) => {
+                let ops = sheets::info_ops(doc.project(), ElementId(*sheet), number, title, format);
+                self.apply_ops(doc, "Planblatt ändern", ops)
+            }
+            Command::DeleteSheet(sheet) => {
+                let ops = sheets::delete_sheet_ops(doc.project(), ElementId(*sheet));
+                self.apply_ops(doc, "Planblatt löschen", ops)
+            }
+            Command::SetStoreyHeight(id, height) => {
+                if *height <= 0.0 {
+                    return Response {
+                        error: Some("Die Geschosshöhe muss größer als null sein".into()),
+                        ..Response::redraw()
+                    };
+                }
+                let ops = navigation::storey_height_ops(doc.project(), ElementId(*id), *height);
+                self.apply_ops(doc, "Geschosshöhe", ops)
+            }
+            Command::SetStoreyElevation(id, elevation) => {
+                let ops = navigation::storey_elevation_ops(doc.project(), ElementId(*id), *elevation);
+                self.apply_ops(doc, "Höhe des Geschosses", ops)
+            }
+            Command::SetHome(view, sheet) => {
+                match sheets::set_home_ops(doc.project(), ElementId(*view), ElementId(*sheet)) {
+                    Ok(ops) => self.apply_ops(doc, "Heimat wählen", ops),
+                    Err(e) => Response { error: Some(e), ..Response::redraw() },
+                }
+            }
             Command::ColumnTool => self.set_tool(Tool::Column),
             Command::SpaceTool => self.set_tool(Tool::Space),
             Command::DoorTool => self.set_tool(Tool::Door),
@@ -1417,6 +1603,9 @@ impl Editor {
             info(Command::WallTool, "Wand zeichnen", "Werkzeug"),
             info(Command::ArcWallTool, "Bogenwand zeichnen", "Werkzeug"),
             info(Command::GridTool, "Achse zeichnen", "Werkzeug"),
+            info(Command::SectionTool, "Schnitt zeichnen", "Werkzeug"),
+            info(Command::ElevationTool, "Ansicht zeichnen", "Werkzeug"),
+            info(Command::AddSheet, "Neues Planblatt", "Planblätter"),
             info(Command::ColumnTool, "Stütze setzen", "Werkzeug"),
             info(Command::SpaceTool, "Raum setzen", "Werkzeug"),
             info(Command::DoorTool, "Tür setzen", "Werkzeug"),
@@ -1521,6 +1710,37 @@ impl Editor {
             }
             if let Some(w) = project_now.wall(*id) {
                 overlay.handles.extend([w.start, w.end]);
+            }
+        }
+        // Ansichten haben im Plan keine Marke; ihre Linie steht nur am Bildschirm.
+        // Gewählte Schnitte zeigen Griffe und wie weit sie blicken.
+        for (id, v) in project_now.section_views() {
+            let (n, _) = v.frame();
+            if v.kind == SectionKind::Elevation {
+                overlay.view_lines.push(view_line(v.start, v.end, n, self.mark_length()));
+            }
+            if self.selection.contains(&id) {
+                overlay.handles.extend([v.start, v.end]);
+                let far = |p: Point2| Point2::new(p.x + n.0 * v.depth, p.y + n.1 * v.depth);
+                overlay.guides.extend([(far(v.start), far(v.end)), (v.start, far(v.start)), (v.end, far(v.end))]);
+            }
+        }
+        if matches!(self.tool, Tool::Section | Tool::Elevation) {
+            overlay.snap = self.pointer;
+            if let (Some(start), Some(p)) = (self.chain_start, self.pointer)
+                && start.distance(p.point) > 1e-6
+            {
+                let probe = lot_model::SectionView {
+                    name: String::new(),
+                    mark: String::new(),
+                    start,
+                    end: p.point,
+                    look: self.section_look,
+                    depth: 1.0,
+                    kind: SectionKind::Section,
+                    home: None,
+                };
+                overlay.view_lines.push(view_line(start, p.point, probe.frame().0, self.mark_length()));
             }
         }
         if let Some(j) = self.selected_junction(project) {
@@ -1895,6 +2115,14 @@ impl Editor {
                 "Stich ziehen und klicken oder tippen, ⏎ übernimmt. Esc: Endpunkt neu.".into()
             }
             (Tool::ArcWall, Some(_), _) => "Bogenwand: Endpunkt klicken oder Sehne tippen.".into(),
+            (Tool::Section, None, _) => "Schnitt: Anfangspunkt der Schnittlinie klicken. Esc: zurück zum Auswählen.".into(),
+            (Tool::Section, Some(_), _) => {
+                "Schnitt: Endpunkt klicken. Leertaste dreht die Blickrichtung, ⇧: nur rechte Winkel.".into()
+            }
+            (Tool::Elevation, None, _) => {
+                "Ansicht: Anfangspunkt der Linie vor der Fassade klicken. Esc: zurück zum Auswählen.".into()
+            }
+            (Tool::Elevation, Some(_), _) => "Ansicht: Endpunkt klicken. Leertaste dreht die Blickrichtung.".into(),
             (Tool::Grid, None, _) => "Achse: Anfangspunkt klicken. Esc: zurück zum Auswählen.".into(),
             (Tool::Grid, Some(_), _) => "Achse: Endpunkt klicken. ⇧: nur rechte Winkel.".into(),
             (Tool::Column, _, _) => "Stütze 30/30: Mittelpunkt klicken. Esc: zurück zum Auswählen.".into(),
@@ -2068,6 +2296,9 @@ impl Editor {
         });
         if has_walls {
             return self.flip_selection(doc);
+        }
+        if self.selection.iter().any(|id| matches!(project.elements.get(id), Some(Element::SectionView(_)))) {
+            return self.run(doc, &Command::FlipSection);
         }
         if has_doors {
             // Bänder vorne links, hinten links, hinten rechts, vorne rechts: jede Taste dreht weiter.
@@ -2391,10 +2622,46 @@ impl Editor {
         Some((id, (nx * d * side, ny * d * side)))
     }
 
+    /// Die gewählten Schnitte und Ansichten, geändert mit `change`.
+    fn selected_sections(
+        &self,
+        project: &Project,
+        change: impl Fn(&mut lot_model::SectionView),
+    ) -> Vec<(ElementId, Element)> {
+        self.selection
+            .iter()
+            .filter_map(|id| match project.elements.get(id) {
+                Some(Element::SectionView(v)) => {
+                    let mut n = v.clone();
+                    change(&mut n);
+                    Some((*id, Element::SectionView(n)))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Länge der Enden einer Schnittmarke in Metern: 8 mm auf dem Papier (wie im Grundriss gezeichnet).
+    fn mark_length(&self) -> f64 {
+        8.0 * self.scale / 1000.0
+    }
+
+    /// Was ein Klick an dieser Stelle wählen würde: Bauteile wie bisher, dahinter Schnitte und Ansichten.
+    fn candidates(&self, project: &Project, p: Point2, tolerance: f64) -> Vec<Candidate> {
+        let mut found = select::candidates_at(project, self.storey, p, tolerance);
+        found.extend(
+            geometry::views_at(project, p, tolerance, self.mark_length())
+                .into_iter()
+                .map(|id| Candidate { ids: vec![id], label: select::label(project, id) }),
+        );
+        found
+    }
+
     fn set_tool(&mut self, tool: Tool) -> Response {
         self.tool = tool;
         self.pivot = None;
         self.door_turn = None;
+        self.section_look = WallSide::Left;
         self.opening_from_after = false;
         self.snap_choices.clear();
         self.series = None;
@@ -2915,6 +3182,9 @@ impl Editor {
         let project = doc.project();
         let mut ops = Vec::new();
         for id in &self.selection {
+            if let Some(Element::SectionView(_)) = project.elements.get(id) {
+                ops.extend(sheets::forget_section_ops(project, *id));
+            }
             for (oid, _) in project.openings_in(*id) {
                 ops.push(Operation::Delete { id: oid, element: project.elements[&oid].clone() });
             }
@@ -2956,6 +3226,8 @@ pub fn shortcuts() -> Vec<(&'static str, Command)> {
         ("WA", Command::WallTool),
         ("BW", Command::ArcWallTool),
         ("GR", Command::GridTool),
+        ("SC", Command::SectionTool),
+        ("AN", Command::ElevationTool),
         ("CL", Command::ColumnTool),
         ("RM", Command::SpaceTool),
         ("DR", Command::DoorTool),
@@ -2995,6 +3267,8 @@ fn command_title(command: &Command) -> &'static str {
         Command::WallTool => "Wand",
         Command::ArcWallTool => "Bogenwand",
         Command::GridTool => "Achse",
+        Command::SectionTool => "Schnitt",
+        Command::ElevationTool => "Ansicht",
         Command::ColumnTool => "Stütze",
         Command::SpaceTool => "Raum",
         Command::DoorTool => "Tür",
@@ -3107,3 +3381,9 @@ pub fn format_m(v: f64) -> String {
 
 #[cfg(test)]
 mod tests;
+
+/// Linie einer Ansicht für das Overlay: Anfang, Ende und Spitze des Blickpfeils in der Mitte.
+fn view_line(start: Point2, end: Point2, look: (f64, f64), mark: f64) -> [Point2; 3] {
+    let mid = Point2::new((start.x + end.x) / 2.0, (start.y + end.y) / 2.0);
+    [start, end, Point2::new(mid.x + look.0 * mark, mid.y + look.1 * mark)]
+}

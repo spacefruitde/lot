@@ -119,6 +119,34 @@ pub enum Command {
     SetSelection(Vec<u64>),
     Undo,
     Redo,
+    /// Schnitt im Grundriss zeichnen (SC): zwei Klicks, Leertaste dreht die Blickrichtung (ADR 0049).
+    SectionTool,
+    /// Ansicht im Grundriss zeichnen (AN): wie ein Schnitt, außerhalb des Gebäudes.
+    ElevationTool,
+    /// Blickrichtung der gewählten Schnitte und Ansichten umdrehen.
+    FlipSection,
+    /// Blicktiefe der gewählten Schnitte und Ansichten, in Metern.
+    SetSectionDepth(f64),
+    /// Name und Kennbuchstabe eines Schnitts.
+    SetSectionInfo(u64, String, String),
+    /// Neues Planblatt A3 mit der nächsten Plannummer; danach ist es offen.
+    AddSheet,
+    /// Ansicht mit ihrer Mitte an (x, y) in Blatt-mm aufs Blatt legen.
+    PlaceView(u64, crate::navigation::ViewRef, f64, f64),
+    /// Ansicht auf dem Blatt verschieben: Blatt, Stelle, neue Mitte.
+    MovePlacedView(u64, u32, f64, f64),
+    /// Ansicht vom Blatt nehmen; die Ansicht selbst bleibt.
+    RemovePlacedView(u64, u32),
+    SetPlacedViewScale(u64, u32, f64),
+    /// Plannummer, Planinhalt und Format.
+    SetSheetInfo(u64, String, String, String),
+    DeleteSheet(u64),
+    /// Heimat eines Schnitts: das Blatt, auf das seine Marke verweist.
+    SetHome(u64, u64),
+    /// Geschosshöhe; die Geschosse darüber rücken mit (Geschossleiste, ADR 0049).
+    SetStoreyHeight(u64, f64),
+    /// OKFF eines Geschosses; die Geschosse darüber rücken mit.
+    SetStoreyElevation(u64, f64),
 }
 
 impl Command {

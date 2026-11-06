@@ -25,7 +25,8 @@ extension AppModel {
                 document.addAttachment(name: name, data: data)
                 guard let viewport else { return }
                 _ = try viewport.addCadUnderlay(source: name)
-                requestRedraw?()
+                refreshViews()
+                loadMissingUnderlays()
                 return
             }
             guard let size = Self.underlaySize(data: data, name: name) else {
@@ -53,7 +54,8 @@ extension AppModel {
             document.addAttachment(name: url.lastPathComponent, data: data)
             guard let viewport else { return }
             _ = try viewport.addReferenceModel(source: url.lastPathComponent)
-            requestRedraw?()
+            refreshViews()
+            loadMissingUnderlays()
         } catch {
             errorMessage = Self.message(for: error)
         }
@@ -61,14 +63,15 @@ extension AppModel {
 
     /// Gibt dem Kern die Bilder aller Unterlagen, die er nicht selbst lesen kann.
     func loadMissingUnderlays() {
-        guard let viewport else { return }
-        for ref in viewport.missingUnderlayImages() {
-            guard let data = document.attachment(name: ref.source),
-                  let image = Self.rasterize(data: data, name: ref.source, page: Int(ref.page))
-            else { continue }
-            viewport.setUnderlayImage(
-                source: ref.source, page: ref.page, width: UInt32(image.width), height: UInt32(image.height), rgba: image.rgba
-            )
+        for viewport in viewports {
+            for ref in viewport.missingUnderlayImages() {
+                guard let data = document.attachment(name: ref.source),
+                      let image = Self.rasterize(data: data, name: ref.source, page: Int(ref.page))
+                else { continue }
+                viewport.setUnderlayImage(
+                    source: ref.source, page: ref.page, width: UInt32(image.width), height: UInt32(image.height), rgba: image.rgba
+                )
+            }
         }
         requestRedraw?()
     }

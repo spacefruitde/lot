@@ -1117,6 +1117,11 @@ pub struct SectionView {
     pub depth: f64,
     #[serde(default)]
     pub kind: SectionKind,
+    /// Planblatt, auf das die Schnittmarke verweist, wenn die Ansicht auf
+    /// mehreren Blättern liegt (ADR 0049). Ohne Angabe das erste Blatt nach
+    /// Plannummer, auf dem sie liegt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<ElementId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

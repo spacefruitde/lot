@@ -25,6 +25,7 @@ extension AppModel {
             viewport.setShowFindings(show: true)
         }
         viewport.focus(storey: storey, x: finding.x, y: finding.y)
+        updateViewState()
         requestRedraw?()
     }
 }

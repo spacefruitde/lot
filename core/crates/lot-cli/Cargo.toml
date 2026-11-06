@@ -20,5 +20,8 @@ png = "0.18.1"
 ron = "0.12.2"
 serde = { version = "1.0.229", features = ["derive"] }
 
+[dev-dependencies]
+lot-edit = { version = "0.1.0", path = "../lot-edit" }
+
 [lints]
 workspace = true
