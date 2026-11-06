@@ -162,5 +162,16 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Typ (Liste) | `OpeningType` | | gleiche Art und Rohbaumaße |
 | Bürostandard eines Büros | `OfficeOverrides` | | `buerostandard.ron` mit den Abweichungen (ADR 0040) |
 | Präsentationsplan | `presentation_plan` | | Wände dunkel, Räume farbig, ohne Maße (ADR 0041) |
+| Ansichtseinstellungen | `ViewSettings` | | was eine Ansicht selbst setzt; der Rest kommt aus Vorlage oder Bürostandard (ADR 0050) |
+| Ansichtsvorlage | `ViewTemplate` | | Bausteine Maßstab mit Detailgrad, Bauzustand, Thema; ein fehlender Baustein steuert nichts |
+| Baustein Maßstab | `ScaleBlock` | | Maßstab und, wenn gesetzt, Detailgrad einer Vorlage |
+| Voreinstellungen der Ansichten | `ViewDefaults` | | Anfang der Kette im Bürostandard |
+| Thema | `Theme` | | Regeln, die zusammen eine Aussage machen, etwa Brandschutz oder Flächen |
+| Regel | `Rule`, `Condition`, `RuleAction` | | blendet aus, graut oder färbt Bauteile nach Eigenschaften; die erste, die trifft, gilt |
+| Bauteilart | `Category` | | Wände, Türen, Fenster, Räume … für Regeln |
+| Herkunft einer Einstellung | `views::Origin` | | Bürostandard, Vorlage oder Ansicht |
+| Darstellung einer Ansicht | `views::Look` | | jede Einstellung mit Herkunft, Regeln, ausgeblendete Bauteile |
+| Vorübergehend ausblenden, isolieren | `views::Temporary` | | H und I, nur am Bildschirm, nie im Druck |
+| Druckbild | `print_view` | | zeigt am Bildschirm nur, was gedruckt wird |
 | Maßstabsleiste | `scale_bar` | | |
 | Nordpfeil | `north_arrow` | | Richtung aus `ProjectInfo::north` |

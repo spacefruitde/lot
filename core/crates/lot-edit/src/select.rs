@@ -227,6 +227,7 @@ pub fn kind_label(project: &Project, id: ElementId) -> String {
         }
         Some(Element::Elevator(_)) => "Aufzug".into(),
         Some(Element::PlanSheet(_)) => "Planblatt".into(),
+        Some(Element::ViewSettings(_)) => "Ansichtseinstellungen".into(),
         Some(Element::Space(_)) => "Raum".into(),
         Some(Element::GridLine(_)) => "Achse".into(),
         Some(Element::WallType(t)) => format!("Wandaufbau {}", t.name),

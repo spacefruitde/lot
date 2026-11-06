@@ -4,18 +4,19 @@
 //! Ansicht, y nach oben. Hier werden sie in Blattmillimeter und Modellmeter
 //! umgerechnet und an den Editor (lot-edit) gegeben.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use lot_edit::navigation::{self as nav, History, Place, Schedule, Target, ViewRef};
 use lot_edit::{Command, Editor, Input, Key, Overlay, Response, SnapKind, Tool};
 use lot_model::{Point2, Project};
-use lot_plan::floor_plan::{DEFAULT_CUT_HEIGHT, FloorPlanView, floor_plan};
+use lot_plan::floor_plan::FloorPlanView;
 use lot_plan::standard::OfficeStandard;
 use lot_plan::{PaperPoint, PlanObject, Viewport as PlanViewport};
 use lot_render::{OverlayItem, PlanCamera, Renderer, UnderlayImage, UnderlayQuad, ViewMode};
 
+use crate::visibility::{HiddenInfo, LookInfo, ReasonInfo, look_info};
 use crate::{LotDocument, LotError};
 
 /// Fangradius in Punkten.
@@ -32,8 +33,6 @@ pub enum ViewKind {
     Schedule,
 }
 
-/// Maßstab des Lageplans in der App.
-const SITE_SCALE: f64 = 500.0;
 /// Abstand der Seiten einer Liste untereinander, in mm.
 const PAGE_GAP: f64 = 20.0;
 
@@ -144,6 +143,10 @@ pub struct ViewState {
     pub has_below: bool,
     /// Das Geschoss darunter ist blass zu sehen.
     pub faded_below: bool,
+    /// Vorübergehend ausgeblendet oder isoliert (H, I): etwa „3 ausgeblendet“; leer, wenn nichts.
+    pub temporary: String,
+    /// Druckbild: nur, was gedruckt wird (ADR 0050).
+    pub print_view: bool,
     /// Aktives Werkzeug: „select“, „wall“, „grid“ oder „column“.
     pub tool: String,
     pub storey: String,
@@ -177,8 +180,14 @@ struct State {
     history: History,
     /// Kamera je Ansicht; alle Grundrisse teilen eine, damit der Geschosswechsel an der Stelle bleibt.
     cameras: HashMap<ViewRef, PlanCamera>,
-    /// Grundrisse (Geschosse), in denen das Geschoss darunter nicht blass erscheint.
-    below_hidden: HashSet<u64>,
+    /// Vorübergehend Ausgeblendetes (H, I) der übrigen Ansichten; das der gezeigten hält der Editor.
+    temps: HashMap<ViewRef, lot_plan::views::Temporary>,
+    /// Druckbild: ohne Hinweise, Fangpunkte, Unterlagen, blasses Geschoss und ohne H und I.
+    print_view: bool,
+    /// Darstellung der gezeigten Ansicht mit der Wirkung jeder Regel (ADR 0050).
+    look: Option<(lot_plan::views::Look, Vec<usize>, usize)>,
+    /// Gerechnetes Modell, wie die gezeigte Ansicht es zeigt (Schnitt, Lageplan).
+    shown_geometry: Option<Arc<lot_geom::ModelGeometry>>,
     /// Gerechnetes Modell für Schnitte, Lageplan und Blätter; verfällt mit jeder Modelländerung.
     geometry: Option<Arc<lot_geom::ModelGeometry>>,
     /// Auf dem gezeigten Blatt: Umrisse der Ansichten, die gewählte und ein laufendes Ziehen.
@@ -248,7 +257,10 @@ impl Viewport {
                 shown: ViewRef::FloorPlan(0),
                 history: History::default(),
                 cameras: HashMap::new(),
-                below_hidden: HashSet::new(),
+                temps: HashMap::new(),
+                print_view: false,
+                look: None,
+                shown_geometry: None,
                 geometry: None,
                 extents: Vec::new(),
                 placed: None,
@@ -520,17 +532,94 @@ impl Viewport {
         }
     }
 
-    /// Geschoss darunter im aktuellen Grundriss blass zeigen oder nicht.
-    pub fn set_faded_below(&self, show_it: bool) {
+    /// Geschoss darunter im aktuellen Grundriss blass zeigen oder nicht; eine Einstellung der Ansicht.
+    pub fn set_faded_below(&self, show_it: bool) -> EventResult {
+        self.set_view_field(format!("FadedBelow(Some({show_it}))"))
+    }
+
+    /// Eine Einstellung der gezeigten Ansicht setzen oder übernehmen (ADR 0050);
+    /// `field` ist die RON-Schreibweise eines `ViewField`, etwa `Scale(Some(50.0))`.
+    pub fn set_view_field(&self, field: String) -> EventResult {
+        let Some(field) = lot_edit::visibility::ViewField::parse(&field) else {
+            return EventResult { error: Some(format!("Unbekannte Einstellung: {field}")), ..EventResult::redraw() };
+        };
         let mut s = self.lock();
-        if let ViewRef::FloorPlan(storey) = s.shown {
-            if show_it {
-                s.below_hidden.remove(&storey);
-            } else {
-                s.below_hidden.insert(storey);
-            }
-        }
+        let Some(target) = s.shown.content() else { return EventResult::none() };
+        run_editor(&mut s, &Command::SetViewField(target, field))
+    }
+
+    /// Ansichtsvorlage der gezeigten Ansicht; `None` für keine.
+    pub fn set_view_template(&self, name: Option<String>) -> EventResult {
+        let mut s = self.lock();
+        let Some(target) = s.shown.content() else { return EventResult::none() };
+        run_editor(&mut s, &Command::SetViewTemplate(target, name))
+    }
+
+    /// Regel des Themas in der gezeigten Ansicht ein- oder abschalten; eigene Regeln der Ansicht löschen.
+    pub fn set_rule_on(&self, name: String, on: bool, own: bool) -> EventResult {
+        let mut s = self.lock();
+        let Some(target) = s.shown.content() else { return EventResult::none() };
+        let command = if own { Command::RemoveViewRule(target, name) } else { Command::SetRuleOn(target, name, on) };
+        run_editor(&mut s, &command)
+    }
+
+    /// Gewählte Bauteile in der gezeigten Ansicht ausblenden.
+    pub fn hide_in_view(&self) -> EventResult {
+        let mut s = self.lock();
+        let Some(target) = s.shown.content() else { return EventResult::none() };
+        run_editor(&mut s, &Command::HideInView(target))
+    }
+
+    /// In der gezeigten Ansicht Ausgeblendete wieder zeigen; leer zeigt alle.
+    pub fn show_in_view(&self, ids: Vec<u64>) -> EventResult {
+        let mut s = self.lock();
+        let Some(target) = s.shown.content() else { return EventResult::none() };
+        run_editor(&mut s, &Command::ShowInView(target, ids))
+    }
+
+    /// Druckbild ein oder aus.
+    pub fn set_print_view(&self, on: bool) {
+        let mut s = self.lock();
+        s.print_view = on;
         rebuild(&mut s, false);
+    }
+
+    /// Darstellung der gezeigten Ansicht mit Herkunft jeder Einstellung; `None` bei 3D, Blättern und Listen.
+    pub fn look(&self) -> Option<LookInfo> {
+        let s = self.lock();
+        let (look, counts, hidden_by_rules) = s.look.as_ref()?;
+        Some(look_info(look, counts, *hidden_by_rules))
+    }
+
+    /// Warum gewählte Bauteile in der gezeigten Ansicht fehlen, mit Lösung je Grund.
+    pub fn hidden_reasons(&self, ids: Vec<u64>) -> Vec<HiddenInfo> {
+        let s = self.lock();
+        let (Some((look, _, _)), Some(doc), Some(editor)) = (&s.look, &s.document, &s.editor) else {
+            return Vec::new();
+        };
+        let doc = doc.lock();
+        let project = doc.project();
+        ids.into_iter()
+            .filter_map(|id| {
+                let id = lot_model::ElementId(id);
+                let reasons = lot_edit::visibility::reasons(project, look, &editor.temp, id);
+                (!reasons.is_empty()).then(|| HiddenInfo {
+                    element: id.0,
+                    label: lot_edit::select::label(project, id),
+                    reasons: reasons
+                        .into_iter()
+                        .map(|r| {
+                            let (fix_title, fix) = match r.fix {
+                                Some((t, lot_edit::visibility::Fix::Run(c))) => (t, c.id()),
+                                Some((t, lot_edit::visibility::Fix::Go(v))) => (t, format!("go:{}", v.id())),
+                                None => (String::new(), String::new()),
+                            };
+                            ReasonInfo { text: r.text, fix_title, fix }
+                        })
+                        .collect(),
+                })
+            })
+            .collect()
     }
 
     /// Auswahl von außen setzen, etwa aus der Ansicht nebenan (gemeinsame Auswahl, ADR 0049).
@@ -597,16 +686,9 @@ impl Viewport {
         })
     }
 
-    /// Maßstab der Planansicht (100 für 1:100). Der Zoom bleibt gleich groß auf dem Bildschirm.
-    pub fn set_plan_scale(&self, scale: f64) {
-        let mut s = self.lock();
-        let old = s.plan_scale;
-        s.plan_scale = scale;
-        let mut camera = s.renderer.plan_camera();
-        camera.center = [camera.center[0] * old / scale, camera.center[1] * old / scale];
-        camera.px_per_mm *= scale / old;
-        s.renderer.set_plan_camera(camera);
-        rebuild(&mut s, false);
+    /// Maßstab der gezeigten Ansicht (100 für 1:100), eine Einstellung der Ansicht (ADR 0050).
+    pub fn set_plan_scale(&self, scale: f64) -> EventResult {
+        self.set_view_field(format!("Scale(Some({scale:?}))"))
     }
 
     pub fn triangle_count(&self) -> u32 {
@@ -709,6 +791,12 @@ impl Viewport {
             match (s.shown, &key) {
                 (ViewRef::FloorPlan(_), _) => {}
                 (ViewRef::Section(_), KeyInput::Delete) => return run_editor(&mut s, &Command::DeleteSelection),
+                (ViewRef::Section(_), KeyInput::Character { text }) if text.eq_ignore_ascii_case("h") => {
+                    return run_editor(&mut s, &Command::TempHide);
+                }
+                (ViewRef::Section(_), KeyInput::Character { text }) if text.eq_ignore_ascii_case("i") => {
+                    return run_editor(&mut s, &Command::TempIsolate);
+                }
                 (ViewRef::Section(_), KeyInput::Escape) => {
                     if let Some(e) = s.editor.as_mut() {
                         e.selection.clear();
@@ -755,6 +843,8 @@ impl Viewport {
             let mark = if (s.plan_scale - scale as f64).abs() < 1e-9 { " ✓" } else { "" };
             list.push(item(&format!("scale:{scale}"), &format!("Maßstab 1:{scale}{mark}"), "", "Ansicht"));
         }
+        let mark = if s.print_view { " ✓" } else { "" };
+        list.push(item("view:print", &format!("Druckbild{mark}"), "⌥⌘P", "Ansicht"));
         if let (Some(editor), Some(doc)) = (&s.editor, &s.document) {
             list.extend(editor.commands(doc.lock().project()).into_iter().map(|c| CommandItem {
                 id: c.id,
@@ -784,7 +874,11 @@ impl Viewport {
             _ => {}
         }
         if let Some(scale) = id.strip_prefix("scale:").and_then(|v| v.parse::<f64>().ok()) {
-            self.set_plan_scale(scale);
+            return self.set_plan_scale(scale);
+        }
+        if id == "view:print" {
+            let on = !self.lock().print_view;
+            self.set_print_view(on);
             return EventResult::redraw();
         }
         let Some(command) = Command::parse(&id) else {
@@ -822,7 +916,12 @@ impl Viewport {
             }
             None => (String::new(), false),
         };
-        let faded_below = has_below && matches!(s.shown, ViewRef::FloorPlan(id) if !s.below_hidden.contains(&id));
+        let faded_below = has_below && s.look.as_ref().is_some_and(|(l, _, _)| l.faded_below.value);
+        let temporary = match s.editor.as_ref().map(|e| &e.temp) {
+            Some(t) if t.isolated.is_some() => "isoliert · I zeigt wieder alles".to_string(),
+            Some(t) if !t.hidden.is_empty() => format!("{} ausgeblendet · H zeigt wieder alles", t.hidden.len()),
+            _ => String::new(),
+        };
         let (storey, wall_type, selection, hint, tool) = match (&s.editor, &s.document) {
             (Some(e), Some(doc)) => {
                 let doc = doc.lock();
@@ -873,6 +972,8 @@ impl Viewport {
             can_go_forward: s.history.can_go_forward(),
             has_below,
             faded_below,
+            temporary,
+            print_view: s.print_view,
             tool,
             storey,
             scale: s.plan_scale,
@@ -905,7 +1006,7 @@ impl Viewport {
         let ViewRef::Section(id) = s.shown else { return EventResult::none() };
         let p = s.renderer.plan_point(x, y);
         let m = s.plan_scale / 1000.0;
-        let (Some(geometry), Some(doc)) = (ensure_geometry(&mut s), s.document.clone()) else {
+        let (Some(geometry), Some(doc)) = (s.shown_geometry.clone(), s.document.clone()) else {
             return EventResult::none();
         };
         let picked = match doc.lock().project().elements.get(&lot_model::ElementId(id)) {
@@ -986,10 +1087,12 @@ impl Viewport {
             alt,
         };
         let dragging_before = editor.preview(doc.lock().project()).is_some();
+        let temp_before = editor.temp.clone();
         let response = action(&mut editor, &mut doc.lock(), input);
         let dragging = editor.preview(doc.lock().project()).is_some();
+        let temp_changed = editor.temp != temp_before;
         s.editor = Some(editor);
-        if response.model_changed {
+        if response.model_changed || temp_changed {
             rebuild(&mut s, true);
         } else if dragging || dragging_before {
             rebuild(&mut s, false);
@@ -1045,11 +1148,18 @@ fn rebuild(s: &mut State, model: bool) -> f64 {
     // Gezeigt werden die aktiven Varianten (2.04).
     let shown = project.variant_sets().next().is_some().then(|| project.variant_view());
     let project: &Project = shown.as_ref().unwrap_or(project);
-    match s.shown {
-        ViewRef::FloorPlan(_) => floor_plan_objects(s, project, standard),
-        ViewRef::Model => {}
-        view => {
-            let objects = view_objects(s, project, view, geometry.as_deref(), standard);
+    // Darstellung der Ansicht (ADR 0050); Grundrisse, Schnitte und der Lageplan zeichnen in ihrem Maßstab.
+    let look = s.shown.content().map(|c| lot_plan::views::look(project, standard, c));
+    if let Some(l) = &look {
+        set_scale(s, l.scale.value);
+    }
+    s.look = None;
+    s.shown_geometry = None;
+    match (s.shown, look) {
+        (ViewRef::FloorPlan(_), Some(look)) => floor_plan_objects(s, project, standard, look),
+        (ViewRef::Model, _) => {}
+        (view, look) => {
+            let objects = view_objects(s, project, view, geometry.as_deref(), standard, look);
             s.renderer.set_plan(objects);
             s.renderer.set_underlays(&[]);
         }
@@ -1061,31 +1171,43 @@ fn rebuild(s: &mut State, model: bool) -> f64 {
 
 /// Grundriss des Editor-Geschosses mit Unterlagen, Referenzmodellen, Hinweisen
 /// und, falls gewünscht, dem Geschoss darunter blass.
-fn floor_plan_objects(s: &mut State, project: &Project, standard: &OfficeStandard) {
+fn floor_plan_objects(s: &mut State, project: &Project, standard: &OfficeStandard, look: lot_plan::views::Look) {
     let Some(editor) = &s.editor else { return };
     let storey = editor.storey;
-    let view = FloorPlanView { storey, cut_height: DEFAULT_CUT_HEIGHT, scale: s.plan_scale };
+    let temp = if s.print_view { Default::default() } else { editor.temp.clone() };
+    let shown = lot_plan::views::apply(project, &look, &temp);
+    let hidden = hidden_ids(project, &shown.project);
+    let view = FloorPlanView { storey, cut_height: look.cut_height.value, scale: s.plan_scale };
     let viewport = PlanViewport { scale: s.plan_scale, origin: PaperPoint::new(0.0, 0.0) };
     let mut objects = Vec::new();
-    // Geschoss darunter blass, ganz unten (ADR 0049).
-    if !s.below_hidden.contains(&storey.0)
+    // Geschoss darunter blass, ganz unten (ADR 0049); nicht im Druckbild.
+    if look.faded_below.value
+        && !s.print_view
         && let Some(below) = nav::storey_step(project, storey, false)
     {
-        objects.extend(lot_plan::floor_plan::faded_storey(project, below, standard, viewport));
+        objects.extend(lot_plan::floor_plan::faded_storey(&shown.project, below, standard, viewport));
     }
+    let print = s.print_view;
+    let project = &shown.project;
     // Unterlagen aus DXF und DWG als graue Linien unter dem Plan, ihre Endpunkte zum Fangen.
     let mut points = Vec::new();
-    for (_, u) in project.underlays_on(storey).filter(|(_, u)| lot_io::cad::is_cad(&u.source)) {
+    for (_, u) in project.underlays_on(storey).filter(|(_, u)| lot_io::cad::is_cad(&u.source) && !print) {
         let Some(v) = s.vectors.get(&u.source) else { continue };
         objects.extend(lot_io::cad::underlay_objects(u, v, viewport));
         points.extend(lot_io::cad::underlay_points(u, v));
     }
     // Referenzmodelle, geschnitten in der Schnittebene.
-    let z = project.storey(storey).map_or(0.0, |st| st.elevation) + DEFAULT_CUT_HEIGHT;
-    let parts = reference_parts(project, &s.references);
-    lot_plan::reference::draw_reference_cut(&mut objects, &parts, z, viewport);
-    objects.extend(floor_plan(project, view, standard, viewport));
-    if s.show_findings {
+    let z = project.storey(storey).map_or(0.0, |st| st.elevation) + look.cut_height.value;
+    if !print {
+        let parts = reference_parts(project, &s.references);
+        lot_plan::reference::draw_reference_cut(&mut objects, &parts, z, viewport);
+    }
+    if look.presentation {
+        objects.extend(lot_plan::presentation::presentation_plan(project, storey, s.plan_scale, standard, viewport));
+    } else {
+        objects.extend(lot_plan::floor_plan::floor_plan_with(project, view, standard, viewport, &shown.paint));
+    }
+    if s.show_findings && !print {
         if s.findings.is_none()
             && let Ok(geometry) = lot_geom::build(project)
         {
@@ -1096,11 +1218,36 @@ fn floor_plan_objects(s: &mut State, project: &Project, standard: &OfficeStandar
         }
     }
     s.renderer.set_plan(objects);
-    let quads = underlay_quads(project, storey, &s.images, viewport);
+    let quads = if print { Vec::new() } else { underlay_quads(project, storey, &s.images, viewport) };
     s.renderer.set_underlays(&quads);
     if let Some(editor) = s.editor.as_mut() {
         editor.underlay_points = points;
+        editor.hidden = hidden;
     }
+    s.look = Some((look, shown.counts, shown.hidden_by_rules));
+}
+
+/// Bauteile des Projekts, die die Ansicht nicht zeigt; sie lassen sich nicht anklicken.
+fn hidden_ids(project: &Project, shown: &Project) -> std::collections::BTreeSet<lot_model::ElementId> {
+    project
+        .elements
+        .iter()
+        .filter(|(id, e)| lot_model::Category::of(e).is_some() && !shown.elements.contains_key(id))
+        .map(|(id, _)| *id)
+        .collect()
+}
+
+/// Maßstab der gezeigten Ansicht; der Zoom bleibt auf dem Bildschirm gleich groß.
+fn set_scale(s: &mut State, scale: f64) {
+    let old = s.plan_scale;
+    if (old - scale).abs() < 1e-9 || scale <= 0.0 {
+        return;
+    }
+    s.plan_scale = scale;
+    let mut camera = s.renderer.plan_camera();
+    camera.center = [camera.center[0] * old / scale, camera.center[1] * old / scale];
+    camera.px_per_mm *= scale / old;
+    s.renderer.set_plan_camera(camera);
 }
 
 /// Schnitt, Lageplan, Planblatt oder Liste als Planobjekte.
@@ -1110,19 +1257,37 @@ fn view_objects(
     view: ViewRef,
     geometry: Option<&lot_geom::ModelGeometry>,
     standard: &OfficeStandard,
+    look: Option<lot_plan::views::Look>,
 ) -> Vec<PlanObject> {
     s.extents.clear();
     let origin = PaperPoint::new(0.0, 0.0);
+    // Schnitt und Lageplan, wie die Ansicht sie zeigt (ADR 0050).
+    if let (Some(look), Some(g), ViewRef::Section(_) | ViewRef::SitePlan) = (look, geometry, view) {
+        let temp = match (&s.editor, s.print_view) {
+            (Some(e), false) => e.temp.clone(),
+            _ => Default::default(),
+        };
+        let shown = lot_plan::views::apply(project, &look, &temp);
+        let visible = Arc::new(lot_plan::layout::visible_geometry(g, project, &shown.project));
+        let viewport = PlanViewport { scale: s.plan_scale, origin };
+        let objects = match view {
+            ViewRef::Section(id) => match shown.project.elements.get(&lot_model::ElementId(id)) {
+                Some(lot_model::Element::SectionView(v)) => {
+                    lot_plan::section::section_with(&shown.project, &visible, v, standard, viewport, &shown.paint)
+                }
+                _ => Vec::new(),
+            },
+            _ => lot_plan::site_plan::site_plan(&shown.project, &visible, standard, viewport),
+        };
+        if let Some(editor) = s.editor.as_mut() {
+            editor.hidden = hidden_ids(project, &shown.project);
+        }
+        s.shown_geometry = Some(visible);
+        s.look = Some((look, shown.counts, shown.hidden_by_rules));
+        return objects;
+    }
     match view {
-        ViewRef::Section(id) => match (project.elements.get(&lot_model::ElementId(id)), geometry) {
-            (Some(lot_model::Element::SectionView(v)), Some(g)) => {
-                lot_plan::section::section(project, g, v, standard, PlanViewport { scale: s.plan_scale, origin })
-            }
-            _ => Vec::new(),
-        },
-        ViewRef::SitePlan => geometry
-            .map(|g| lot_plan::site_plan::site_plan(project, g, standard, PlanViewport { scale: SITE_SCALE, origin }))
-            .unwrap_or_default(),
+        ViewRef::Section(_) | ViewRef::SitePlan => Vec::new(),
         ViewRef::Sheet(id) => match (project.elements.get(&lot_model::ElementId(id)), geometry) {
             (Some(lot_model::Element::PlanSheet(sheet)), Some(g)) => {
                 s.extents = lot_plan::layout::placed_extents(project, g, sheet, standard);
@@ -1240,6 +1405,15 @@ fn show(s: &mut State, view: ViewRef, record: bool) -> bool {
         s.cameras.insert(camera_key(s.shown), camera);
     }
     let same_camera = camera_key(s.shown) == camera_key(view);
+    // H und I gelten je Ansicht.
+    if let Some(editor) = s.editor.as_mut() {
+        let temp = std::mem::take(&mut editor.temp);
+        let old = s.shown;
+        s.temps.insert(old, temp);
+        if let Some(editor) = s.editor.as_mut() {
+            editor.temp = s.temps.remove(&view).unwrap_or_default();
+        }
+    }
     s.shown = view;
     s.placed = None;
     s.placed_drag = None;
@@ -1417,7 +1591,7 @@ fn update_overlay(s: &mut State) {
 /// Die gemeinsame Auswahl im Schnitt, blau wie im Grundriss.
 fn section_overlay(s: &mut State, id: u64) {
     let mut items = Vec::new();
-    if let (Some(editor), Some(doc), Some(geometry)) = (&s.editor, &s.document, &s.geometry)
+    if let (Some(editor), Some(doc), Some(geometry)) = (&s.editor, &s.document, &s.shown_geometry)
         && !editor.selection.is_empty()
         && let Some(lot_model::Element::SectionView(v)) = doc.lock().project().elements.get(&lot_model::ElementId(id))
     {

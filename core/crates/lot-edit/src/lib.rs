@@ -18,6 +18,7 @@ pub mod snap;
 pub mod tempdims;
 pub mod transform;
 pub mod types;
+pub mod visibility;
 pub mod walls;
 
 pub use command::{Command, CommandInfo};
@@ -289,6 +290,11 @@ pub struct Editor {
     pub scale: f64,
     /// Blickrichtung beim Zeichnen eines Schnitts, die Leertaste dreht sie.
     section_look: WallSide,
+    /// Vorübergehend ausgeblendet oder isoliert (H, I) in der gezeigten Ansicht;
+    /// die Ansicht tauscht es beim Wechsel aus (ADR 0050).
+    pub temp: lot_plan::views::Temporary,
+    /// Was die gezeigte Ansicht nicht zeigt; von der Ansicht gesetzt. Es lässt sich nicht anklicken.
+    pub hidden: std::collections::BTreeSet<ElementId>,
 }
 
 /// Die vier Lagen einer Tür: Aufschlagseite und ob die Bänder am hinteren Ende sitzen.
@@ -339,6 +345,8 @@ impl Editor {
             door_turn: None,
             scale: 100.0,
             section_look: WallSide::Left,
+            temp: Default::default(),
+            hidden: Default::default(),
         }
     }
 
@@ -1254,6 +1262,84 @@ impl Editor {
                 let ops = navigation::storey_elevation_ops(doc.project(), ElementId(*id), *elevation);
                 self.apply_ops(doc, "Höhe des Geschosses", ops)
             }
+            Command::SetViewTemplate(view, name) => {
+                let standard = lot_plan::standard::OfficeStandard::default_standard();
+                match visibility::set_template_ops(doc.project(), standard, *view, name.as_deref()) {
+                    Ok(ops) => self.apply_ops(doc, "Ansichtsvorlage", ops),
+                    Err(e) => Response { error: Some(e), ..Response::redraw() },
+                }
+            }
+            Command::SetViewField(view, field) => {
+                let bad = match field {
+                    visibility::ViewField::Scale(Some(v)) | visibility::ViewField::CutHeight(Some(v)) => *v <= 0.0,
+                    _ => false,
+                };
+                if bad {
+                    return Response {
+                        error: Some("Der Wert muss größer als null sein".into()), ..Response::redraw()
+                    };
+                }
+                let ops = visibility::set_field_ops(doc.project(), *view, field);
+                self.apply_ops(doc, "Ansicht einstellen", ops)
+            }
+            Command::SetRuleOn(view, name, on) => {
+                let ops = visibility::set_rule_on_ops(doc.project(), *view, name, *on);
+                self.apply_ops(doc, "Regel der Ansicht", ops)
+            }
+            Command::AddViewRule(view, rule) => {
+                let ops = visibility::add_rule_ops(doc.project(), *view, rule);
+                self.apply_ops(doc, "Regel anlegen", ops)
+            }
+            Command::RemoveViewRule(view, name) => {
+                let ops = visibility::remove_rule_ops(doc.project(), *view, name);
+                self.apply_ops(doc, "Regel löschen", ops)
+            }
+            Command::HideInView(view) => {
+                if self.selection.is_empty() {
+                    return Response { error: Some("Erst Bauteile wählen".into()), ..Response::redraw() };
+                }
+                let ids = std::mem::take(&mut self.selection);
+                let ops = visibility::hide_ops(doc.project(), *view, &ids);
+                self.apply_ops(doc, "In der Ansicht ausblenden", ops)
+            }
+            Command::ShowInView(view, ids) => {
+                let ids: Vec<ElementId> = ids.iter().copied().map(ElementId).collect();
+                let ops = visibility::show_ops(doc.project(), *view, &ids);
+                self.apply_ops(doc, "In der Ansicht zeigen", ops)
+            }
+            Command::TempHide => {
+                if self.selection.is_empty() {
+                    if self.temp.is_active() {
+                        self.temp = Default::default();
+                        return Response::redraw();
+                    }
+                    return Response {
+                        error: Some("H blendet die Auswahl aus: erst Bauteile wählen".into()),
+                        ..Response::redraw()
+                    };
+                }
+                let ids = std::mem::take(&mut self.selection);
+                self.temp.hidden.extend(ids);
+                Response::redraw()
+            }
+            Command::TempIsolate => {
+                if self.selection.is_empty() {
+                    if self.temp.is_active() {
+                        self.temp = Default::default();
+                        return Response::redraw();
+                    }
+                    return Response {
+                        error: Some("I isoliert die Auswahl: erst Bauteile wählen".into()),
+                        ..Response::redraw()
+                    };
+                }
+                self.temp.isolated = Some(self.selection.iter().copied().collect());
+                Response::redraw()
+            }
+            Command::TempReset => {
+                self.temp = Default::default();
+                Response::redraw()
+            }
             Command::SetHome(view, sheet) => {
                 match sheets::set_home_ops(doc.project(), ElementId(*view), ElementId(*sheet)) {
                     Ok(ops) => self.apply_ops(doc, "Heimat wählen", ops),
@@ -1571,7 +1657,8 @@ impl Editor {
             }
             Command::SelectAll => {
                 self.tool = Tool::Select;
-                let all = select::pickable(&doc.project().variant_view(), self.storey);
+                let mut all = select::pickable(&doc.project().variant_view(), self.storey);
+                all.retain(|id| !self.hidden.contains(id));
                 self.set_selection(all);
                 Response::redraw()
             }
@@ -1606,6 +1693,9 @@ impl Editor {
             info(Command::SectionTool, "Schnitt zeichnen", "Werkzeug"),
             info(Command::ElevationTool, "Ansicht zeichnen", "Werkzeug"),
             info(Command::AddSheet, "Neues Planblatt", "Planblätter"),
+            info(Command::TempHide, "Auswahl vorübergehend ausblenden (H)", "Ansicht"),
+            info(Command::TempIsolate, "Auswahl isolieren (I)", "Ansicht"),
+            info(Command::TempReset, "Ausgeblendetes wieder zeigen", "Ansicht"),
             info(Command::ColumnTool, "Stütze setzen", "Werkzeug"),
             info(Command::SpaceTool, "Raum setzen", "Werkzeug"),
             info(Command::DoorTool, "Tür setzen", "Werkzeug"),
@@ -2247,6 +2337,7 @@ impl Editor {
     /// Ergebnis eines Rahmens oder Lassos: ersetzt die Auswahl, mit ⇧ kommt
     /// jedes gefundene Bauteil hinzu oder fällt heraus.
     fn select_found(&mut self, found: Vec<ElementId>, shift: bool) {
+        let found: Vec<ElementId> = found.into_iter().filter(|id| !self.hidden.contains(id)).collect();
         if !shift {
             self.set_selection(found);
             return;
@@ -2649,6 +2740,7 @@ impl Editor {
     /// Was ein Klick an dieser Stelle wählen würde: Bauteile wie bisher, dahinter Schnitte und Ansichten.
     fn candidates(&self, project: &Project, p: Point2, tolerance: f64) -> Vec<Candidate> {
         let mut found = select::candidates_at(project, self.storey, p, tolerance);
+        found.retain(|c| c.ids.iter().all(|id| !self.hidden.contains(id)));
         found.extend(
             geometry::views_at(project, p, tolerance, self.mark_length())
                 .into_iter()
@@ -3226,6 +3318,8 @@ pub fn shortcuts() -> Vec<(&'static str, Command)> {
         ("WA", Command::WallTool),
         ("BW", Command::ArcWallTool),
         ("GR", Command::GridTool),
+        ("H", Command::TempHide),
+        ("I", Command::TempIsolate),
         ("SC", Command::SectionTool),
         ("AN", Command::ElevationTool),
         ("CL", Command::ColumnTool),
@@ -3267,6 +3361,8 @@ fn command_title(command: &Command) -> &'static str {
         Command::WallTool => "Wand",
         Command::ArcWallTool => "Bogenwand",
         Command::GridTool => "Achse",
+        Command::TempHide => "Ausblenden",
+        Command::TempIsolate => "Isolieren",
         Command::SectionTool => "Schnitt",
         Command::ElevationTool => "Ansicht",
         Command::ColumnTool => "Stütze",

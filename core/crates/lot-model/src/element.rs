@@ -53,6 +53,7 @@ pub enum Element {
     Elevator(crate::Elevator),
     ProjectInfo(ProjectInfo),
     PlanSheet(PlanSheet),
+    ViewSettings(crate::ViewSettings),
 }
 
 /// Art eines Elements, ohne Daten.
@@ -85,6 +86,7 @@ pub enum ElementKind {
     Elevator,
     ProjectInfo,
     PlanSheet,
+    ViewSettings,
 }
 
 impl Element {
@@ -117,6 +119,7 @@ impl Element {
             Element::Elevator(_) => ElementKind::Elevator,
             Element::ProjectInfo(_) => ElementKind::ProjectInfo,
             Element::PlanSheet(_) => ElementKind::PlanSheet,
+            Element::ViewSettings(_) => ElementKind::ViewSettings,
         }
     }
 

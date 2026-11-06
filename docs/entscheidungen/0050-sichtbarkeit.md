@@ -1,6 +1,6 @@
 # 0050 Sichtbarkeit und Ansichtsvorlagen
 
-Status: entschieden von Ben · 26.10.2026
+Status: entschieden von Ben · 26.10.2026; umgesetzt am 28.10.2026 bis auf die offenen Punkte unter „Folgen“, Ben testet in der App
 
 ## Kontext
 
@@ -24,3 +24,5 @@ Ben am 26.10.2026: „24 ok“, „25 ok“, „26 ok“.
 ## Folgen
 
 - Die Vorlagen ab Werk werden Teil des eingebauten Bürostandards (ADR 0040).
+- Umgesetzt (28.10.2026): Einstellungen je Ansicht als Element `ViewSettings` (nur, was die Ansicht selbst setzt), Vorlagen aus Bausteinen (`ViewTemplate`, `ScaleBlock`), Themen mit Regeln nach Art, Bauzustand, Eigenschaft, Aufbau und Nutzung (`Theme`, `Rule`), die Kette mit Herkunft (`views::look`), Zähler je Regel, „Warum sehe ich das nicht?“ mit Lösung je Grund, dauerhaft in der Ansicht ausblenden, H und I je Ansicht mit Rahmen, Druckbild, sieben Vorlagen und drei Themen ab Werk im Bürostandard. Planblätter zeigen jede Ansicht so, wie sie eingestellt ist.
+- Offen: mehrere Grundrisse je Geschoss („Ansicht duplizieren“), Regeln und Vorlagen in der App anlegen, „Verborgenes zeigen“, Farben je Bauteil über Regeln hinaus, Türen und Fenster farbig nach Regeln.

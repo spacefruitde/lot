@@ -261,7 +261,8 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
             | Element::Plot(_)
             | Element::Elevator(_)
             | Element::ProjectInfo(_)
-            | Element::PlanSheet(_) => false,
+            | Element::PlanSheet(_)
+            | Element::ViewSettings(_) => false,
             Element::Wall(w) => {
                 let k = inside(w.start.x, w.start.y) || inside(w.end.x, w.end.y);
                 if k {

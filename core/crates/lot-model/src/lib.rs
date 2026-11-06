@@ -20,6 +20,7 @@ mod stair;
 mod terrain;
 mod underlay;
 mod variant;
+mod view;
 
 pub use annotation::{Annotation, AnnotationShape, AnnotationView};
 pub use document::{Document, ModelError};
@@ -39,3 +40,4 @@ pub use stair::{FlightLayout, Landing, Railing, RailingPath, Stair, StairFlight,
 pub use terrain::{Terrain, TerrainPoint};
 pub use underlay::{ReferenceModel, Underlay, pdf_point_scale};
 pub use variant::{Variant, VariantSet};
+pub use view::{Category, Condition, Detail, Rule, RuleAction, ScaleBlock, Theme, ViewSettings, ViewTemplate};

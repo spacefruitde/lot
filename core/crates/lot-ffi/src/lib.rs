@@ -10,6 +10,7 @@
 
 mod navigation;
 mod viewport;
+mod visibility;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};

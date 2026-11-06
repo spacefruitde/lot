@@ -156,6 +156,9 @@ fn annotation_deletes(project: &Project, view: AnnotationView) -> Vec<Operation>
 pub fn forget_section_ops(project: &Project, view: ElementId) -> Vec<Operation> {
     let mut ops = annotation_deletes(project, AnnotationView::Section { view });
     let content = ViewContent::Section { view };
+    if let Some((id, settings)) = project.view_settings(content) {
+        ops.push(Operation::Delete { id, element: Element::ViewSettings(settings.clone()) });
+    }
     for (id, s) in project.plan_sheets() {
         if s.views.iter().any(|p| p.content == content) {
             let mut new = s.clone();

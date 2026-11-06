@@ -13,6 +13,9 @@ struct InspectorView: View {
                     Button("Gelesen") { model.notices.removeAll() }
                 }
             }
+            if !model.hiddenInfos.isEmpty {
+                HiddenSection()
+            }
             if let placed = model.placed {
                 PlacedSection(info: placed)
             } else if let sheet = model.sheet {
@@ -26,6 +29,9 @@ struct InspectorView: View {
                         Text("Nichts gewählt. Eine Wand oder einen Raumstempel anklicken zeigt die Eigenschaften.")
                             .foregroundStyle(.secondary)
                     }
+                }
+                if let look = model.look {
+                    LookSection(look: look)
                 }
                 if model.storeyAreas.contains(where: { $0.net > 0 }) {
                     Section("Flächen") {
@@ -42,6 +48,12 @@ struct InspectorView: View {
                     }
                 }
             } else {
+                if model.look != nil {
+                    Section {
+                        Button("In dieser Ansicht ausblenden") { model.hideInView() }
+                            .help("Bleibt ausgeblendet, bis du es im Abschnitt Ansicht wieder zeigst. H blendet nur vorübergehend aus.")
+                    }
+                }
                 ForEach(model.sections, id: \.element) { SectionSection(info: $0) }
                 ForEach(model.spaces, id: \.element) { SpaceSection(space: $0) }
                 ForEach(model.texts, id: \.element) { TextSection(info: $0) }
@@ -831,6 +843,163 @@ private struct PlacedSection: View {
             HStack {
                 Button("Öffnen") { model.go(info.view) }
                 Button("Vom Blatt nehmen") { model.run("RemovePlacedView(\(info.sheet),\(info.index))") }
+            }
+        }
+    }
+}
+
+/// Die aktive Ansicht (ADR 0050): Vorlage, jede Einstellung mit Herkunft und
+/// Zurücksetzen, Regeln mit Zähler, in der Ansicht Ausgeblendetes.
+private struct LookSection: View {
+    @Environment(AppModel.self) private var model
+    let look: LookInfo
+
+    var body: some View {
+        Section("Ansicht") {
+            Picker("Vorlage", selection: Binding(
+                get: { look.template },
+                set: { model.setViewTemplate($0.isEmpty ? nil : $0) }
+            )) {
+                Text("keine").tag("")
+                ForEach(look.templates, id: \.self) { Text($0).tag($0) }
+            }
+            ChainRow(title: "Maßstab", origin: look.scaleOrigin, own: look.scaleOwn, reset: "Scale(None)") {
+                Picker("", selection: Binding(
+                    get: { look.scale },
+                    set: { model.setViewField("Scale(Some(\($0)))") }
+                )) {
+                    ForEach(scales, id: \.self) { Text("1:\(Int($0))").tag($0) }
+                }
+                .labelsHidden()
+            }
+            ChainRow(title: "Detailgrad", origin: look.detailOrigin, own: look.detailOwn, reset: detailField(index: nil)) {
+                Picker("", selection: Binding(
+                    get: { Int(look.detail) },
+                    set: { model.setViewField(detailField(index: UInt32($0))) }
+                )) {
+                    ForEach(Array(AppModel.details.enumerated()), id: \.offset) { Text($1).tag($0) }
+                }
+                .labelsHidden()
+            }
+            ChainRow(title: "Bauzustand", origin: look.phaseOrigin, own: look.phaseOwn, reset: phaseField(index: nil)) {
+                Picker("", selection: Binding(
+                    get: { Int(look.phase) },
+                    set: { model.setViewField(phaseField(index: UInt32($0))) }
+                )) {
+                    ForEach(Array(AppModel.phases.enumerated()), id: \.offset) { Text($1).tag($0) }
+                }
+                .labelsHidden()
+            }
+            ChainRow(title: "Thema", origin: look.themeOrigin, own: look.themeOwn, reset: "Theme(None)") {
+                Picker("", selection: Binding(
+                    get: { look.theme },
+                    set: { model.setViewField("Theme(Some(\(ron($0))))") }
+                )) {
+                    Text("keins").tag("")
+                    ForEach(look.themes, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden()
+            }
+            if look.isPlan {
+                ChainRow(title: "Schnitthöhe", origin: look.cutHeightOrigin, own: look.cutHeightOwn, reset: "CutHeight(None)") {
+                    HStack(spacing: 4) {
+                        TextField("", value: Binding(
+                            get: { look.cutHeight },
+                            set: { model.setViewField("CutHeight(Some(\($0)))") }
+                        ), format: .number.precision(.fractionLength(2)))
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 56)
+                        Text("m").foregroundStyle(.secondary)
+                    }
+                }
+                ChainRow(title: "Geschoss darunter", origin: look.fadedBelowOrigin, own: look.fadedBelowOwn, reset: "FadedBelow(None)") {
+                    Toggle("", isOn: Binding(get: { look.fadedBelow }, set: { model.setFadedBelow($0) }))
+                        .labelsHidden()
+                }
+            }
+        }
+        if !look.rules.isEmpty {
+            Section("Regeln") {
+                ForEach(look.rules, id: \.name) { rule in
+                    HStack(alignment: .firstTextBaseline) {
+                        Toggle("", isOn: Binding(get: { rule.on }, set: { model.setRule(rule, on: $0) }))
+                            .labelsHidden()
+                            .toggleStyle(.checkbox)
+                            .help(rule.own ? "Eigene Regel der Ansicht: abschalten löscht sie" : "In dieser Ansicht abschalten")
+                        if rule.color.count == 3 {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color(red: Double(rule.color[0]) / 255, green: Double(rule.color[1]) / 255, blue: Double(rule.color[2]) / 255))
+                                .frame(width: 12, height: 12)
+                        }
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(rule.name)
+                            Text("\(rule.count) · \(rule.origin)").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        if !look.hidden.isEmpty {
+            Section("In dieser Ansicht ausgeblendet") {
+                Text(look.hidden.count == 1 ? "1 Bauteil" : "\(look.hidden.count) Bauteile")
+                Button("Alle wieder zeigen") { model.showInView([]) }
+            }
+        }
+    }
+
+    private var scales: [Double] {
+        let common: [Double] = [20, 50, 100, 200, 500, 1000]
+        return common.contains(look.scale) ? common : (common + [look.scale]).sorted()
+    }
+}
+
+/// Eine Einstellung mit ihrer Herkunft; setzt die Ansicht sie selbst, führt ↺ zurück zur Kette.
+private struct ChainRow<Control: View>: View {
+    @Environment(AppModel.self) private var model
+    let title: String
+    let origin: String
+    let own: Bool
+    let reset: String
+    @ViewBuilder let control: () -> Control
+
+    var body: some View {
+        LabeledContent {
+            HStack(spacing: 4) {
+                control()
+                if own {
+                    Button { model.setViewField(reset) } label: { Image(systemName: "arrow.uturn.backward") }
+                        .buttonStyle(.borderless)
+                        .help("Wieder aus Vorlage oder Bürostandard übernehmen")
+                }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                Text(origin).font(.caption2).foregroundStyle(own ? Color.orange : Color.secondary)
+            }
+        }
+    }
+}
+
+/// Gewählte Bauteile, die die Ansicht nicht zeigt: warum, und eine Lösung je Grund (ADR 0050).
+private struct HiddenSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section("Nicht zu sehen in dieser Ansicht") {
+            ForEach(model.hiddenInfos, id: \.element) { info in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(info.label).fontWeight(.medium)
+                    ForEach(Array(info.reasons.enumerated()), id: \.offset) { _, reason in
+                        HStack {
+                            Text(reason.text).font(.callout).foregroundStyle(.secondary)
+                            Spacer()
+                            if !reason.fix.isEmpty {
+                                Button(reason.fixTitle) { model.fix(reason) }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

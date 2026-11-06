@@ -355,6 +355,32 @@ fn validate(project: &Project) -> Result<(), ModelError> {
                 }
             }
             Element::ProjectInfo(_) => {}
+            Element::ViewSettings(v) => {
+                let view_ok = match v.view {
+                    crate::ViewContent::FloorPlan { storey } | crate::ViewContent::Presentation { storey } => {
+                        project.storey(storey).is_some()
+                    }
+                    crate::ViewContent::Section { view } => {
+                        matches!(project.elements.get(&view), Some(Element::SectionView(_)))
+                    }
+                    crate::ViewContent::SitePlan => true,
+                };
+                if !view_ok {
+                    return Err(invalid("Ansicht: Das Geschoss oder der Schnitt fehlt"));
+                }
+                if v.scale.is_some_and(|s| s <= 0.0) || v.cut_height.is_some_and(|h| h <= 0.0) {
+                    return Err(invalid("Ansicht: Maßstab und Schnitthöhe müssen größer als null sein"));
+                }
+                let twice = project
+                    .elements
+                    .values()
+                    .filter(|e| matches!(e, Element::ViewSettings(o) if o.view == v.view))
+                    .count()
+                    > 1;
+                if twice {
+                    return Err(invalid("Ansicht: Einstellungen gibt es je Ansicht nur einmal"));
+                }
+            }
             Element::PlanSheet(s) => {
                 if !["A4", "A3", "A2", "A1", "A0"].contains(&s.format.as_str()) {
                     return Err(invalid("Planblatt: Format A4 bis A0"));

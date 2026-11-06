@@ -6,7 +6,7 @@
 use lot_geom::ModelGeometry;
 use lot_model::{Element, PlanSheet, Project, ViewContent};
 
-use crate::floor_plan::{DEFAULT_CUT_HEIGHT, FloorPlanView, floor_plan};
+use crate::floor_plan::{FloorPlanView, floor_plan_with};
 use crate::standard::OfficeStandard;
 use crate::{Anchor, PaperPoint, Pen, PlanObject, Sheet, Viewport, bounds, rect_points};
 
@@ -59,15 +59,31 @@ fn drawings(project: &Project, geometry: &ModelGeometry, sheet: &PlanSheet, stan
     let mut out = Vec::new();
     for (index, placed) in sheet.views.iter().enumerate() {
         let viewport = Viewport { scale: placed.scale, origin: PaperPoint::new(0.0, 0.0) };
+        // Jede Ansicht so, wie sie eingestellt ist (ADR 0050); der Maßstab gehört zur Platzierung.
+        let look = crate::views::look(project, standard, placed.content);
+        let shown = crate::views::apply(project, &look, &crate::views::Temporary::default());
+        let geometry = &visible_geometry(geometry, project, &shown.project);
+        let project = &shown.project;
+        let mut paint = shown.paint.clone();
+        if look.detail.origin == crate::views::Origin::Office {
+            paint.detail = None;
+        }
         let (mut objects, title) = match placed.content {
-            ViewContent::FloorPlan { storey } => {
-                let view = FloorPlanView { storey, cut_height: DEFAULT_CUT_HEIGHT, scale: placed.scale };
+            ViewContent::FloorPlan { storey } if look.presentation => {
                 let name = project.storey(storey).map_or("?".to_string(), |s| s.name.clone());
-                (floor_plan(project, view, standard, viewport), format!("Grundriss {name}"))
+                (
+                    crate::presentation::presentation_plan(project, storey, placed.scale, standard, viewport),
+                    format!("Grundriss {name}"),
+                )
+            }
+            ViewContent::FloorPlan { storey } => {
+                let view = FloorPlanView { storey, cut_height: look.cut_height.value, scale: placed.scale };
+                let name = project.storey(storey).map_or("?".to_string(), |s| s.name.clone());
+                (floor_plan_with(project, view, standard, viewport, &paint), format!("Grundriss {name}"))
             }
             ViewContent::Section { view } => match project.elements.get(&view) {
                 Some(Element::SectionView(v)) => {
-                    (crate::section::section(project, geometry, v, standard, viewport), v.name.clone())
+                    (crate::section::section_with(project, geometry, v, standard, viewport, &paint), v.name.clone())
                 }
                 _ => (Vec::new(), "Ansicht fehlt".to_string()),
             },
@@ -98,6 +114,14 @@ fn drawings(project: &Project, geometry: &ModelGeometry, sheet: &PlanSheet, stan
         });
     }
     out
+}
+
+/// Das gerechnete Modell ohne die Bauteile, die eine Ansicht ausblendet
+/// (in `full`, aber nicht in `shown`); was nicht zum Projekt gehört, bleibt.
+pub fn visible_geometry(geometry: &ModelGeometry, full: &Project, shown: &Project) -> ModelGeometry {
+    let mut g = geometry.clone();
+    g.elements.retain(|e| shown.elements.contains_key(&e.id) || !full.elements.contains_key(&e.id));
+    g
 }
 
 /// Zeichnet ein Planblatt.

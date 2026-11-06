@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+use lot_model::{PhaseFilter, Theme, ViewTemplate};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -28,6 +29,36 @@ pub struct OfficeStandard {
     /// Präsentationspläne (3.11).
     #[serde(default)]
     pub presentation: PresentationStyle,
+    /// Voreinstellungen jeder Ansicht, der Anfang der Kette (ADR 0050).
+    #[serde(default)]
+    pub views: ViewDefaults,
+    /// Ansichtsvorlagen aus Bausteinen.
+    #[serde(default)]
+    pub templates: Vec<ViewTemplate>,
+    /// Themen: Regeln, die zusammen eine Aussage machen.
+    #[serde(default)]
+    pub themes: Vec<Theme>,
+}
+
+/// Was jede Ansicht zeigt, solange weder Vorlage noch Ansicht etwas anderes
+/// setzen (ADR 0050).
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+pub struct ViewDefaults {
+    /// Maßstab von Grundrissen, Schnitten und Ansichten.
+    pub scale: f64,
+    /// Maßstab des Lageplans.
+    pub site_scale: f64,
+    /// Schnitthöhe im Grundriss über OKFF, in Metern.
+    pub cut_height: f64,
+    pub phase: PhaseFilter,
+    /// Geschoss darunter blass im Grundriss (ADR 0049).
+    pub faded_below: bool,
+}
+
+impl Default for ViewDefaults {
+    fn default() -> Self {
+        ViewDefaults { scale: 100.0, site_scale: 500.0, cut_height: 1.0, phase: PhaseFilter::All, faded_below: true }
+    }
 }
 
 /// Angaben zum Büro für den Plankopf.
@@ -110,6 +141,13 @@ pub struct OfficeOverrides {
     pub sheets: Option<SheetSettings>,
     #[serde(default)]
     pub presentation: Option<PresentationStyle>,
+    #[serde(default)]
+    pub views: Option<ViewDefaults>,
+    /// Vorlagen und Themen ergänzen oder ersetzen die gleichnamigen.
+    #[serde(default)]
+    pub templates: Vec<ViewTemplate>,
+    #[serde(default)]
+    pub themes: Vec<Theme>,
 }
 
 /// Füllfarben geschnittener Bauteile im Umbauplan, sRGB. Die Bauvorlagenverordnungen
@@ -172,16 +210,7 @@ pub enum CutPattern {
     },
 }
 
-/// Detailgrad eines Maßstabsbereichs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-pub enum Detail {
-    /// Wände als gefüllte Fläche, keine Schichten.
-    Coarse,
-    /// Tragschicht mit Muster, weitere Schichten nur als Linie.
-    Medium,
-    /// Alle Schichten mit Materialmuster.
-    Fine,
-}
+pub use lot_model::Detail;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ScaleStyle {
@@ -267,6 +296,21 @@ impl OfficeStandard {
         if let Some(v) = o.presentation {
             s.presentation = v;
         }
+        if let Some(v) = o.views {
+            s.views = v;
+        }
+        for t in o.templates {
+            match s.templates.iter_mut().find(|x| x.name == t.name) {
+                Some(x) => *x = t,
+                None => s.templates.push(t),
+            }
+        }
+        for t in o.themes {
+            match s.themes.iter_mut().find(|x| x.name == t.name) {
+                Some(x) => *x = t,
+                None => s.themes.push(t),
+            }
+        }
         Ok(s)
     }
 
@@ -278,6 +322,14 @@ impl OfficeStandard {
     /// Darstellung für einen Maßstab 1:`scale`.
     pub fn style_for(&self, scale: f64) -> &ScaleStyle {
         self.scales.iter().find(|s| scale <= s.up_to).unwrap_or_else(|| self.scales.last().expect("Maßstäbe definiert"))
+    }
+
+    pub fn template(&self, name: &str) -> Option<&ViewTemplate> {
+        self.templates.iter().find(|t| t.name == name)
+    }
+
+    pub fn theme(&self, name: &str) -> Option<&Theme> {
+        self.themes.iter().find(|t| t.name == name)
     }
 
     /// Material zu einem Schlüssel; unbekannte Materialien erscheinen leer und grau.

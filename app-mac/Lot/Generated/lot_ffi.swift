@@ -1530,6 +1530,16 @@ public protocol ViewportProtocol: AnyObject, Sendable {
     func go(target: String)  -> EventResult
     
     /**
+     * Warum gewählte Bauteile in der gezeigten Ansicht fehlen, mit Lösung je Grund.
+     */
+    func hiddenReasons(ids: [UInt64])  -> [HiddenInfo]
+    
+    /**
+     * Gewählte Bauteile in der gezeigten Ansicht ausblenden.
+     */
+    func hideInView()  -> EventResult
+    
+    /**
      * Der gewählte Anschluss mit Erklärung und Ausnahmen; `None`, wenn keiner gewählt ist.
      */
     func junction()  -> JunctionInfo?
@@ -1540,6 +1550,11 @@ public protocol ViewportProtocol: AnyObject, Sendable {
      * Art der gezeigten Ansicht, ohne den übrigen Zustand: für jedes Zeigerereignis.
      */
     func kind()  -> ViewKind
+    
+    /**
+     * Darstellung der gezeigten Ansicht mit Herkunft jeder Einstellung; `None` bei 3D, Blättern und Listen.
+     */
+    func look()  -> LookInfo?
     
     /**
      * Unterlagen ohne Bild, die die App rendern muss. PNG liest der Kern selbst.
@@ -1590,14 +1605,24 @@ public protocol ViewportProtocol: AnyObject, Sendable {
     func setDocument(document: LotDocument)  -> Double
     
     /**
-     * Geschoss darunter im aktuellen Grundriss blass zeigen oder nicht.
+     * Geschoss darunter im aktuellen Grundriss blass zeigen oder nicht; eine Einstellung der Ansicht.
      */
-    func setFadedBelow(showIt: Bool) 
+    func setFadedBelow(showIt: Bool)  -> EventResult
     
     /**
-     * Maßstab der Planansicht (100 für 1:100). Der Zoom bleibt gleich groß auf dem Bildschirm.
+     * Maßstab der gezeigten Ansicht (100 für 1:100), eine Einstellung der Ansicht (ADR 0050).
      */
-    func setPlanScale(scale: Double) 
+    func setPlanScale(scale: Double)  -> EventResult
+    
+    /**
+     * Druckbild ein oder aus.
+     */
+    func setPrintView(on: Bool) 
+    
+    /**
+     * Regel des Themas in der gezeigten Ansicht ein- oder abschalten; eigene Regeln der Ansicht löschen.
+     */
+    func setRuleOn(name: String, on: Bool, own: Bool)  -> EventResult
     
     /**
      * Auswahl von außen setzen, etwa aus der Ansicht nebenan (gemeinsame Auswahl, ADR 0049).
@@ -1619,6 +1644,22 @@ public protocol ViewportProtocol: AnyObject, Sendable {
      * ⌘1 Grundriss des aktuellen Geschosses, ⌘2 3D; die übrigen Ansichten öffnet `go`.
      */
     func setView(view: ViewKind) 
+    
+    /**
+     * Eine Einstellung der gezeigten Ansicht setzen oder übernehmen (ADR 0050);
+     * `field` ist die RON-Schreibweise eines `ViewField`, etwa `Scale(Some(50.0))`.
+     */
+    func setViewField(field: String)  -> EventResult
+    
+    /**
+     * Ansichtsvorlage der gezeigten Ansicht; `None` für keine.
+     */
+    func setViewTemplate(name: String?)  -> EventResult
+    
+    /**
+     * In der gezeigten Ansicht Ausgeblendete wieder zeigen; leer zeigt alle.
+     */
+    func showInView(ids: [UInt64])  -> EventResult
     
     func state()  -> ViewState
     
@@ -1839,6 +1880,31 @@ open func go(target: String) -> EventResult  {
 }
     
     /**
+     * Warum gewählte Bauteile in der gezeigten Ansicht fehlen, mit Lösung je Grund.
+     */
+open func hiddenReasons(ids: [UInt64]) -> [HiddenInfo]  {
+    return try!  FfiConverterSequenceTypeHiddenInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_hidden_reasons(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Gewählte Bauteile in der gezeigten Ansicht ausblenden.
+     */
+open func hideInView() -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_hide_in_view(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
      * Der gewählte Anschluss mit Erklärung und Ausnahmen; `None`, wenn keiner gewählt ist.
      */
 open func junction() -> JunctionInfo?  {
@@ -1867,6 +1933,18 @@ open func kind() -> ViewKind  {
     return try!  FfiConverterTypeViewKind_lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_viewport_kind(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Darstellung der gezeigten Ansicht mit Herkunft jeder Einstellung; `None` bei 3D, Blättern und Listen.
+     */
+open func look() -> LookInfo?  {
+    return try!  FfiConverterOptionTypeLookInfo.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_look(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -2031,27 +2109,56 @@ open func setDocument(document: LotDocument) -> Double  {
 }
     
     /**
-     * Geschoss darunter im aktuellen Grundriss blass zeigen oder nicht.
+     * Geschoss darunter im aktuellen Grundriss blass zeigen oder nicht; eine Einstellung der Ansicht.
      */
-open func setFadedBelow(showIt: Bool)  {try! rustCall() {
+open func setFadedBelow(showIt: Bool) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_viewport_set_faded_below(
             self.uniffiCloneHandle(),
         FfiConverterBool.lower(showIt),uniffiCallStatus
     )
-}
+})
 }
     
     /**
-     * Maßstab der Planansicht (100 für 1:100). Der Zoom bleibt gleich groß auf dem Bildschirm.
+     * Maßstab der gezeigten Ansicht (100 für 1:100), eine Einstellung der Ansicht (ADR 0050).
      */
-open func setPlanScale(scale: Double)  {try! rustCall() {
+open func setPlanScale(scale: Double) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_lot_ffi_fn_method_viewport_set_plan_scale(
             self.uniffiCloneHandle(),
         FfiConverterDouble.lower(scale),uniffiCallStatus
     )
+})
 }
+    
+    /**
+     * Druckbild ein oder aus.
+     */
+open func setPrintView(on: Bool)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_set_print_view(
+            self.uniffiCloneHandle(),
+        FfiConverterBool.lower(on),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Regel des Themas in der gezeigten Ansicht ein- oder abschalten; eigene Regeln der Ansicht löschen.
+     */
+open func setRuleOn(name: String, on: Bool, own: Bool) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_set_rule_on(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(name),
+        FfiConverterBool.lower(on),
+        FfiConverterBool.lower(own),uniffiCallStatus
+    )
+})
 }
     
     /**
@@ -2105,6 +2212,46 @@ open func setView(view: ViewKind)  {try! rustCall() {
         FfiConverterTypeViewKind_lower(view),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * Eine Einstellung der gezeigten Ansicht setzen oder übernehmen (ADR 0050);
+     * `field` ist die RON-Schreibweise eines `ViewField`, etwa `Scale(Some(50.0))`.
+     */
+open func setViewField(field: String) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_set_view_field(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(field),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Ansichtsvorlage der gezeigten Ansicht; `None` für keine.
+     */
+open func setViewTemplate(name: String?) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_set_view_template(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(name),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * In der gezeigten Ansicht Ausgeblendete wieder zeigen; leer zeigt alle.
+     */
+open func showInView(ids: [UInt64]) -> EventResult  {
+    return try!  FfiConverterTypeEventResult_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_method_viewport_show_in_view(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt64.lower(ids),uniffiCallStatus
+    )
+})
 }
     
 open func state() -> ViewState  {
@@ -2586,6 +2733,67 @@ public func FfiConverterTypeFindingInfo_lower(_ value: FindingInfo) -> RustBuffe
 
 
 /**
+ * Ein gewähltes Bauteil, das die Ansicht nicht zeigt, mit den Gründen.
+ */
+public struct HiddenInfo: Equatable, Hashable {
+    public var element: UInt64
+    public var label: String
+    public var reasons: [ReasonInfo]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(element: UInt64, label: String, reasons: [ReasonInfo]) {
+        self.element = element
+        self.label = label
+        self.reasons = reasons
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension HiddenInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHiddenInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HiddenInfo {
+        return
+            try HiddenInfo(
+                element: FfiConverterUInt64.read(from: &buf), 
+                label: FfiConverterString.read(from: &buf), 
+                reasons: FfiConverterSequenceTypeReasonInfo.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HiddenInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.element, into: &buf)
+        FfiConverterString.write(value.label, into: &buf)
+        FfiConverterSequenceTypeReasonInfo.write(value.reasons, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHiddenInfo_lift(_ buf: RustBuffer) throws -> HiddenInfo {
+    return try FfiConverterTypeHiddenInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHiddenInfo_lower(_ value: HiddenInfo) -> RustBuffer {
+    return FfiConverterTypeHiddenInfo.lower(value)
+}
+
+
+/**
  * Eine Wand an einem Anschluss.
  */
 public struct JunctionArmInfo: Equatable, Hashable {
@@ -2916,6 +3124,198 @@ public func FfiConverterTypeLibraryItemInfo_lift(_ buf: RustBuffer) throws -> Li
 #endif
 public func FfiConverterTypeLibraryItemInfo_lower(_ value: LibraryItemInfo) -> RustBuffer {
     return FfiConverterTypeLibraryItemInfo.lower(value)
+}
+
+
+/**
+ * Darstellung der gezeigten Ansicht. Je Einstellung: Wert, woher er kommt
+ * („aus Vorlage Bauantrag 1:100“) und ob die Ansicht ihn selbst setzt.
+ */
+public struct LookInfo: Equatable, Hashable {
+    /**
+     * Name der Vorlage oder leer.
+     */
+    public var template: String
+    public var templates: [String]
+    public var themes: [String]
+    public var scale: Double
+    public var scaleOrigin: String
+    public var scaleOwn: Bool
+    /**
+     * Index in [`detail_levels`].
+     */
+    public var detail: UInt32
+    public var detailOrigin: String
+    public var detailOwn: Bool
+    /**
+     * Index in [`phase_filters`].
+     */
+    public var phase: UInt32
+    public var phaseOrigin: String
+    public var phaseOwn: Bool
+    /**
+     * Name des Themas oder leer.
+     */
+    public var theme: String
+    public var themeOrigin: String
+    public var themeOwn: Bool
+    /**
+     * Nur Grundrisse haben Schnitthöhe und Geschoss darunter.
+     */
+    public var isPlan: Bool
+    public var cutHeight: Double
+    public var cutHeightOrigin: String
+    public var cutHeightOwn: Bool
+    public var fadedBelow: Bool
+    public var fadedBelowOrigin: String
+    public var fadedBelowOwn: Bool
+    public var rules: [RuleInfo]
+    /**
+     * In der Ansicht ausgeblendete Bauteile (Stufe „Bauteil“).
+     */
+    public var hidden: [UInt64]
+    /**
+     * Wie viele Bauteile Regeln ausblenden.
+     */
+    public var hiddenByRules: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Name der Vorlage oder leer.
+         */template: String, templates: [String], themes: [String], scale: Double, scaleOrigin: String, scaleOwn: Bool, 
+        /**
+         * Index in [`detail_levels`].
+         */detail: UInt32, detailOrigin: String, detailOwn: Bool, 
+        /**
+         * Index in [`phase_filters`].
+         */phase: UInt32, phaseOrigin: String, phaseOwn: Bool, 
+        /**
+         * Name des Themas oder leer.
+         */theme: String, themeOrigin: String, themeOwn: Bool, 
+        /**
+         * Nur Grundrisse haben Schnitthöhe und Geschoss darunter.
+         */isPlan: Bool, cutHeight: Double, cutHeightOrigin: String, cutHeightOwn: Bool, fadedBelow: Bool, fadedBelowOrigin: String, fadedBelowOwn: Bool, rules: [RuleInfo], 
+        /**
+         * In der Ansicht ausgeblendete Bauteile (Stufe „Bauteil“).
+         */hidden: [UInt64], 
+        /**
+         * Wie viele Bauteile Regeln ausblenden.
+         */hiddenByRules: UInt32) {
+        self.template = template
+        self.templates = templates
+        self.themes = themes
+        self.scale = scale
+        self.scaleOrigin = scaleOrigin
+        self.scaleOwn = scaleOwn
+        self.detail = detail
+        self.detailOrigin = detailOrigin
+        self.detailOwn = detailOwn
+        self.phase = phase
+        self.phaseOrigin = phaseOrigin
+        self.phaseOwn = phaseOwn
+        self.theme = theme
+        self.themeOrigin = themeOrigin
+        self.themeOwn = themeOwn
+        self.isPlan = isPlan
+        self.cutHeight = cutHeight
+        self.cutHeightOrigin = cutHeightOrigin
+        self.cutHeightOwn = cutHeightOwn
+        self.fadedBelow = fadedBelow
+        self.fadedBelowOrigin = fadedBelowOrigin
+        self.fadedBelowOwn = fadedBelowOwn
+        self.rules = rules
+        self.hidden = hidden
+        self.hiddenByRules = hiddenByRules
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension LookInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLookInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LookInfo {
+        return
+            try LookInfo(
+                template: FfiConverterString.read(from: &buf), 
+                templates: FfiConverterSequenceString.read(from: &buf), 
+                themes: FfiConverterSequenceString.read(from: &buf), 
+                scale: FfiConverterDouble.read(from: &buf), 
+                scaleOrigin: FfiConverterString.read(from: &buf), 
+                scaleOwn: FfiConverterBool.read(from: &buf), 
+                detail: FfiConverterUInt32.read(from: &buf), 
+                detailOrigin: FfiConverterString.read(from: &buf), 
+                detailOwn: FfiConverterBool.read(from: &buf), 
+                phase: FfiConverterUInt32.read(from: &buf), 
+                phaseOrigin: FfiConverterString.read(from: &buf), 
+                phaseOwn: FfiConverterBool.read(from: &buf), 
+                theme: FfiConverterString.read(from: &buf), 
+                themeOrigin: FfiConverterString.read(from: &buf), 
+                themeOwn: FfiConverterBool.read(from: &buf), 
+                isPlan: FfiConverterBool.read(from: &buf), 
+                cutHeight: FfiConverterDouble.read(from: &buf), 
+                cutHeightOrigin: FfiConverterString.read(from: &buf), 
+                cutHeightOwn: FfiConverterBool.read(from: &buf), 
+                fadedBelow: FfiConverterBool.read(from: &buf), 
+                fadedBelowOrigin: FfiConverterString.read(from: &buf), 
+                fadedBelowOwn: FfiConverterBool.read(from: &buf), 
+                rules: FfiConverterSequenceTypeRuleInfo.read(from: &buf), 
+                hidden: FfiConverterSequenceUInt64.read(from: &buf), 
+                hiddenByRules: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LookInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.template, into: &buf)
+        FfiConverterSequenceString.write(value.templates, into: &buf)
+        FfiConverterSequenceString.write(value.themes, into: &buf)
+        FfiConverterDouble.write(value.scale, into: &buf)
+        FfiConverterString.write(value.scaleOrigin, into: &buf)
+        FfiConverterBool.write(value.scaleOwn, into: &buf)
+        FfiConverterUInt32.write(value.detail, into: &buf)
+        FfiConverterString.write(value.detailOrigin, into: &buf)
+        FfiConverterBool.write(value.detailOwn, into: &buf)
+        FfiConverterUInt32.write(value.phase, into: &buf)
+        FfiConverterString.write(value.phaseOrigin, into: &buf)
+        FfiConverterBool.write(value.phaseOwn, into: &buf)
+        FfiConverterString.write(value.theme, into: &buf)
+        FfiConverterString.write(value.themeOrigin, into: &buf)
+        FfiConverterBool.write(value.themeOwn, into: &buf)
+        FfiConverterBool.write(value.isPlan, into: &buf)
+        FfiConverterDouble.write(value.cutHeight, into: &buf)
+        FfiConverterString.write(value.cutHeightOrigin, into: &buf)
+        FfiConverterBool.write(value.cutHeightOwn, into: &buf)
+        FfiConverterBool.write(value.fadedBelow, into: &buf)
+        FfiConverterString.write(value.fadedBelowOrigin, into: &buf)
+        FfiConverterBool.write(value.fadedBelowOwn, into: &buf)
+        FfiConverterSequenceTypeRuleInfo.write(value.rules, into: &buf)
+        FfiConverterSequenceUInt64.write(value.hidden, into: &buf)
+        FfiConverterUInt32.write(value.hiddenByRules, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLookInfo_lift(_ buf: RustBuffer) throws -> LookInfo {
+    return try FfiConverterTypeLookInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLookInfo_lower(_ value: LookInfo) -> RustBuffer {
+    return FfiConverterTypeLookInfo.lower(value)
 }
 
 
@@ -3553,6 +3953,164 @@ public func FfiConverterTypePropertyInfo_lift(_ buf: RustBuffer) throws -> Prope
 #endif
 public func FfiConverterTypePropertyInfo_lower(_ value: PropertyInfo) -> RustBuffer {
     return FfiConverterTypePropertyInfo.lower(value)
+}
+
+
+/**
+ * Ein Grund mit Lösung: `fix` ist ein Befehl oder `go:` und eine Ansicht.
+ */
+public struct ReasonInfo: Equatable, Hashable {
+    public var text: String
+    public var fixTitle: String
+    public var fix: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(text: String, fixTitle: String, fix: String) {
+        self.text = text
+        self.fixTitle = fixTitle
+        self.fix = fix
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ReasonInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeReasonInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReasonInfo {
+        return
+            try ReasonInfo(
+                text: FfiConverterString.read(from: &buf), 
+                fixTitle: FfiConverterString.read(from: &buf), 
+                fix: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ReasonInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterString.write(value.fixTitle, into: &buf)
+        FfiConverterString.write(value.fix, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReasonInfo_lift(_ buf: RustBuffer) throws -> ReasonInfo {
+    return try FfiConverterTypeReasonInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReasonInfo_lower(_ value: ReasonInfo) -> RustBuffer {
+    return FfiConverterTypeReasonInfo.lower(value)
+}
+
+
+/**
+ * Eine Regel der Ansicht mit ihrer Wirkung.
+ */
+public struct RuleInfo: Equatable, Hashable {
+    public var name: String
+    /**
+     * Etwa „Thema Brandschutz, aus Vorlage Brandschutzplan“ oder „Regel dieser Ansicht“.
+     */
+    public var origin: String
+    public var on: Bool
+    /**
+     * Eigene Regel der Ansicht: löschen statt abschalten.
+     */
+    public var own: Bool
+    /**
+     * Etwa „12 Bauteile ausgeblendet“.
+     */
+    public var count: String
+    /**
+     * Füllfarbe als sRGB, bei „ausblenden“ leer.
+     */
+    public var color: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, 
+        /**
+         * Etwa „Thema Brandschutz, aus Vorlage Brandschutzplan“ oder „Regel dieser Ansicht“.
+         */origin: String, on: Bool, 
+        /**
+         * Eigene Regel der Ansicht: löschen statt abschalten.
+         */own: Bool, 
+        /**
+         * Etwa „12 Bauteile ausgeblendet“.
+         */count: String, 
+        /**
+         * Füllfarbe als sRGB, bei „ausblenden“ leer.
+         */color: Data) {
+        self.name = name
+        self.origin = origin
+        self.on = on
+        self.own = own
+        self.count = count
+        self.color = color
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RuleInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRuleInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RuleInfo {
+        return
+            try RuleInfo(
+                name: FfiConverterString.read(from: &buf), 
+                origin: FfiConverterString.read(from: &buf), 
+                on: FfiConverterBool.read(from: &buf), 
+                own: FfiConverterBool.read(from: &buf), 
+                count: FfiConverterString.read(from: &buf), 
+                color: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RuleInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.origin, into: &buf)
+        FfiConverterBool.write(value.on, into: &buf)
+        FfiConverterBool.write(value.own, into: &buf)
+        FfiConverterString.write(value.count, into: &buf)
+        FfiConverterData.write(value.color, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuleInfo_lift(_ buf: RustBuffer) throws -> RuleInfo {
+    return try FfiConverterTypeRuleInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRuleInfo_lower(_ value: RuleInfo) -> RustBuffer {
+    return FfiConverterTypeRuleInfo.lower(value)
 }
 
 
@@ -4229,6 +4787,14 @@ public struct ViewState: Equatable, Hashable {
      */
     public var fadedBelow: Bool
     /**
+     * Vorübergehend ausgeblendet oder isoliert (H, I): etwa „3 ausgeblendet“; leer, wenn nichts.
+     */
+    public var temporary: String
+    /**
+     * Druckbild: nur, was gedruckt wird (ADR 0050).
+     */
+    public var printView: Bool
+    /**
      * Aktives Werkzeug: „select“, „wall“, „grid“ oder „column“.
      */
     public var tool: String
@@ -4254,6 +4820,12 @@ public struct ViewState: Equatable, Hashable {
          * Das Geschoss darunter ist blass zu sehen.
          */fadedBelow: Bool, 
         /**
+         * Vorübergehend ausgeblendet oder isoliert (H, I): etwa „3 ausgeblendet“; leer, wenn nichts.
+         */temporary: String, 
+        /**
+         * Druckbild: nur, was gedruckt wird (ADR 0050).
+         */printView: Bool, 
+        /**
          * Aktives Werkzeug: „select“, „wall“, „grid“ oder „column“.
          */tool: String, storey: String, scale: Double, wallType: String, selection: [UInt64], hint: String) {
         self.view = view
@@ -4263,6 +4835,8 @@ public struct ViewState: Equatable, Hashable {
         self.canGoForward = canGoForward
         self.hasBelow = hasBelow
         self.fadedBelow = fadedBelow
+        self.temporary = temporary
+        self.printView = printView
         self.tool = tool
         self.storey = storey
         self.scale = scale
@@ -4294,6 +4868,8 @@ public struct FfiConverterTypeViewState: FfiConverterRustBuffer {
                 canGoForward: FfiConverterBool.read(from: &buf), 
                 hasBelow: FfiConverterBool.read(from: &buf), 
                 fadedBelow: FfiConverterBool.read(from: &buf), 
+                temporary: FfiConverterString.read(from: &buf), 
+                printView: FfiConverterBool.read(from: &buf), 
                 tool: FfiConverterString.read(from: &buf), 
                 storey: FfiConverterString.read(from: &buf), 
                 scale: FfiConverterDouble.read(from: &buf), 
@@ -4311,6 +4887,8 @@ public struct FfiConverterTypeViewState: FfiConverterRustBuffer {
         FfiConverterBool.write(value.canGoForward, into: &buf)
         FfiConverterBool.write(value.hasBelow, into: &buf)
         FfiConverterBool.write(value.fadedBelow, into: &buf)
+        FfiConverterString.write(value.temporary, into: &buf)
+        FfiConverterBool.write(value.printView, into: &buf)
         FfiConverterString.write(value.tool, into: &buf)
         FfiConverterString.write(value.storey, into: &buf)
         FfiConverterDouble.write(value.scale, into: &buf)
@@ -5009,6 +5587,30 @@ fileprivate struct FfiConverterOptionTypeJunctionInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeLookInfo: FfiConverterRustBuffer {
+    typealias SwiftType = LookInfo?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLookInfo.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLookInfo.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypePlacedInfo: FfiConverterRustBuffer {
     typealias SwiftType = PlacedInfo?
 
@@ -5256,6 +5858,31 @@ fileprivate struct FfiConverterSequenceTypeFindingInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeHiddenInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [HiddenInfo]
+
+    public static func write(_ value: [HiddenInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHiddenInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HiddenInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HiddenInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHiddenInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeJunctionArmInfo: FfiConverterRustBuffer {
     typealias SwiftType = [JunctionArmInfo]
 
@@ -5473,6 +6100,56 @@ fileprivate struct FfiConverterSequenceTypePropertyInfo: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypePropertyInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeReasonInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [ReasonInfo]
+
+    public static func write(_ value: [ReasonInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeReasonInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ReasonInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ReasonInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeReasonInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeRuleInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [RuleInfo]
+
+    public static func write(_ value: [RuleInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRuleInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RuleInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RuleInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRuleInfo.read(from: &buf))
         }
         return seq
     }
@@ -5804,6 +6481,48 @@ public func sheetFormats() -> [String]  {
     )
 })
 }
+/**
+ * RON-Schreibweise für `set_view_field`: Detailgrad nach Index, `None` übernimmt.
+ */
+public func detailField(index: UInt32?) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_detail_field(
+        FfiConverterOptionUInt32.lower(index),uniffiCallStatus
+    )
+})
+}
+/**
+ * Detailgrade für die Auswahl im Inspektor: grob, mittel, fein.
+ */
+public func detailLevels() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_detail_levels(uniffiCallStatus
+    )
+})
+}
+/**
+ * RON-Schreibweise für `set_view_field`: Bauzustand nach Index, `None` übernimmt.
+ */
+public func phaseField(index: UInt32?) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_phase_field(
+        FfiConverterOptionUInt32.lower(index),uniffiCallStatus
+    )
+})
+}
+/**
+ * Bauzustände für die Auswahl: Umbauplan, Bestand, Neuzustand.
+ */
+public func phaseFilters() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_phase_filters(uniffiCallStatus
+    )
+})
+}
 
 private enum InitializationResult {
     case ok
@@ -5848,6 +6567,18 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_func_sheet_formats() != 34468) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_detail_field() != 50512) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_detail_levels() != 23286) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_phase_field() != 43246) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_phase_filters() != 57937) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_lotdocument_add_attachment() != 53219) {
@@ -5997,6 +6728,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_viewport_go() != 28927) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_lot_ffi_checksum_method_viewport_hidden_reasons() != 40985) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_hide_in_view() != 6324) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_lot_ffi_checksum_method_viewport_junction() != 31303) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6004,6 +6741,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_kind() != 53855) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_look() != 8910) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_missing_underlay_images() != 14459) {
@@ -6045,10 +6785,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_lot_ffi_checksum_method_viewport_set_document() != 22496) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_set_faded_below() != 10314) {
+    if (uniffi_lot_ffi_checksum_method_viewport_set_faded_below() != 65014) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_lot_ffi_checksum_method_viewport_set_plan_scale() != 46506) {
+    if (uniffi_lot_ffi_checksum_method_viewport_set_plan_scale() != 63591) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_set_print_view() != 22871) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_set_rule_on() != 39425) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_set_selection() != 7539) {
@@ -6061,6 +6807,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_set_view() != 19814) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_set_view_field() != 7261) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_set_view_template() != 62794) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_method_viewport_show_in_view() != 43637) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_method_viewport_state() != 40038) {
