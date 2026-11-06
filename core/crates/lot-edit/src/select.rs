@@ -202,6 +202,7 @@ pub fn kind_label(project: &Project, id: ElementId) -> String {
         Some(Element::Slab(s)) => match s.kind {
             lot_model::SlabKind::Floor => "Decke".into(),
             lot_model::SlabKind::Base => "Bodenplatte".into(),
+            lot_model::SlabKind::Roof => "Flachdach".into(),
         },
         Some(Element::SlabType(t)) => format!("Deckenaufbau {}", t.name),
         Some(Element::OpeningType(t)) => format!("Tür- oder Fenstertyp {}", t.name),

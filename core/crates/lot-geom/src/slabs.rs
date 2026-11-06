@@ -1,6 +1,7 @@
 //! Decken und Bodenplatten: Umriss aus den Wänden und Körper für das 3D.
 
 use lot_model::{ElementId, LayerFunction, Project, Slab};
+use manifold_rust::linalg::Vec3;
 use manifold_rust::manifold::Manifold;
 
 use crate::joins::solid_regions;
@@ -10,7 +11,7 @@ use crate::poly::{Area, Ring};
 const FLOOR_CUT: f64 = 0.05;
 
 /// Umrisse für Decken eines Geschosses: die Außenkanten der Tragschichten aller
-/// Wände, je zusammenhängendem Gebäudeteil ein Ring. Schichten außerhalb der
+/// Wände, je zusammenhängendem Gebäudeteil ein Ring, wenn die Wände ihn umschließen. Schichten außerhalb der
 /// Tragschicht (Dämmung, Außenputz, Vormauerschale) liegen außerhalb, so wie
 /// eine Decke auf dem Mauerwerk aufliegt und die Dämmung vor der Stirn
 /// durchläuft. Wände ohne Tragschicht zählen ganz.
@@ -27,8 +28,17 @@ pub fn slab_outlines(project: &Project, storey: ElementId) -> Vec<Ring> {
         })
         .map(|r| &r.area)
         .collect();
-    Area::union_all(inner).rings().into_iter().filter(|r| crate::signed_area(r) > 0.0).collect()
+    let walls = Area::union_all(inner);
+    // Nur Ringe, die etwas umschließen: offene Wandzüge geben keine Decke.
+    walls
+        .rings()
+        .into_iter()
+        .filter(|r| crate::signed_area(r) > 0.0 && Area::from_ring(r).difference(&walls).area() > MIN_ENCLOSED)
+        .collect()
 }
+
+/// Kleinste umschlossene Fläche, aus der eine Decke wird, in m².
+const MIN_ENCLOSED: f64 = 0.25;
 
 /// Grundfläche einer Decke ohne ihre Durchbrüche.
 pub fn slab_area(project: &Project, id: ElementId, slab: &Slab) -> Area {
@@ -111,9 +121,43 @@ pub fn slab_solids(project: &Project, id: ElementId, slab: &Slab) -> Vec<(usize,
                 },
                 _ => area.clone(),
             };
-            let solid = crate::extrude(&layer_area, bottom, top);
+            let solid = match &slab.fall {
+                // Gefälle (ADR 0051): die Gefälleschicht wird gegen die Fließrichtung
+                // dicker, die Schichten darüber steigen mit.
+                Some(fall) if k <= fall.layer => {
+                    let rise = fall.max_extra(&slab.outline);
+                    let solid = crate::extrude(&layer_area, bottom, top + rise);
+                    let solid = sloped_below(solid, fall, &slab.outline, top);
+                    if k < fall.layer { sloped_above(solid, fall, &slab.outline, bottom) } else { solid }
+                }
+                _ => crate::extrude(&layer_area, bottom, top),
+            };
             top = bottom;
             (k, layer.material.clone(), solid)
         })
         .collect()
+}
+
+/// Ebene der Gefällefläche durch die Höhe `z` am tiefsten Punkt: z(p) = z + Mehrdicke(p).
+/// Gibt (Normale nach oben, Abstand) für z(p) = Ebene.
+fn fall_plane(fall: &lot_model::Fall, outline: &[lot_model::Point2], z: f64) -> (Vec3, f64) {
+    let (dx, dy) = fall.flow();
+    let s = fall.percent / 100.0;
+    let low = outline.iter().map(|q| q.x * dx + q.y * dy).fold(f64::NEG_INFINITY, f64::max);
+    // z_p = z + s (low - p·d)  <=>  s dx x + s dy y + z_p = z + s low
+    let n = Vec3::new(s * dx, s * dy, 1.0);
+    let len = (n.x * n.x + n.y * n.y + n.z * n.z).sqrt();
+    (Vec3::new(n.x / len, n.y / len, n.z / len), (z + s * low) / len)
+}
+
+/// Behält, was unter der geneigten Fläche durch `z` am tiefsten Punkt liegt.
+fn sloped_below(solid: Manifold, fall: &lot_model::Fall, outline: &[lot_model::Point2], z: f64) -> Manifold {
+    let (n, offset) = fall_plane(fall, outline, z);
+    solid.trim_by_plane(Vec3::new(-n.x, -n.y, -n.z), -offset)
+}
+
+/// Behält, was über der geneigten Fläche durch `z` am tiefsten Punkt liegt.
+fn sloped_above(solid: Manifold, fall: &lot_model::Fall, outline: &[lot_model::Point2], z: f64) -> Manifold {
+    let (n, offset) = fall_plane(fall, outline, z);
+    solid.trim_by_plane(n, offset)
 }

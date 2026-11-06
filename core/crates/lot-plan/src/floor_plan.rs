@@ -132,6 +132,8 @@ pub fn floor_plan_layers_with(
     // 5. Türen und Fenster, Deckendurchbrüche.
     layer("A_Tueren_Fenster", &mut |objects| draw_openings(objects, project, view.storey, z_cut, style, viewport));
     layer("A_Deckendurchbrueche", &mut |objects| draw_slab_openings(objects, project, view.storey, style, viewport));
+    // 5c. Gefälle (ADR 0051): Pfeil in Fließrichtung mit Prozent, Abläufe, Notüberläufe.
+    layer("A_Gefaelle", &mut |objects| draw_falls(objects, project, view.storey, style, viewport));
 
     // 5a. Treppen und Geländer.
     layer("A_Treppen", &mut |objects| {
@@ -564,6 +566,84 @@ fn draw_section_marks(objects: &mut Vec<PlanObject>, project: &Project, style: &
                     rotation: 0.0,
                 }));
             }
+        }
+    }
+}
+
+/// Gefälle der Decken eines Geschosses (ADR 0051): ein Pfeil in Fließrichtung
+/// mit dem Gefälle in Prozent, Abläufe als Kreis mit Kreuz, Notüberläufe als
+/// Rechteck mit „NÜ“. Vorschlag, Ben prüft.
+fn draw_falls(
+    objects: &mut Vec<PlanObject>,
+    project: &Project,
+    storey: ElementId,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let pen = Pen::mm(style.pens.annotation);
+    let line = |points: Vec<PaperPoint>, closed: bool| {
+        PlanObject::Line(Line { points, closed, pen, style: LineStyle::Solid, color: Color::BLACK })
+    };
+    for (_, slab) in project.slabs_on(storey) {
+        let Some(fall) = &slab.fall else { continue };
+        let n = slab.outline.len().max(1) as f64;
+        let c = viewport.to_paper(
+            slab.outline.iter().map(|p| p.x).sum::<f64>() / n,
+            slab.outline.iter().map(|p| p.y).sum::<f64>() / n,
+        );
+        let (dx, dy) = fall.flow();
+        let (len, head) = (12.0, 2.5);
+        let tip = PaperPoint::new(c.x + dx * len / 2.0, c.y + dy * len / 2.0);
+        let tail = PaperPoint::new(c.x - dx * len / 2.0, c.y - dy * len / 2.0);
+        objects.push(line(vec![tail, tip], false));
+        let back = PaperPoint::new(tip.x - dx * head, tip.y - dy * head);
+        objects.push(PlanObject::Area(PlanArea {
+            rings: vec![vec![
+                tip,
+                PaperPoint::new(back.x - dy * head * 0.4, back.y + dx * head * 0.4),
+                PaperPoint::new(back.x + dy * head * 0.4, back.y - dx * head * 0.4),
+            ]],
+            fill: Fill::Solid(Color::BLACK),
+        }));
+        // Prozent neben dem Pfeil, lesbar zwischen -90° und 90° (DIN 1356-1).
+        let mut angle = dy.atan2(dx).to_degrees();
+        if angle > 90.0 {
+            angle -= 180.0;
+        } else if angle < -90.0 {
+            angle += 180.0;
+        }
+        let off = style.text * 0.6;
+        objects.push(PlanObject::Text(Text {
+            position: PaperPoint::new(c.x - dy * off, c.y + dx * off),
+            text: format!("{} %", crate::format_de(fall.percent, 1)),
+            height_mm: style.text,
+            anchor: Anchor::Center,
+            rotation: angle,
+        }));
+        for d in &fall.drains {
+            let p = viewport.to_paper(d.x, d.y);
+            let r = 2.0;
+            let ring: Vec<PaperPoint> = (0..24)
+                .map(|i| {
+                    let a = i as f64 / 24.0 * std::f64::consts::TAU;
+                    PaperPoint::new(p.x + r * a.cos(), p.y + r * a.sin())
+                })
+                .collect();
+            objects.push(line(ring, true));
+            let k = r * std::f64::consts::FRAC_1_SQRT_2;
+            objects.push(line(vec![PaperPoint::new(p.x - k, p.y - k), PaperPoint::new(p.x + k, p.y + k)], false));
+            objects.push(line(vec![PaperPoint::new(p.x - k, p.y + k), PaperPoint::new(p.x + k, p.y - k)], false));
+        }
+        for o in &fall.overflows {
+            let p = viewport.to_paper(o.x, o.y);
+            objects.push(line(crate::rect_points(p.x - 1.5, p.y - 0.75, 3.0, 1.5), true));
+            objects.push(PlanObject::Text(Text {
+                position: PaperPoint::new(p.x, p.y + 1.5),
+                text: "NÜ".into(),
+                height_mm: style.text * 0.8,
+                anchor: Anchor::Center,
+                rotation: 0.0,
+            }));
         }
     }
 }

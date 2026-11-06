@@ -375,8 +375,14 @@ impl Project {
     }
 
     /// Form einer Treppe; sie überwindet die Geschosshöhe ihres Geschosses.
+    /// Form einer Treppe; Wendelstufen verzogen auf den Mindestauftritt der
+    /// Gebäudeart (DIN 18065:2020-08, Tabelle 1, Nr. 6.2.1).
     pub fn stair_layout(&self, stair: &crate::Stair) -> Option<crate::StairLayout> {
-        Some(stair.layout(self.storey(stair.storey)?.height))
+        let min_inner = match self.info().building {
+            crate::BuildingClass::SmallResidential => crate::MIN_INNER_SMALL_RESIDENTIAL,
+            crate::BuildingClass::General => crate::MIN_INNER_GENERAL,
+        };
+        Some(stair.layout_with(self.storey(stair.storey)?.height, min_inner))
     }
 
     pub fn railings_on(&self, storey: ElementId) -> impl Iterator<Item = (ElementId, &crate::Railing)> {

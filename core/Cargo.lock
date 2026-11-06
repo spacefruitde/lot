@@ -1216,6 +1216,7 @@ dependencies = [
  "lot-geom",
  "lot-model",
  "lot-plan",
+ "lot-rules",
  "ron",
  "serde",
 ]

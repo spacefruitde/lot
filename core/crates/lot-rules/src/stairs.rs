@@ -28,16 +28,17 @@ pub struct StairCheck {
 }
 
 /// Grenzwerte einer Zeile der Tabelle 1, in m.
-struct Limits {
-    width: f64,
-    rise: (f64, f64),
-    tread: (f64, f64),
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Limits {
+    pub width: f64,
+    pub rise: (f64, f64),
+    pub tread: (f64, f64),
 }
 
 /// DIN 18065:2020-08, Tabelle 1: nutzbare Laufbreite, Steigung und Auftritt
 /// je Gebäudeart und Treppenart. Steigung ab 14 cm und Auftritt bis 37 cm gelten
 /// für alle Zeilen.
-fn limits(building: BuildingClass, necessary: bool) -> Limits {
+pub fn limits(building: BuildingClass, necessary: bool) -> Limits {
     match (building, necessary) {
         (BuildingClass::SmallResidential, true) => Limits { width: 0.80, rise: (0.14, 0.20), tread: (0.23, 0.37) },
         (BuildingClass::General, true) => Limits { width: 1.00, rise: (0.14, 0.19), tread: (0.26, 0.37) },
@@ -46,7 +47,7 @@ fn limits(building: BuildingClass, necessary: bool) -> Limits {
 }
 
 /// Schrittmaßregel nach DIN 18065:2020-08: 59 cm ≤ 2s + a ≤ 65 cm.
-const STEP_RANGE: (f64, f64) = (0.59, 0.65);
+pub const STEP_RANGE: (f64, f64) = (0.59, 0.65);
 /// Lichte Treppendurchgangshöhe nach DIN 18065:2020-08: mindestens 2,00 m.
 const MIN_HEADROOM: f64 = 2.00;
 
@@ -89,16 +90,43 @@ pub fn check_stair(project: &Project, id: ElementId, stair: &Stair) -> Option<St
     if step < STEP_RANGE.0 - 1e-9 || step > STEP_RANGE.1 + 1e-9 {
         problems.push(format!("Schrittmaß 2s + a = {} cm außerhalb 59 bis 65 cm (DIN 18065:2020-08)", cm(step)));
     }
-    if stair.width < limits.width - 1e-9 {
+    // Nutzbare Laufbreite; bei Spindeltreppen ab der inneren Begrenzung (6.2.4).
+    if layout.width < limits.width - 1e-9 {
         problems.push(format!(
             "Laufbreite {} cm unter {} cm (DIN 18065:2020-08, Tabelle 1)",
-            cm(stair.width),
+            cm(layout.width),
             cm(limits.width)
         ));
     }
     // Lichte Durchgangshöhe: über jeder Stufenvorderkante an beiden Seiten und
     // in der Mitte, auf Podesten an den Ecken und in der Mitte.
     let mut samples: Vec<(Point2, f64)> = Vec::new();
+    // Wendel- und Spindelstufen (ADR 0051): an jeder Vorderkante innen, Mitte, außen.
+    for step in &layout.steps {
+        let (i, o) = step.front;
+        let (i, o) = (add_toward(i, o, 0.01), add_toward(o, i, 0.01));
+        for p in [i, Point2::new((i.x + o.x) / 2.0, (i.y + o.y) / 2.0), o] {
+            samples.push((p, z0 + step.top));
+        }
+    }
+    // Mindestauftritt an der inneren Begrenzung (DIN 18065:2020-08, Tabelle 1):
+    // Wendelstufen Nr. 6.2.1, Spindeltreppen Nr. 6.2.4 (in Wohngebäuden ohne Anforderung).
+    let min_inner = match (stair.spiral.is_some(), project.info().building) {
+        (false, BuildingClass::General) => Some((0.10, "6.2.1")),
+        (false, BuildingClass::SmallResidential) => Some((0.05, "6.2.1")),
+        (true, BuildingClass::General) => Some((0.10, "6.2.4")),
+        (true, BuildingClass::SmallResidential) => None,
+    };
+    if let Some((min, nr)) = min_inner
+        && let Some(narrowest) = layout.steps.iter().map(|s| s.inner).reduce(f64::min)
+        && narrowest < min - 1e-6
+    {
+        problems.push(format!(
+            "Auftritt an der inneren Begrenzung {} cm unter {} cm (DIN 18065:2020-08, Tabelle 1, Nr. {nr})",
+            cm(narrowest),
+            cm(min)
+        ));
+    }
     let h = layout.width / 2.0 - 0.01;
     for f in &layout.flights {
         let left = Point2::new(-f.dir.y, f.dir.x);
@@ -221,6 +249,12 @@ fn lot_format(value: f64, decimals: usize) -> String {
     format!("{value:.decimals$}").replace('.', ",")
 }
 
+/// Punkt `a`, um `t` in Richtung `b` gerückt.
+fn add_toward(a: Point2, b: Point2, t: f64) -> Point2 {
+    let len = a.distance(b).max(1e-12);
+    Point2::new(a.x + (b.x - a.x) / len * t, a.y + (b.y - a.y) / len * t)
+}
+
 #[cfg(test)]
 mod tests {
     use lot_model::{Landing, ProjectInfo, StairFlight};
@@ -252,6 +286,8 @@ mod tests {
                 ],
                 thickness: 0.18,
                 necessary: true,
+                spiral: None,
+                eye: 0.0,
             }),
         );
         p
@@ -327,6 +363,9 @@ mod tests {
                     Point2::new(-1.0, 4.0),
                 ],
                 kind: lot_model::SlabKind::Floor,
+                follows_walls: false,
+                boundary_walls: Vec::new(),
+                fall: None,
                 top_offset: 0.0,
             }),
         );

@@ -50,6 +50,9 @@ pub fn draw_stairs(
                 cover.push(outline.iter().map(|p| viewport.to_paper(p.x, p.y)).collect());
             }
         }
+        for step in layout.steps.iter().filter(|s| s.top <= cut_height) {
+            cover.push(step.outline.iter().map(|p| viewport.to_paper(p.x, p.y)).collect());
+        }
     }
     for (id, stair) in project.stairs_on(storey) {
         draw_stair(objects, project, id, stair, cut_height, Mode::Own, &[], style, viewport);
@@ -92,6 +95,10 @@ fn draw_stair(
     viewport: Viewport,
 ) {
     let Some(layout) = project.stair_layout(stair) else { return };
+    if !layout.steps.is_empty() {
+        draw_steps(objects, stair, &layout, cut_height, mode, style, viewport);
+        return;
+    }
     let cut = Cut::new(&layout, cut_height);
     // Alle Kanten als kurze Strecken mit Höhe, damit Schnittlinie und
     // Verdeckung je Stück entschieden werden können.
@@ -429,6 +436,94 @@ fn on_ring(p: Point2, ring: &[Point2]) -> bool {
     })
 }
 
+/// Gewendelte und Spindeltreppen (ADR 0051): im eigenen Geschoss die Stufen
+/// unter der Schnitthöhe durchgezogen, darüber gestrichelt, im Geschoss
+/// darüber die Stufen über der Schnitthöhe; Lauflinie mit Kreis am Antritt
+/// und Pfeil am Austritt, die Spindel als Kreis.
+#[allow(clippy::too_many_arguments)]
+fn draw_steps(
+    objects: &mut Vec<PlanObject>,
+    stair: &Stair,
+    layout: &StairLayout,
+    cut_height: f64,
+    mode: Mode,
+    style: &ScaleStyle,
+    viewport: Viewport,
+) {
+    let pen = style.pens.view;
+    let paper = |points: &[Point2]| points.iter().map(|p| viewport.to_paper(p.x, p.y)).collect::<Vec<_>>();
+    for step in &layout.steps {
+        let below = step.top <= cut_height;
+        let look = match (mode, below) {
+            (Mode::Own, true) | (Mode::FromBelow, false) => Look::Solid,
+            (Mode::Own, false) => Look::Dashed,
+            (Mode::FromBelow, true) => continue,
+        };
+        let mut ring = paper(&step.outline);
+        if let Some(first) = ring.first().copied() {
+            ring.push(first);
+        }
+        objects.push(line(ring, pen, look));
+    }
+    if let Some(spiral) = stair.spiral {
+        let c = viewport.to_paper(spiral.center.x, spiral.center.y);
+        let r = spiral.spindle * 1000.0 / viewport.scale;
+        let ring: Vec<PaperPoint> = (0..=24)
+            .map(|i| {
+                let a = i as f64 / 24.0 * std::f64::consts::TAU;
+                PaperPoint::new(c.x + r * a.cos(), c.y + r * a.sin())
+            })
+            .collect();
+        objects.push(line(ring, style.pens.cut, Look::Solid));
+    }
+    if mode == Mode::FromBelow {
+        return;
+    }
+    let walking = paper(&layout.walking);
+    let annotation = style.pens.annotation;
+    objects.push(line(walking.clone(), annotation, Look::Solid));
+    if let Some(c) = walking.first() {
+        let ring: Vec<PaperPoint> = (0..=16)
+            .map(|i| {
+                let a = i as f64 / 16.0 * std::f64::consts::TAU;
+                PaperPoint::new(c.x + 0.75 * a.cos(), c.y + 0.75 * a.sin())
+            })
+            .collect();
+        objects.push(line(ring, annotation, Look::Solid));
+    }
+    if let [.., prev, tip] = walking.as_slice() {
+        let len = (tip.x - prev.x).hypot(tip.y - prev.y);
+        if len > 1e-9 {
+            let d = ((tip.x - prev.x) / len, (tip.y - prev.y) / len);
+            let back = PaperPoint::new(tip.x - d.0 * 2.5, tip.y - d.1 * 2.5);
+            let (s0, s1) = (
+                PaperPoint::new(back.x - d.1 * 0.8, back.y + d.0 * 0.8),
+                PaperPoint::new(back.x + d.1 * 0.8, back.y - d.0 * 0.8),
+            );
+            objects
+                .push(PlanObject::Area(PlanArea { rings: vec![vec![*tip, s0, s1]], fill: Fill::Solid(Color::BLACK) }));
+        }
+    }
+    // Steigungen und Steigungsverhältnis am Antritt.
+    if let Some(first) = layout.steps.first() {
+        let (a, b) = first.front;
+        let at = viewport.to_paper((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+        let text = format!(
+            "{} Stg. {}/{}",
+            stair.risers(),
+            crate::format_de(layout.rise * 100.0, 1),
+            crate::format_de(layout.tread * 100.0, 1)
+        );
+        objects.push(PlanObject::Text(Text {
+            position: PaperPoint::new(at.x, at.y - style.space_text * 1.6),
+            text,
+            height_mm: style.space_text,
+            anchor: Anchor::Center,
+            rotation: 0.0,
+        }));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use lot_model::{Element, Landing, Railing, StairFlight, WallSide};
@@ -461,12 +556,15 @@ mod tests {
                 ],
                 thickness: 0.18,
                 necessary: true,
+                spiral: None,
+                eye: 0.0,
             }),
         );
         p.elements.insert(
             ElementId(901),
             Element::Railing(Railing {
                 phase: Default::default(),
+                around: None,
                 storey: lower,
                 path: RailingPath::Flight { stair: ElementId(900), flight: 0, side: WallSide::Left },
                 height: 0.9,

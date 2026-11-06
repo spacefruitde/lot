@@ -54,4 +54,4 @@ Kurze Festlegungen mit Kontext, Entscheidung, Alternativen und Folgen. Bens Ents
 | [0048](0048-typen-und-eigenschaften.md) | Typen und Eigenschaften | umgesetzt, Teile offen, Ben testet |
 | [0049](0049-navigation.md) | Navigation: Seitenleiste, Geschosse, Schnitte und Blätter | umgesetzt, Teile offen, Ben testet |
 | [0050](0050-sichtbarkeit.md) | Sichtbarkeit und Ansichtsvorlagen | umgesetzt, Teile offen, Ben testet |
-| [0051](0051-decken-daecher-treppen.md) | Decken, Dächer und Treppen in der App | entschieden |
+| [0051](0051-decken-daecher-treppen.md) | Decken, Dächer und Treppen in der App | umgesetzt bis auf Gauben, Ben testet |

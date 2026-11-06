@@ -23,7 +23,9 @@ struct InspectorView: View {
             }
             if let junction = model.junction {
                 JunctionSection(junction: junction)
-            } else if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty && model.sections.isEmpty {
+            } else if model.parameters.isEmpty && model.spaces.isEmpty && model.texts.isEmpty && model.sections.isEmpty
+                && model.slabInfos.isEmpty && model.roofInfos.isEmpty && model.stairInfos.isEmpty
+            {
                 if model.viewState?.view == .plan || model.viewState?.view == .section {
                     Section {
                         Text("Nichts gewählt. Eine Wand oder einen Raumstempel anklicken zeigt die Eigenschaften.")
@@ -55,6 +57,9 @@ struct InspectorView: View {
                     }
                 }
                 ForEach(model.sections, id: \.element) { SectionSection(info: $0) }
+                ForEach(model.slabInfos, id: \.element) { SlabSection(info: $0) }
+                ForEach(model.roofInfos, id: \.element) { RoofSection(info: $0) }
+                ForEach(model.stairInfos, id: \.element) { StairSection(info: $0) }
                 ForEach(model.spaces, id: \.element) { SpaceSection(space: $0) }
                 ForEach(model.texts, id: \.element) { TextSection(info: $0) }
                 if let phase = model.selectionPhase {
@@ -1000,6 +1005,133 @@ private struct HiddenSection: View {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// Gewählte Decke (ADR 0051): folgt den Wänden, Gefälle mit Abläufen.
+private struct SlabSection: View {
+    @Environment(AppModel.self) private var model
+    let info: SlabInfo
+
+    var body: some View {
+        Section(info.kind) {
+            Toggle("Folgt den Wänden", isOn: Binding(get: { info.follows }, set: { model.run("SetSlabFollows(\($0))") }))
+            if info.broken {
+                Label("Eine Wand fehlt oder kam dazu; der Umriss bleibt, wie er war.", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                Button("Umriss neu aus den Wänden") { model.run("RefollowSlabs") }
+            }
+            Toggle("Gefälle", isOn: Binding(
+                get: { info.hasFall },
+                set: { model.run(fallPurposeField(index: $0 ? info.purpose : nil)) }
+            ))
+            if info.hasFall {
+                Picker("Für", selection: Binding(
+                    get: { Int(info.purpose) },
+                    set: { model.run(fallPurposeField(index: UInt32($0))) }
+                )) {
+                    ForEach(Array(AppModel.fallPurposes.enumerated()), id: \.offset) { Text($1).tag($0) }
+                }
+                LabeledContent("Gefälle") {
+                    HStack(spacing: 4) {
+                        TextField("", value: Binding(get: { info.percent }, set: { model.run("SetFallPercent(\($0))") }),
+                                  format: .number.precision(.fractionLength(1)))
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 56)
+                        Text("%").foregroundStyle(.secondary)
+                    }
+                }
+                LabeledContent("Fließrichtung") {
+                    HStack(spacing: 4) {
+                        TextField("", value: Binding(get: { info.direction }, set: { model.run("SetFallDirection(\($0))") }),
+                                  format: .number.precision(.fractionLength(0)))
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 56)
+                        Text("°").foregroundStyle(.secondary)
+                    }
+                }
+                Picker("In der Schicht", selection: Binding(
+                    get: { Int(info.layer) },
+                    set: { model.run("SetFallLayer(\($0))") }
+                )) {
+                    ForEach(Array(info.layers.enumerated()), id: \.offset) { Text($1).tag($0) }
+                }
+                LabeledContent("Abläufe, Notüberläufe", value: "\(info.drains), \(info.overflows)")
+                HStack {
+                    Button("Ablauf setzen (AB)") { model.run("DrainTool") }
+                    Button("Notüberlauf (NU)") { model.run("OverflowTool") }
+                }
+                if info.drains + info.overflows > 0 {
+                    Button("Abläufe entfernen") { model.run("ClearDrains") }
+                }
+            }
+        }
+    }
+}
+
+/// Gewähltes Dach: je Kante Traufe oder Giebel, Neigung und Überstand.
+private struct RoofSection: View {
+    @Environment(AppModel.self) private var model
+    let info: RoofInfo
+
+    var body: some View {
+        Section("Dachkanten") {
+            ForEach(info.edges, id: \.index) { edge in
+                HStack {
+                    Picker("", selection: Binding(
+                        get: { edge.eave },
+                        set: { if $0 != edge.eave { model.run("ToggleRoofEdge(\(info.element),\(edge.index))") } }
+                    )) {
+                        Text("Traufe").tag(true)
+                        Text("Giebel").tag(false)
+                    }
+                    .labelsHidden()
+                    .frame(width: 96)
+                    Text(String(format: "%.2f m", edge.length).replacingOccurrences(of: ".", with: ","))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                    Spacer()
+                    if edge.eave {
+                        TextField("", value: Binding(
+                            get: { edge.slope },
+                            set: { model.run("SetRoofEdge(\(info.element),\(edge.index),Some(\($0)),None)") }
+                        ), format: .number.precision(.fractionLength(0)))
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 40)
+                        Text("°").foregroundStyle(.secondary)
+                    }
+                    TextField("", value: Binding(
+                        get: { edge.overhang },
+                        set: { model.run("SetRoofEdge(\(info.element),\(edge.index),None,Some(\($0)))") }
+                    ), format: .number.precision(.fractionLength(2)))
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 48)
+                        .help("Dachüberstand")
+                    Text("m").foregroundStyle(.secondary)
+                }
+            }
+            Text("Im Grundriss mit DK eine Kante anklicken wechselt Traufe und Giebel. Giebelwände reichen bis unter das Dach.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Gewählte Treppe: Prüfung nach DIN 18065 als Ampel.
+private struct StairSection: View {
+    let info: StairInfo
+
+    var body: some View {
+        Section("Treppe") {
+            Label(info.summary, systemImage: info.problems.isEmpty ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                .foregroundStyle(info.problems.isEmpty ? Color.green : Color.red)
+            ForEach(info.problems, id: \.self) { Text($0).font(.callout).foregroundStyle(.red) }
+            if info.problems.isEmpty {
+                Text("Erfüllt DIN 18065:2020-08 (Steigung, Auftritt, Schrittmaß, Laufbreite, Durchgangshöhe).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

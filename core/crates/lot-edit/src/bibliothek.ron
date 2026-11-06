@@ -62,6 +62,13 @@
             (material: "daemmung_hart", thickness: 0.1, function: Insulation),
             (material: "stahlbeton", thickness: 0.25, function: Structure),
         ], props: (ifc_class: Some("IfcSlab.BASESLAB"))),
+        (name: "Flachdach Warmdach StB 20", layers: [
+            (material: "kies", thickness: 0.05, function: Finish),
+            (material: "abdichtung", thickness: 0.01, function: Finish),
+            (material: "daemmung_hart", thickness: 0.16, function: Insulation),
+            (material: "stahlbeton", thickness: 0.2, function: Structure),
+            (material: "putz", thickness: 0.015, function: Finish),
+        ], props: (ifc_class: Some("IfcSlab.ROOF"))),
         (name: "Steildach Sparren 22", layers: [
             (material: "dachziegel", thickness: 0.06, function: Finish),
             (material: "daemmung", thickness: 0.22, function: Insulation),

@@ -19,6 +19,7 @@ pub mod accessible;
 pub mod areas;
 pub mod building;
 pub mod escape;
+pub mod falls;
 pub mod land_use;
 pub mod landesrecht;
 pub mod report;

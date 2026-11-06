@@ -1,0 +1,17 @@
+// Gefälle (ADR 0051): Mindestwerte als Daten mit Quelle.
+//
+// VORSCHLAG nach ADR 0051, von Ben zu prüfen (Prüfpaket Bauteile).
+FallNorm(
+    // Flachdach: planmäßig mindestens 2 %; darunter Sonderkonstruktion.
+    roof: (
+        minimum: 2.0,
+        source: "Flachdachrichtlinie 2016, DIN 18531-1:2017-07",
+        below: "unter 2 % ist das Dach eine Sonderkonstruktion",
+    ),
+    // Balkon, Loggia, Terrasse.
+    balcony: (minimum: 2.0, source: "Vorschlag ADR 0051, angelehnt an die Flachdachrichtlinie 2016", below: ""),
+    // Bodengleiche Dusche.
+    shower: (minimum: 2.0, source: "Vorschlag ADR 0051", below: ""),
+    // Jede Dachfläche braucht einen Ablauf und einen Notüberlauf.
+    drains_source: "DIN 1986-100:2016-12",
+)

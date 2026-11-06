@@ -29,16 +29,28 @@ pub struct Document {
     log: Vec<Operation>,
     undo: Vec<Operation>,
     redo: Vec<Operation>,
+    /// Was nach jeder Änderung nachgeführt wird, etwa Decken, die den Wänden
+    /// folgen (ADR 0051); gehört zum selben Schritt beim Widerrufen.
+    follow: Option<Follow>,
 }
+
+/// Rechnet nach einer Änderung die Operationen, die abhängige Elemente
+/// nachführen. Gelingen sie nicht, bleibt die Änderung trotzdem.
+pub type Follow = fn(&Project) -> Vec<Operation>;
 
 impl Document {
     pub fn new(project: Project) -> Self {
-        Self { project, log: Vec::new(), undo: Vec::new(), redo: Vec::new() }
+        Self { project, log: Vec::new(), undo: Vec::new(), redo: Vec::new(), follow: None }
+    }
+
+    /// Setzt, was nach jeder Änderung nachgeführt wird.
+    pub fn set_follow(&mut self, follow: Follow) {
+        self.follow = Some(follow);
     }
 
     /// Öffnet ein Projekt mit einem schon vorhandenen Protokoll, etwa aus einer Datei.
     pub fn with_log(project: Project, log: Vec<Operation>) -> Self {
-        Self { project, log, undo: Vec::new(), redo: Vec::new() }
+        Self { project, log, undo: Vec::new(), redo: Vec::new(), follow: None }
     }
 
     pub fn project(&self) -> &Project {
@@ -60,6 +72,22 @@ impl Document {
     /// Führt eine Operation des Benutzers aus. Leert den Redo-Stapel.
     pub fn apply(&mut self, op: Operation) -> Result<(), ModelError> {
         self.execute(&op)?;
+        let more = self.follow.map(|f| f(&self.project)).unwrap_or_default();
+        let op = if more.is_empty() {
+            op
+        } else {
+            let follow = Operation::Group { label: "Nachführen".into(), ops: more };
+            match self.execute(&follow) {
+                Ok(()) => match op {
+                    Operation::Group { label, mut ops } => {
+                        ops.push(follow);
+                        Operation::Group { label, ops }
+                    }
+                    single => Operation::Group { label: "Ändern".into(), ops: vec![single, follow] },
+                },
+                Err(_) => op,
+            }
+        };
         self.undo.push(op);
         self.redo.clear();
         Ok(())
