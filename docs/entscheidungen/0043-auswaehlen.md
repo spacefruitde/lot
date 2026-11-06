@@ -1,6 +1,6 @@
 # 0043 Auswählen
 
-Status: entschieden von Ben · 26.10.2026
+Status: entschieden von Ben · 26.10.2026; umgesetzt bis auf die Punkte unter „Folgen“
 
 ## Kontext
 
@@ -29,3 +29,4 @@ Ben am 26.10.2026 zu Frage 1 bis 3: „1 ok“, „2 ok“, „3 ok“.
 ## Folgen
 
 - Auswahl, Vorhervorhebung und Tab-Kandidaten rechnet der Kern (`lot-edit`), die App zeichnet nur.
+- Umgesetzt am 26.10.2026 (Branch `bedienung-auswaehlen`): Rahmen, Lasso, ⇧, Vorhervorhebung mit Text, Tab mit Wandkette, SA, ⌘←, Unterlagen nur über den Befehl „Unterlage wählen“. Offen: Doppelklick auf Teile (mit der Wandlogik, ADR 0045), Fixieren, Auswahl in 3D und Schnitt.

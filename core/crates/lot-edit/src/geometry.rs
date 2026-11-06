@@ -83,18 +83,67 @@ pub fn distance_to_wall(project: &Project, wall: &Wall, p: Point2) -> f64 {
 /// Raum wählt, in Metern (etwa die Größe des Raumstempels in 1:100).
 const ROOM_PICK: (f64, f64) = (0.9, 0.5);
 
-/// Das Element unter dem Punkt: Stützen vor Wänden vor Achsen vor Raumstempeln, jeweils das nächste.
+/// Das Element unter dem Punkt, siehe [`elements_at`].
 pub fn element_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    element_except_spaces(project, storey, p, tolerance).or_else(|| {
+    elements_at(project, storey, p, tolerance).into_iter().next()
+}
+
+/// Alle wählbaren Elemente unter dem Punkt, das Wichtigste zuerst: Öffnungen,
+/// 2D-Elemente, Maßketten, Stützen, Wände, Achsen, Deckendurchbrüche, Dächer,
+/// Deckenränder, Raumstempel; innerhalb einer Art das nächste zuerst.
+/// Unterlagen fehlen: Sie sind nie wählbar, aber fangbar (ADR 0043).
+pub fn elements_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Vec<ElementId> {
+    let mut out = openings_at(project, storey, p, tolerance);
+    out.extend(annotations_at(project, storey, p, tolerance));
+    out.extend(nearest(
+        project.dimensions_on(storey).filter_map(|(id, d)| {
+            let (a, b) = dimension_extent(project, d)?;
+            Some((id, segment_distance(a, b, p)))
+        }),
+        tolerance,
+    ));
+    out.extend(nearest(project.columns_on(storey).map(|(id, c)| (id, column_distance(c, p))), tolerance));
+    out.extend(walls_at(project, storey, p, tolerance));
+    out.extend(nearest(project.grid_lines().map(|(id, g)| (id, segment_distance(g.start, g.end, p))), tolerance));
+    out.extend(nearest(
+        project
+            .slabs_on(storey)
+            .flat_map(|(slab, _)| project.slab_openings_in(slab))
+            .map(|(id, o)| (id, ring_distance(&o.outline, p))),
+        tolerance,
+    ));
+    out.extend(nearest(project.roofs_on(storey).map(|(id, r)| (id, ring_distance(&r.outer_outline(), p))), tolerance));
+    out.extend(nearest(project.slabs_on(storey).map(|(id, s)| (id, ring_distance(&s.outline, p))), tolerance));
+    out.extend(nearest(
         project
             .spaces_on(storey)
             .filter(|(_, r)| {
                 (p.x - r.position.x).abs() <= ROOM_PICK.0 + tolerance
                     && (p.y - r.position.y).abs() <= ROOM_PICK.1 + tolerance
             })
-            .min_by(|a, b| a.1.position.distance(p).total_cmp(&b.1.position.distance(p)))
-            .map(|(id, _)| id)
-    })
+            .map(|(id, r)| (id, r.position.distance(p))),
+        f64::INFINITY,
+    ));
+    out
+}
+
+/// Bereich um einen Raumpunkt, in dem ein Klick den Raum wählt.
+pub fn space_stamp(r: &lot_model::Space) -> [Point2; 4] {
+    let (x, y, w, h) = (r.position.x, r.position.y, ROOM_PICK.0, ROOM_PICK.1);
+    [Point2::new(x - w, y - h), Point2::new(x + w, y - h), Point2::new(x + w, y + h), Point2::new(x - w, y + h)]
+}
+
+/// Kennungen mit Abstand bis `tolerance`, das nächste zuerst.
+fn nearest(items: impl Iterator<Item = (ElementId, f64)>, tolerance: f64) -> Vec<ElementId> {
+    let mut v: Vec<(ElementId, f64)> = items.filter(|(_, d)| *d <= tolerance).collect();
+    v.sort_by(|a, b| a.1.total_cmp(&b.1));
+    v.into_iter().map(|(id, _)| id).collect()
+}
+
+/// Abstand vom Rand eines geschlossenen Umrisses.
+fn ring_distance(ring: &[Point2], p: Point2) -> f64 {
+    let n = ring.len();
+    (0..n).map(|i| segment_distance(ring[i], ring[(i + 1) % n], p)).fold(f64::INFINITY, f64::min)
 }
 
 /// Umriss einer Öffnung in ihrer Wand, über die ganze Wanddicke.
@@ -104,36 +153,22 @@ pub fn opening_outline(project: &Project, o: &lot_model::Opening) -> Option<Vec<
     lot_geom::wall_section(wall, (o.offset, o.offset + o.width), (left, right)).rings().into_iter().next()
 }
 
-/// Die Öffnung unter dem Punkt, falls er in einer Öffnung einer Wand des Geschosses liegt.
-fn opening_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    project.walls_on(storey).find_map(|(wall_id, wall)| {
-        let (s, t) = wall.locate(p);
-        let (left, right) = faces(project, wall);
-        if t > left + tolerance || t < right - tolerance {
-            return None;
-        }
-        project
-            .openings_in(wall_id)
-            .find(|(_, o)| s >= o.offset - tolerance / 2.0 && s <= o.offset + o.width + tolerance / 2.0)
-            .map(|(id, _)| id)
-    })
-}
-
-fn element_except_spaces(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    opening_at(project, storey, p, tolerance).or_else(|| other_elements(project, storey, p, tolerance))
-}
-
-/// Die Maßkette, deren Maßlinie am Punkt liegt.
-fn dimension_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
+/// Die Öffnungen, in denen der Punkt liegt.
+fn openings_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Vec<ElementId> {
     project
-        .dimensions_on(storey)
-        .filter_map(|(id, d)| {
-            let (a, b) = dimension_extent(project, d)?;
-            Some((id, segment_distance(a, b, p)))
+        .walls_on(storey)
+        .flat_map(|(wall_id, wall)| {
+            let (s, t) = wall.locate(p);
+            let (left, right) = faces(project, wall);
+            let inside = t <= left + tolerance && t >= right - tolerance;
+            project
+                .openings_in(wall_id)
+                .filter(move |(_, o)| {
+                    inside && s >= o.offset - tolerance / 2.0 && s <= o.offset + o.width + tolerance / 2.0
+                })
+                .map(|(id, _)| id)
         })
-        .filter(|(_, dist)| *dist <= tolerance)
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(id, _)| id)
+        .collect()
 }
 
 /// Anfang und Ende der Maßlinie.
@@ -143,29 +178,6 @@ fn dimension_extent(project: &Project, d: &lot_model::DimensionChain) -> Option<
     let dir = lot_geom::dimensions::direction(d);
     let at = |s: f64| Point2::new(d.position.x + dir[0] * s, d.position.y + dir[1] * s);
     Some((at(first.along), at(last.along)))
-}
-
-fn other_elements(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    annotation_at(project, storey, p, tolerance)
-        .or_else(|| dimension_at(project, storey, p, tolerance))
-        .or_else(|| walls_columns_grids(project, storey, p, tolerance))
-        .or_else(|| slab_opening_at(project, storey, p, tolerance))
-        .or_else(|| roof_at(project, storey, p, tolerance))
-        .or_else(|| underlay_at(project, storey, p, tolerance))
-}
-
-/// Das Dach des Geschosses, dessen Umriss mit Überstand am Punkt liegt.
-fn roof_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    project
-        .roofs_on(storey)
-        .filter_map(|(id, r)| {
-            let outer = r.outer_outline();
-            let n = outer.len();
-            let d = (0..n).map(|i| segment_distance(outer[i], outer[(i + 1) % n], p)).fold(f64::INFINITY, f64::min);
-            (d <= tolerance).then_some((id, d))
-        })
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(id, _)| id)
 }
 
 /// Ungefähre Ausdehnung eines Texts in m, für 1:100 (Schrifthöhe in mm auf dem Papier).
@@ -201,68 +213,20 @@ fn annotation_edges(a: &lot_model::Annotation) -> Vec<(Point2, Point2)> {
     }
 }
 
-/// Das 2D-Element des Grundrisses unter dem Punkt; bei Texten zählt die ganze Fläche.
-fn annotation_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    project
-        .annotations_in(lot_model::AnnotationView::FloorPlan { storey })
-        .filter_map(|(id, a)| {
+/// Die 2D-Elemente des Grundrisses unter dem Punkt; bei Texten zählt die ganze Fläche.
+fn annotations_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Vec<ElementId> {
+    nearest(
+        project.annotations_in(lot_model::AnnotationView::FloorPlan { storey }).map(|(id, a)| {
             if let lot_model::AnnotationShape::Text { position, text, height, .. } = &a.shape {
                 let b = text_box(*position, text, *height);
                 if p.x >= b[0][0] && p.x <= b[1][0] && p.y >= b[0][1] && p.y <= b[2][1] {
-                    return Some((id, 0.0));
+                    return (id, 0.0);
                 }
             }
-            let d = annotation_edges(a).iter().map(|(a, b)| segment_distance(*a, *b, p)).fold(f64::INFINITY, f64::min);
-            (d <= tolerance).then_some((id, d))
-        })
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(id, _)| id)
-}
-
-/// Die Unterlage, deren Rand am Punkt liegt. Ins Bild klicken wählt sie nicht,
-/// sonst ließe sich darauf nicht zeichnen.
-fn underlay_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    project
-        .underlays_on(storey)
-        .filter_map(|(id, u)| {
-            let c = u.corners();
-            let d = (0..4).map(|i| segment_distance(c[i], c[(i + 1) % 4], p)).fold(f64::INFINITY, f64::min);
-            (d <= tolerance).then_some((id, d))
-        })
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(id, _)| id)
-}
-
-/// Der Deckendurchbruch des Geschosses, dessen Rand am Punkt liegt.
-fn slab_opening_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    project
-        .slabs_on(storey)
-        .flat_map(|(slab, _)| project.slab_openings_in(slab))
-        .filter_map(|(id, o)| {
-            let n = o.outline.len();
-            let d =
-                (0..n).map(|i| segment_distance(o.outline[i], o.outline[(i + 1) % n], p)).fold(f64::INFINITY, f64::min);
-            (d <= tolerance).then_some((id, d))
-        })
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(id, _)| id)
-}
-
-fn walls_columns_grids(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    let column = project
-        .columns_on(storey)
-        .map(|(id, c)| (id, column_distance(c, p)))
-        .filter(|(_, d)| *d <= tolerance)
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(id, _)| id);
-    column.or_else(|| wall_at(project, storey, p, tolerance)).or_else(|| {
-        project
-            .grid_lines()
-            .map(|(id, g)| (id, segment_distance(g.start, g.end, p)))
-            .filter(|(_, d)| *d <= tolerance)
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(id, _)| id)
-    })
+            (id, annotation_edges(a).iter().map(|(a, b)| segment_distance(*a, *b, p)).fold(f64::INFINITY, f64::min))
+        }),
+        tolerance,
+    )
 }
 
 /// Abstand vom Querschnitt einer Stütze (0 innerhalb).
@@ -285,6 +249,7 @@ pub fn outline(project: &Project, id: ElementId) -> Option<Vec<[f64; 2]>> {
         Element::Column(c) => Some(column_outline(c)),
         Element::Opening(o) => opening_outline(project, o),
         Element::SlabOpening(o) => Some(o.outline.iter().map(|p| [p.x, p.y]).collect()),
+        Element::Slab(s) => Some(s.outline.iter().map(|p| [p.x, p.y]).collect()),
         Element::Roof(r) => Some(r.outer_outline().iter().map(|p| [p.x, p.y]).collect()),
         Element::Underlay(u) => Some(u.corners().iter().map(|p| [p.x, p.y]).collect()),
         Element::Annotation(a) => match &a.shape {
@@ -428,12 +393,12 @@ pub fn moved_elements(project: &Project, ids: &[ElementId], delta: (f64, f64)) -
 
 /// Die Wand unter dem Punkt (innerhalb `tolerance`), die nächste zuerst.
 pub fn wall_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Option<ElementId> {
-    project
-        .walls_on(storey)
-        .map(|(id, w)| (id, distance_to_wall(project, w, p)))
-        .filter(|(_, d)| *d <= tolerance)
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(id, _)| id)
+    walls_at(project, storey, p, tolerance).into_iter().next()
+}
+
+/// Alle Wände unter dem Punkt, die nächste zuerst.
+pub fn walls_at(project: &Project, storey: ElementId, p: Point2, tolerance: f64) -> Vec<ElementId> {
+    nearest(project.walls_on(storey).map(|(id, w)| (id, distance_to_wall(project, w, p))), tolerance)
 }
 
 /// Schnittpunkt der Geraden durch `p` mit Richtung `d` und der Geraden durch `q` mit Richtung `e`.

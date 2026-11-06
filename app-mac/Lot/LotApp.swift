@@ -71,26 +71,50 @@ struct LotApp: App {
                 Button("Befehle …") { model.showPalette.toggle() }
                     .keyboardShortcut("k")
                 Divider()
-                Button("Auswählen") { model.run("SelectTool") }
-                Button("Wand zeichnen") { model.run("WallTool") }
-                Button("Bogenwand zeichnen") { model.run("ArcWallTool") }
-                Button("Achse zeichnen") { model.run("GridTool") }
-                Button("Stütze setzen") { model.run("ColumnTool") }
-                Button("Tür setzen") { model.run("DoorTool") }
-                Button("Fenster setzen") { model.run("WindowTool") }
-                Button("Raum setzen") { model.run("SpaceTool") }
+                Button("Auswählen (Esc)") { model.run("SelectTool") }
+                Button("Wand zeichnen (WA)") { model.run("WallTool") }
+                Button("Wände als Rechteck (WR)") { model.run("WallRectTool") }
+                Button("Bogenwand zeichnen (BW)") { model.run("ArcWallTool") }
+                Button("Achse zeichnen (GR)") { model.run("GridTool") }
+                Button("Stütze setzen (CL)") { model.run("ColumnTool") }
+                Button("Tür setzen (DR)") { model.run("DoorTool") }
+                Button("Fenster setzen (WN)") { model.run("WindowTool") }
+                Button("Raum setzen (RM)") { model.run("SpaceTool") }
                 Button("Räume erkennen") { model.run("DetectSpaces") }
-                Button("Gewählte Wände bemaßen") { model.run("DimensionWalls") }
+                Button("Gewählte Wände bemaßen (DI)") { model.run("DimensionWalls") }
                 Button("Decke aus Wänden") { model.run("SlabFromWalls") }
-                Button("Deckendurchbruch zeichnen") { model.run("SlabOpeningTool") }
+                Button("Deckendurchbruch zeichnen (DB)") { model.run("SlabOpeningTool") }
                 Button("Satteldach über dem Geschoss") { model.run("GableRoofFromWalls") }
-                Button("Linie zeichnen (2D)") { model.run("LineTool") }
-                Button("Text setzen (2D)") { model.run("TextTool") }
-                Button("Unterlage kalibrieren") { model.run("CalibrateUnderlayTool") }
+                Button("Linie zeichnen, 2D (LI)") { model.run("LineTool") }
+                Button("Text setzen, 2D (TX)") { model.run("TextTool") }
+                Button("Unterlage kalibrieren (KA)") { model.run("CalibrateUnderlayTool") }
                 Button("Unterlage ausrichten") { model.run("AlignUnderlayTool") }
+                Divider()
+                Button("Zeichenrichtung von einer Kante (ZR)") { model.run("DirectionFromEdge") }
+                Menu("Fangen für einen Klick") {
+                    Button("Nur Endpunkte (SE)") { model.run("SnapOverride(Endpoints)") }
+                    Button("Nur Mitten (SM)") { model.run("SnapOverride(Midpoints)") }
+                    Button("Nur Schnittpunkte (SI)") { model.run("SnapOverride(Intersections)") }
+                    Button("Nur lotrecht (SP)") { model.run("SnapOverride(Perpendicular)") }
+                    Button("Nur auf Linien (SN)") { model.run("SnapOverride(Nearest)") }
+                    Button("Fangen aus (SO)") { model.run("SnapOverride(Off)") }
+                }
+                Divider()
+                Button("Verschieben (MV)") { model.run("MoveTool") }
+                Button("Kopieren (CO)") { model.run("CopyTool") }
+                Button("Drehen (RO)") { model.run("RotateTool") }
+                Button("Spiegeln (MM)") { model.run("MirrorTool") }
+                Button("Reihe (AR)") { model.run("ArrayTool") }
+                Button("Versetzen (OF)") { model.run("OffsetTool") }
+                Button("Ausrichten (AL)") { model.run("AlignTool") }
+                Button("Stutzen und Dehnen (TR)") { model.run("TrimTool") }
+                Button("Wand teilen (SL)") { model.run("SplitTool") }
                 Divider()
                 Button("Alles auswählen") { model.run("SelectAll") }
                     .keyboardShortcut("a")
+                Button("Gleiche wählen (SA)") { model.run("SelectSimilar") }
+                Button("Vorige Auswahl (⌘← im Plan)") { model.run("PreviousSelection") }
+                Button("Unterlage wählen") { model.run("SelectUnderlay") }
                 Button("Löschen") { model.run("DeleteSelection") }
             }
         }

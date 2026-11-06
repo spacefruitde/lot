@@ -205,7 +205,8 @@ final class MetalViewportNSView: NSView {
     override func mouseMoved(with event: NSEvent) {
         guard let viewport, isPlan else { return }
         let (x, y) = pointerOffset(event)
-        let result = viewport.pointerMoved(x: x, y: y, shift: event.modifierFlags.contains(.shift))
+        let result = viewport.pointerMoved(
+            x: x, y: y, shift: event.modifierFlags.contains(.shift), alt: event.modifierFlags.contains(.option))
         if result.redraw { deliver(result) }
     }
 
@@ -213,20 +214,23 @@ final class MetalViewportNSView: NSView {
         window?.makeFirstResponder(self)
         guard let viewport else { return }
         dragging = true
-        if isPlan && !event.modifierFlags.contains(.option) {
+        if isPlan {
             let (x, y) = pointerOffset(event)
             deliver(viewport.pointerDown(
-                x: x, y: y, clicks: UInt32(event.clickCount), shift: event.modifierFlags.contains(.shift)))
+                x: x, y: y, clicks: UInt32(event.clickCount),
+                shift: event.modifierFlags.contains(.shift), alt: event.modifierFlags.contains(.option)))
         }
     }
 
     override func mouseDragged(with event: NSEvent) {
         guard let viewport else { return }
-        if event.modifierFlags.contains(.option) {
-            viewport.pan(dx: Float(event.deltaX), dy: Float(event.deltaY))
-        } else if isPlan {
+        if isPlan {
+            // Im Grundriss gehört ⌥ der Auswahl (Lasso, Kopie); verschoben wird mit zwei Fingern.
             let (x, y) = pointerOffset(event)
-            deliver(viewport.pointerDragged(x: x, y: y, shift: event.modifierFlags.contains(.shift)))
+            deliver(viewport.pointerDragged(
+                x: x, y: y, shift: event.modifierFlags.contains(.shift), alt: event.modifierFlags.contains(.option)))
+        } else if event.modifierFlags.contains(.option) {
+            viewport.pan(dx: Float(event.deltaX), dy: Float(event.deltaY))
         } else {
             viewport.orbit(dx: Float(event.deltaX), dy: Float(event.deltaY))
         }
@@ -275,36 +279,45 @@ final class MetalViewportNSView: NSView {
         didInteract()
     }
 
+    /// ⌘C und ⌘V aus dem Menü Bearbeiten: Auswahl kopieren, an derselben Stelle
+    /// im aktuellen Geschoss einfügen.
+    @objc func copy(_ sender: Any?) {
+        model?.run("CopyToClipboard")
+    }
+
+    @objc func paste(_ sender: Any?) {
+        model?.run("Paste")
+    }
+
+    /// Tasten gehen an den Kern: Kürzel aus zwei Buchstaben (WA, DR, SA …),
+    /// Zahlen, Tab, Pfeile und Leertaste (ADR 0043, 0044).
     override func keyDown(with event: NSEvent) {
         guard let viewport else { return super.keyDown(with: event) }
         let mods = event.modifierFlags.intersection([.command, .control, .option])
+        if mods == [.command] && event.keyCode == 123 {
+            model?.run("PreviousSelection")
+            return
+        }
+        // Auf deutschen Tastaturen liegen @, [ und ] auf ⌥; sie gehören zur Zahleneingabe.
+        if mods == [.option], let c = event.characters?.first, "@[]{}|".contains(c) {
+            deliver(viewport.key(key: .character(text: String(c))))
+            return
+        }
         guard mods.isEmpty else { return super.keyDown(with: event) }
+        let large = event.modifierFlags.contains(.shift)
         switch event.keyCode {
         case 53: deliver(viewport.key(key: .escape))
         case 36, 76: deliver(viewport.key(key: .enter))
         case 51, 117: deliver(viewport.key(key: .delete))
+        case 48: deliver(viewport.key(key: .tab))
+        case 123: deliver(viewport.key(key: .arrow(dx: -1, dy: 0, large: large)))
+        case 124: deliver(viewport.key(key: .arrow(dx: 1, dy: 0, large: large)))
+        case 125: deliver(viewport.key(key: .arrow(dx: 0, dy: -1, large: large)))
+        case 126: deliver(viewport.key(key: .arrow(dx: 0, dy: 1, large: large)))
         default:
-            guard let text = event.charactersIgnoringModifiers?.lowercased(), let c = text.first else {
-                return super.keyDown(with: event)
-            }
-            switch c {
-            case "w": model?.run("WallTool")
-            case "b": model?.run("ArcWallTool")
-            case "v": model?.run("SelectTool")
-            case "a": model?.run("GridTool")
-            case "s": model?.run("ColumnTool")
-            case "r": model?.run("SpaceTool")
-            case "t": model?.run("DoorTool")
-            case "m": model?.run("DimensionWalls")
-            case "d": model?.run("SlabOpeningTool")
-            case "l": model?.run("LineTool")
-            case "x": model?.run("TextTool")
-            case "k": model?.run("CalibrateUnderlayTool")
-            case "f": model?.run(event.modifierFlags.contains(.shift) ? "FlipWalls" : "WindowTool")
-            case "0"..."9", ",", ".": deliver(viewport.key(key: .character(text: String(c))))
-            default: super.keyDown(with: event)
-            }
-            needsRender = true
+            guard let c = event.characters?.first else { return super.keyDown(with: event) }
+            deliver(viewport.key(key: .character(text: String(c))))
         }
+        needsRender = true
     }
 }

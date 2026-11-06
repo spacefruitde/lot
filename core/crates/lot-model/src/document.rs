@@ -97,6 +97,23 @@ impl Document {
         self.apply(Operation::SetParam { id, param, old, new: value })
     }
 
+    /// Mehrere Parameter als ein Undo-Schritt, etwa dieselbe Höhe für alle gewählten Wände.
+    pub fn set_params(&mut self, label: &str, changes: &[(ElementId, Param, f64)]) -> Result<(), ModelError> {
+        let mut ops = Vec::new();
+        for &(id, param, value) in changes {
+            let element = self.project.elements.get(&id).ok_or(ModelError::UnknownElement(id))?;
+            let old = element.param(param).ok_or(ModelError::UnknownParam { id, param })?;
+            if (old - value).abs() > TOLERANCE {
+                ops.push(Operation::SetParam { id, param, old, new: value });
+            }
+        }
+        match ops.len() {
+            0 => Ok(()),
+            1 => self.apply(ops.remove(0)),
+            _ => self.apply(Operation::Group { label: label.into(), ops }),
+        }
+    }
+
     pub fn undo(&mut self) -> Result<bool, ModelError> {
         let Some(op) = self.undo.pop() else {
             return Ok(false);

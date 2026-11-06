@@ -345,6 +345,11 @@ int8_t uniffi_lot_ffi_fn_method_lotdocument_redo(uint64_t ptr, RustCallStatus *_
 void uniffi_lot_ffi_fn_method_lotdocument_save(uint64_t ptr, RustBuffer path, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SELECTION_GROUPS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SELECTION_GROUPS
+RustBuffer uniffi_lot_ffi_fn_method_lotdocument_selection_groups(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_ANNOTATION_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_ANNOTATION_TEXT
 void uniffi_lot_ffi_fn_method_lotdocument_set_annotation_text(uint64_t ptr, uint64_t element, RustBuffer text, double height, RustCallStatus *_Nonnull out_status
@@ -353,6 +358,11 @@ void uniffi_lot_ffi_fn_method_lotdocument_set_annotation_text(uint64_t ptr, uint
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_PARAM
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_PARAM
 void uniffi_lot_ffi_fn_method_lotdocument_set_param(uint64_t ptr, uint64_t element, RustBuffer kind, double value, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_PARAMS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_PARAMS
+void uniffi_lot_ffi_fn_method_lotdocument_set_params(uint64_t ptr, RustBuffer elements, RustBuffer kind, RustBuffer values, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_LOTDOCUMENT_SET_SPACE
@@ -437,17 +447,17 @@ void uniffi_lot_ffi_fn_method_viewport_pan(uint64_t ptr, float dx, float dy, Rus
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_POINTER_DOWN
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_POINTER_DOWN
-RustBuffer uniffi_lot_ffi_fn_method_viewport_pointer_down(uint64_t ptr, float x, float y, uint32_t clicks, int8_t shift, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_lot_ffi_fn_method_viewport_pointer_down(uint64_t ptr, float x, float y, uint32_t clicks, int8_t shift, int8_t alt, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_POINTER_DRAGGED
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_POINTER_DRAGGED
-RustBuffer uniffi_lot_ffi_fn_method_viewport_pointer_dragged(uint64_t ptr, float x, float y, int8_t shift, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_lot_ffi_fn_method_viewport_pointer_dragged(uint64_t ptr, float x, float y, int8_t shift, int8_t alt, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_POINTER_MOVED
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_POINTER_MOVED
-RustBuffer uniffi_lot_ffi_fn_method_viewport_pointer_moved(uint64_t ptr, float x, float y, int8_t shift, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_lot_ffi_fn_method_viewport_pointer_moved(uint64_t ptr, float x, float y, int8_t shift, int8_t alt, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_METHOD_VIEWPORT_POINTER_UP
@@ -887,6 +897,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_save(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SELECTION_GROUPS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SELECTION_GROUPS
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_selection_groups(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_ANNOTATION_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_ANNOTATION_TEXT
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_annotation_text(void
@@ -896,6 +912,12 @@ uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_annotation_text(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_PARAM
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_PARAM
 uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_param(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_PARAMS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_METHOD_LOTDOCUMENT_SET_PARAMS
+uint16_t uniffi_lot_ffi_checksum_method_lotdocument_set_params(void
     
 );
 #endif

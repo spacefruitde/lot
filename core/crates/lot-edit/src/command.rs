@@ -26,6 +26,23 @@ pub enum Command {
     CalibrateUnderlayTool,
     /// Unterlage ausrichten: zwei Punkte, die waagerecht oder senkrecht liegen sollen
     AlignUnderlayTool,
+    /// Verschieben, Kopieren, Drehen, Spiegeln, Reihe an der Auswahl (MV, CO, RO, MM, AR).
+    MoveTool,
+    CopyTool,
+    RotateTool,
+    MirrorTool,
+    ArrayTool,
+    /// Versetzen, Ausrichten, Stutzen und Dehnen, Teilen (OF, AL, TR, SL).
+    OffsetTool,
+    AlignTool,
+    TrimTool,
+    SplitTool,
+    /// Wände als Rechteck in der Zeichenrichtung (WR).
+    WallRectTool,
+    /// Zeichenrichtung von einer Kante setzen (ZR).
+    DirectionFromEdge,
+    /// Fangkürzel für den nächsten Klick (SE, SM, SI, SP, SN, SO).
+    SnapOverride(crate::snap::SnapOnly),
     /// Gewählte Türen schlagen zur anderen Wandseite auf.
     FlipDoorSwing,
     /// Gewählte Türen: DIN links und DIN rechts tauschen.
@@ -55,6 +72,18 @@ pub enum Command {
     /// Zeichenrichtung der gewählten Wände umkehren: innen und außen tauschen.
     FlipWalls,
     SelectAll,
+    /// Gleiche Bauteile wie die Auswahl: erst im Geschoss, dann im Projekt (SA).
+    SelectSimilar,
+    /// Die vorige Auswahl zurückholen (⌘←).
+    PreviousSelection,
+    /// Unterlagen sind nicht anklickbar (ADR 0043); dieser Befehl wählt sie nacheinander.
+    SelectUnderlay,
+    /// Auswahl in die Zwischenablage (⌘C).
+    CopyToClipboard,
+    /// Zwischenablage an derselben Stelle ins aktuelle Geschoss einfügen (⌘V).
+    Paste,
+    /// Genau diese Elemente wählen, etwa eine Gruppe aus dem Inspektor.
+    SetSelection(Vec<u64>),
     Undo,
     Redo,
 }

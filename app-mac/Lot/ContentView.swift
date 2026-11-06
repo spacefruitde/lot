@@ -57,14 +57,14 @@ struct ContentView: View {
             .help("Ansicht wechseln (⌘1, ⌘2)")
         }
         ToolbarItemGroup {
-            toolButton("Auswählen", systemImage: "cursorarrow", tool: "select", command: "SelectTool", key: "V")
-            toolButton("Wand", systemImage: "square.split.diagonal.2x2", tool: "wall", command: "WallTool", key: "W")
-            toolButton("Bogenwand", systemImage: "point.topleft.down.curvedto.point.bottomright.up", tool: "arc", command: "ArcWallTool", key: "B")
-            toolButton("Achse", systemImage: "line.diagonal", tool: "grid", command: "GridTool", key: "A")
-            toolButton("Stütze", systemImage: "square.fill", tool: "column", command: "ColumnTool", key: "S")
-            toolButton("Tür", systemImage: "door.left.hand.open", tool: "door", command: "DoorTool", key: "T")
-            toolButton("Fenster", systemImage: "squareshape.split.2x2", tool: "window", command: "WindowTool", key: "F")
-            toolButton("Raum", systemImage: "square.dashed", tool: "space", command: "SpaceTool", key: "R")
+            toolButton("Auswählen", systemImage: "cursorarrow", tool: "select", command: "SelectTool", key: "Esc")
+            toolButton("Wand", systemImage: "square.split.diagonal.2x2", tool: "wall", command: "WallTool", key: "WA")
+            toolButton("Bogenwand", systemImage: "point.topleft.down.curvedto.point.bottomright.up", tool: "arc", command: "ArcWallTool", key: "BW")
+            toolButton("Achse", systemImage: "line.diagonal", tool: "grid", command: "GridTool", key: "GR")
+            toolButton("Stütze", systemImage: "square.fill", tool: "column", command: "ColumnTool", key: "CL")
+            toolButton("Tür", systemImage: "door.left.hand.open", tool: "door", command: "DoorTool", key: "DR")
+            toolButton("Fenster", systemImage: "squareshape.split.2x2", tool: "window", command: "WindowTool", key: "WN")
+            toolButton("Raum", systemImage: "square.dashed", tool: "space", command: "SpaceTool", key: "RM")
             commandMenu("Wandaufbau", systemImage: "square.stack.3d.up", group: "Wandaufbau")
             commandMenu("Geschoss", systemImage: "building.2", group: "Geschoss")
         }
