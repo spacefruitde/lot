@@ -4,19 +4,22 @@ Quellen und Einzelheiten: `recherche-bauteile-bauen.md`. Was Lot heute kann: `lo
 
 ## Kurzvergleich
 
-| Thema | Revit | Archicad | Vectorworks | Allplan | Lot heute |
-|---|---|---|---|---|---|
-| eigenes Bauteil | Familie mit Referenzebenen und Abhängigkeiten | GDL-Skript oder starres Objekt | Hybridsymbol, Plug-in, Marionette | Makro, SmartPart- oder Python-Skript | keins (M6) |
-| einmalige Form | Modellieren vor Ort, bremst, nicht umwandelbar | Morph, nicht assoziativ | Volumenkörper | 3D-Körper, wandelbar | keine |
-| 2D je Maßstab | symbolische Linien je Detailgrad, von Hand | Projektion oder Skript | 2D je Ansicht und Detailgrad | Folien je Maßstab | fest je Bauteilart |
-| Wanddicke wechselnd | nein, überlappende Wände | trapezförmig, polygonal | nein | über Ebenen | nein |
-| schiefe Wand | geneigt, konisch | geneigt, doppelt geneigt | nein | über Ebenen | nein |
-| Nische, Schlitz | Abzugskörper vor Ort | Solid-Operation, nicht im Grundriss | „Wall Recess“ | aus 3D-Körpern | Durchbruch nur in Decken |
-| Teilabbruch | Wand teilen oder „Teile“ | Wand teilen | eigener Wandstil | Wand teilen | Wand teilen |
+| Thema | Revit | Archicad | Vectorworks | Allplan | Synaps | Lot heute |
+|---|---|---|---|---|---|---|
+| eigenes Bauteil | Familie mit Referenzebenen und Abhängigkeiten | GDL-Skript oder starres Objekt | Hybridsymbol, Plug-in, Marionette | Makro, SmartPart- oder Python-Skript | Block aus 2D-Formen, ohne Parameter | keins (M6) |
+| einmalige Form | Modellieren vor Ort, bremst, nicht umwandelbar | Morph, nicht assoziativ | Volumenkörper | 3D-Körper, wandelbar | unbelegt | keine |
+| 2D je Maßstab | symbolische Linien je Detailgrad, von Hand | Projektion oder Skript | 2D je Ansicht und Detailgrad | Folien je Maßstab | unbelegt | fest je Bauteilart |
+| Wanddicke wechselnd | nein, überlappende Wände | trapezförmig, polygonal | nein | über Ebenen | eine Dicke je Wand | nein |
+| schiefe Wand | geneigt, konisch | geneigt, doppelt geneigt | nein | über Ebenen | unbelegt | nein |
+| Nische, Schlitz | Abzugskörper vor Ort | Solid-Operation, nicht im Grundriss | „Wall Recess“ | aus 3D-Körpern | unbelegt | Durchbruch nur in Decken |
+| Bestand aus Scan | nicht untersucht | nicht untersucht | nicht untersucht | nicht untersucht | KI legt Wände, Öffnungen, Raumnamen an, Maßstab selbst prüfen | Unterlage kalibrieren, nachzeichnen |
+| Teilabbruch | Wand teilen oder „Teile“ | Wand teilen | eigener Wandstil | Wand teilen | keine Bauzustände gefunden | Wand teilen |
 
 **Was Nutzer am meisten ärgert:** Altbauwände werden in Revit aus überlappenden Wänden, Stützen und Modellen vor Ort zusammengestückelt [54 bis 56]; Modelle vor Ort lassen sich nicht in Familien umwandeln (Revit Ideas, 170 Stimmen [61]), nicht alle Kategorien werden im Grundriss geschnitten (533 Stimmen [62]); Archicads Solid-Operationen erscheinen nie im Grundriss [65], Morphs liefern in Listen nur Volumen [66]; eigene Objekte brauchen Skripte (GDL, SmartParts) oder brüchige Referenzebenen [57, 58, 71, 82].
 
 **Wo Lot schon vorn ist:** Lot leitet jeden Grundriss aus der Geometrie ab (Regel 6) und speichert jede Änderung als Operation (Regel 7). Darauf lassen sich Körper, die im Grundriss richtig geschnitten werden, und Bauzustände je Teilbereich bauen, ohne Wände zu zerstückeln.
+
+**Synaps** (ergänzt am 6.11.2026, nur aus Website und Doku): ein Zeichenwerkzeug mit KI im Browser, das sich als Ergänzung zu Revit sieht, nicht als BIM [84]. Beim Einstieg in den Bestand ist es stärker als alle vier: Aus einem Scan, PDF oder Handyfoto macht die KI bearbeitbare Wände, Öffnungen und Raumnamen, laut Website auf 1 bis 2 % genau; den Maßstab prüft man danach selbst [88, 89]. Danach endet es: keine Bauzustände, keine Körper, Blöcke nur aus 2D-Formen ohne Parameter, Wände mit einer Dicke und bis zu acht Schichten [85, 86]. Daraus Punkt 7 im Vorschlag.
 
 ## Vorschlag für Lot
 
@@ -26,3 +29,4 @@ Quellen und Einzelheiten: `recherche-bauteile-bauen.md`. Was Lot heute kann: `lo
 4. **2D-Bild abgeleitet, je Maßstab übersteuerbar:** Standard ist der Schnitt durch die Geometrie plus Ansicht von oben in Linien nach Bürostandard. Wer will, zeichnet für 1:100 ein vereinfachtes und für 1:50 ein genaues Symbol.
 5. **Bauzustand je Teilbereich und Schicht, ohne die Wand zu teilen:** Ein Rechteck in der Ansicht oder im Grundriss markiert einen Abbruchbereich in einer Bestandswand; eine Schicht lässt sich einzeln abbrechen (alter Putz ab, neuer Putz an). Bauantrag und Umbauplan zeigen es nach Bürostandard gelb und rot.
 6. **Vorlagen für den Bestand:** Kamin mit Zügen, Unterzug, Holzbalkendecke, Kappendecke, Tonnen- und Kreuzgewölbe, Fachwerkwand, Bestandstreppe aus dem Aufmaß (jede Stufe einzeln). Jede Vorlage ist ein Körper aus Punkt 2 mit Parametern.
+7. **Wände aus dem Scan vorschlagen** (neu nach dem Vergleich mit Synaps, für später): Auf einer kalibrierten Unterlage schlägt Lot Wände, Öffnungen und Räume vor, mit Dicke und Aufbau aus dem Bürostandard und dem Bauzustand Bestand. Du nimmst sie an oder korrigierst sie wie in Punkt 1. Lot rechnet mit dem Maßstab aus der Kalibrierung, nicht mit einer Schätzung.
