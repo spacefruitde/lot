@@ -146,7 +146,8 @@ pub fn draw_door_sizes(
             if dimensioned.contains(&id) || matches!(o.kind, lot_model::OpeningKind::Window) {
                 continue;
             }
-            if bottom + o.sill_height > z_cut || bottom + o.sill_height + o.height <= z_cut {
+            let Some((o0, o1)) = project.opening_span(o) else { continue };
+            if o0 > z_cut || o1 <= z_cut {
                 continue;
             }
             // Auf der Seite ohne Aufschlag; bei Durchgängen links der Wand.

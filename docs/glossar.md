@@ -10,14 +10,17 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Schichtfunktion | `LayerFunction` | | Tragschicht, Dämmung, Installationsebene, Bekleidung, Luftschicht |
 | Tragschicht | `LayerFunction::Structure` | | höchste Priorität bei Anschlüssen |
 | Bezugslinie | `Wall::start`, `Wall::end` | | Linie, an der eine Wand gezeichnet wird |
-| Lage der Bezugslinie | `WallAlignment` | | Mitte, Außenkante, Innenkante des Aufbaus |
+| Lage der Bezugslinie | `WallAlignment` | | Mitte, Außenfläche, Innenfläche, Kernmitte, Kern außen, Kern innen; eine Lesart, ein Wechsel verschiebt die Wand nicht (ADR 0045) |
+| Kern | `WallType::core` | | von der ersten bis zur letzten Tragschicht |
+| Umdrehen | `walls::flip_ops` | | innen und außen tauschen, die Wand bleibt liegen |
 | Oberkante | `Top` | | feste Höhe oder bis zum nächsten Geschoss |
 | Unterkante über OKFF | `base_offset` | | |
 | OKFF | `Storey::elevation` | | Oberkante Fertigfußboden über ±0,00 |
 | Geschosshöhe | `Storey::height` | | OKFF bis OKFF darüber |
 | Schichtrang | `LayerFunction::priority` | | 1 = Tragschicht, bestimmt das Ineinandergreifen an Anschlüssen |
 | Kniestock | | | niedrige Außenwand im Dachgeschoss, `Top::Height` |
-| Anschluss, Wandknoten | `Join` | | |
+| Anschluss, Wandknoten | `Junction` | | auswählbar, mit Erklärung, welche Schicht welche schneidet (ADR 0045) |
+| Ausnahme am Anschluss | `JoinRule` | | durchlaufen (`Through`), nicht verbinden (`Butt`) |
 | Geschoss | `Storey` | IfcBuildingStorey | |
 | Achsraster | `Grid` | IfcGrid | |
 | Decke, Bodenplatte | `Slab` | IfcSlab | Bodenplatte als `SlabKind::Base` |
@@ -29,7 +32,13 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Tür | `Door` | IfcDoor | |
 | Fenster | `Window` | IfcWindow | |
 | Laibung | `Reveal` | | |
-| Brüstung, Brüstungshöhe | `sill_height` | | Höhe über Fertigfußboden |
+| Brüstung, Brüstungshöhe (BRH) | `sill_height` | | fertige Brüstung über OKFF, führend (ADR 0047) |
+| Rohbaubrüstung | `Project::rough_sill` | | über Oberkante Rohdecke: BRH plus Fußbodenaufbau minus unterer Anschluss |
+| Fußbodenaufbau | `Project::floor_build_up` | | Schichten der Decke über der Rohdecke, bis OKFF |
+| Unterer Anschluss | `OpeningType::sill_connection` | | von der Rohbaubrüstung bis zur fertigen Brüstung (Fensterbank, Ausgleich) |
+| Tür- und Fenstertyp | `OpeningType` | IfcDoorType, IfcWindowType | füllt eine Öffnung, mit Kennzeichen wie F1 |
+| Rohbauöffnung | `Project::opening_span` | | Unter- und Oberkante der Öffnung im Rohbau |
+| Nische | `Recess` | | Öffnung, die nur von einer Seite so tief wie angegeben in die Wand reicht |
 | Sturz, Sturzhöhe | `head_height` | | |
 | Anschlag (Fenster, Tür) | `Rebate` | | Falz, an dem der Flügel anschlägt |
 | Anschlag DIN links, DIN rechts | `Handing` | | nach DIN 107: Bänder links oder rechts, gesehen von der Seite, zu der die Tür aufschlägt |

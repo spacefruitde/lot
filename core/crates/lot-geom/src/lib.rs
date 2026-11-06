@@ -26,7 +26,10 @@ pub mod terrain;
 
 use std::collections::BTreeMap;
 
-pub use joins::{Band, LayerRegion, column_area, layer_regions, solid_regions, wall_section};
+pub use joins::{
+    ArmRole, Band, Cause, Contact, Junction, JunctionArm, LayerRef, LayerRegion, column_area, contacts, junction_at,
+    junctions, layer_regions, solid_regions, wall_section,
+};
 use lot_model::{Element, ElementId, Project};
 use manifold_rust::linalg::{Vec2, Vec3};
 use manifold_rust::manifold::Manifold;
@@ -98,7 +101,6 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
             }
         }
     }
-    let stacks: Vec<_> = stacks.into_iter().collect();
     let slabs: Vec<_> = project
         .elements
         .iter()
@@ -107,6 +109,31 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
             _ => None,
         })
         .collect();
+    // Schichten nach Bauablauf (ADR 0045): Wände und Stützen stehen auf der
+    // Rohdecke, unter OKFF reichen sie durch Estrich und Dämmung hinunter.
+    let floors: Vec<(ElementId, Area, slabs::FloorLevels)> = slabs
+        .iter()
+        .filter_map(|(id, slab)| {
+            Some((slab.storey, slabs::slab_area(project, *id, slab), slabs::floor_levels(project, slab)?))
+        })
+        .collect();
+    for ((id, _), (_, parts)) in stacks.iter_mut() {
+        let Some((storey, base)) = standing_on(project, *id) else { continue };
+        let Some(elevation) = project.storey(storey).map(|s| s.elevation) else { continue };
+        if base.abs() > 1e-6 {
+            continue;
+        }
+        let Some(foot) = parts.iter().find(|p| (p.0 - elevation).abs() < 1e-9).map(|p| p.2.clone()) else {
+            continue;
+        };
+        for (_, area, levels) in floors.iter().filter(|f| f.0 == storey && f.2.structure_top < elevation - 1e-9) {
+            let part = foot.intersection(area);
+            if !part.is_empty() {
+                parts.push((levels.structure_top, elevation, part));
+            }
+        }
+    }
+    let stacks: Vec<_> = stacks.into_iter().collect();
     let slab_solids: Vec<(ElementId, usize, String, Manifold)> = parallel_map(&slabs, |(id, slab)| {
         slabs::slab_solids(project, *id, slab)
             .into_iter()
@@ -116,9 +143,26 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
     .into_iter()
     .flatten()
     .collect();
-    // Wände und Stützen enden unter den Decken, die auf ihnen liegen.
-    let all_slabs: Vec<Manifold> = slab_solids.iter().map(|s| s.3.clone()).collect();
-    let cut = if all_slabs.is_empty() { None } else { Some(Manifold::batch_boolean(&all_slabs, OpType::Add)) };
+    // Wände und Stützen enden unter der Rohdecke, die auf ihnen liegt; auf der
+    // Decke ihres Geschosses stehen sie auf der Rohdecke.
+    let cuts: BTreeMap<ElementId, Manifold> = project
+        .storeys()
+        .into_iter()
+        .filter_map(|(storey, _)| {
+            let parts: Vec<Manifold> = floors
+                .iter()
+                .map(|(s, area, l)| {
+                    if *s == storey {
+                        extrude(area, l.bottom, l.structure_top)
+                    } else {
+                        extrude(area, l.structure_bottom, l.top)
+                    }
+                })
+                .filter(|m| !m.is_empty())
+                .collect();
+            (!parts.is_empty()).then(|| (storey, Manifold::batch_boolean(&parts, OpType::Add)))
+        })
+        .collect();
     // Dächer, und der Raum unter jedem Dach für Wände, die bis unter das Dach reichen.
     let roofs: Vec<_> = project
         .elements
@@ -198,7 +242,7 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
         } else {
             Manifold::batch_boolean(&solids, OpType::Add)
         };
-        let solid = match &cut {
+        let solid = match standing_on(project, *id).and_then(|(storey, _)| cuts.get(&storey)) {
             Some(cut) => solid.difference(cut),
             None => solid,
         };
@@ -243,6 +287,15 @@ pub fn build(project: &Project) -> Result<ModelGeometry, GeomError> {
     })
 }
 
+/// Geschoss und Unterkante über OKFF einer Wand oder Stütze.
+fn standing_on(project: &Project, id: ElementId) -> Option<(ElementId, f64)> {
+    match project.elements.get(&id)? {
+        Element::Wall(w) => Some((w.storey, w.base_offset)),
+        Element::Column(c) => Some((c.storey, c.base_offset)),
+        _ => None,
+    }
+}
+
 /// `f` auf alle Einträge angewandt, verteilt auf die Prozessorkerne. Die
 /// Reihenfolge des Ergebnisses entspricht der Eingabe.
 fn parallel_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
@@ -275,7 +328,7 @@ pub fn heights(project: &Project, storey: ElementId) -> Vec<f64> {
         if let Some((bottom, top)) = project.wall_extent(w) {
             z.extend([bottom, top]);
             for (_, o) in project.openings_in(id) {
-                z.extend([bottom + o.sill_height, bottom + o.sill_height + o.height]);
+                z.extend(project.opening_span(o).map(|(a, b)| [a, b]).into_iter().flatten());
             }
         }
     }

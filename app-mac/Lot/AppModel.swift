@@ -17,6 +17,25 @@ final class AppModel {
     private(set) var spaces: [SpaceInfo] = []
     /// Gewählte Türen.
     private(set) var doors: [DoorInfo] = []
+    /// Gewählte Öffnungen mit beiden Brüstungshöhen (ADR 0047).
+    private(set) var openings: [OpeningInfo] = []
+    /// Hinweise, die nicht stören sollen, etwa eine gewanderte Rohbaubrüstung.
+    var notices: [String] = []
+    /// Füllungen einer Öffnung: Durchgang, Tür, Fenster.
+    static let fills = openingFills()
+    /// Gewählte Wände mit Lage der Bezugslinie.
+    private(set) var walls: [WallInfo] = []
+    /// Gewählter Anschluss (Doppelklick an einem Wandknoten), ADR 0045.
+    private(set) var junction: JunctionInfo?
+    /// Wandaufbau der gewählten Wände, wenn sie alle denselben haben.
+    private(set) var wallType: WallTypeInfo?
+    /// Materialien des Bürostandards und Schichtfunktionen für den Wandaufbau.
+    static let materials = Lot.materials()
+    static let functions = layerFunctions()
+    /// Die sechs Lagen der Bezugslinie.
+    static let alignments = wallAlignments()
+    /// Arten der Oberkante: Geschoss, Decke, Dach, fest.
+    static let tops = wallTops()
     /// Gewählte 2D-Texte.
     private(set) var texts: [TextInfo] = []
     /// Bauzustand der Auswahl: 0 Bestand, 1 Abbruch, 2 Neubau; `nil` ohne Bauteile mit Bauzustand,
@@ -111,6 +130,11 @@ final class AppModel {
         groups = state.selection.count > 1 ? document.selectionGroups(ids: state.selection) : []
         spaces = state.selection.isEmpty ? [] : document.spaces(ids: state.selection)
         doors = state.selection.isEmpty ? [] : document.doors(ids: state.selection)
+        walls = state.selection.isEmpty ? [] : document.walls(ids: state.selection)
+        openings = state.selection.isEmpty ? [] : document.openings(ids: state.selection)
+        let types = Set(walls.map(\.wallType))
+        wallType = types.count == 1 ? document.wallType(element: types.first!) : nil
+        junction = viewport.junction()
         let phases = Set(state.selection.compactMap { document.elementPhase(element: $0) })
         selectionPhase = phases.isEmpty ? nil : (phases.count == 1 ? Int(phases.first!) : -1)
         texts = state.selection.compactMap { id in
@@ -139,6 +163,36 @@ final class AppModel {
     func set(_ values: [Double], for elements: [UInt64], kind: ParamKind) {
         do {
             try document.setParams(elements: elements, kind: kind, values: values)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+        if let viewport {
+            stats.rebuildMs = viewport.refresh()
+        }
+        refresh()
+        updateViewState()
+        requestRedraw?()
+    }
+
+    /// Setzt die Rohbaubrüstung; Lot rechnet die fertige Brüstung zurück.
+    func setRoughSill(_ value: Double, for element: UInt64) {
+        do {
+            try document.setRoughSill(element: element, value: value)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+        if let viewport {
+            stats.rebuildMs = viewport.refresh()
+        }
+        refresh()
+        updateViewState()
+        requestRedraw?()
+    }
+
+    /// Ändert Namen und Schichten eines Wandaufbaus in einem Undo-Schritt.
+    func setWallType(_ info: WallTypeInfo, name: String? = nil, layers: [LayerInfo]? = nil) {
+        do {
+            try document.setWallType(element: info.element, name: name ?? info.name, layers: layers ?? info.layers)
         } catch {
             errorMessage = Self.message(for: error)
         }
@@ -279,6 +333,7 @@ final class AppModel {
         canUndo = document.canUndo()
         canRedo = document.canRedo()
         storeyAreas = document.storeyAreas()
+        notices += document.roughSillNotices()
     }
 
     static func message(for error: Error) -> String {

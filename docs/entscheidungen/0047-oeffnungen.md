@@ -1,6 +1,6 @@
 # 0047 Öffnungen: Rohbauöffnung zuerst, zwei Brüstungshöhen
 
-Status: entschieden von Ben · 26.10.2026; das Setzen testet Ben in der App
+Status: entschieden von Ben · 26.10.2026; umgesetzt am 28.10.2026 bis auf die Punkte unter „Folgen“, das Setzen testet Ben in der App
 
 ## Kontext
 
@@ -26,3 +26,6 @@ Ben am 26.10.2026: „15 an sich klingt das gut“, zum Setzen „16 muss ich au
 ## Folgen
 
 - Der untere Anschluss (Fensterbank, Ausgleich) wird ein Wert am Fenstertyp; der Fußbodenaufbau kommt aus der Decke.
+- **Umgesetzt am 28.10.2026** (Prüfpaket `pruefpakete/2026-10-28-waende-oeffnungen`): BRH führend, Rohbaubrüstung im Inspektor tippbar, Hinweis bei gewanderter Rohbaubrüstung, Tür- und Fenstertyp (`OpeningType`) mit unterem Anschluss, Füllung Durchgang, Nische, Tür, Fenster, Setzen mit Abstand, Bezug, mittig und Leertaste.
+- **Noch offen:** Beschriftung im Plan je Planart (Werkplan Rohbaubrüstung, Bauantrag BRH) kommt mit der Planerstellung; Typen-Verwaltung mit ADR 0048.
+

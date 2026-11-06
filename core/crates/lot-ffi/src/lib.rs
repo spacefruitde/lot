@@ -139,6 +139,126 @@ pub fn space_usages() -> Vec<SpaceUsageItem> {
         .collect()
 }
 
+/// Eine Lage der Bezugslinie zur Auswahl, mit dem Befehl, der sie setzt.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ChoiceItem {
+    pub title: String,
+    pub command: String,
+}
+
+/// Die sechs Lagen der Bezugslinie (ADR 0045), in der Reihenfolge von `WallInfo::alignment`.
+#[uniffi::export]
+pub fn wall_alignments() -> Vec<ChoiceItem> {
+    lot_model::WallAlignment::ALL
+        .iter()
+        .map(|a| ChoiceItem { title: a.title().into(), command: lot_edit::Command::SetAlignment(*a).id() })
+        .collect()
+}
+
+/// Die Arten der Oberkante einer Wand, in der Reihenfolge von `WallInfo::top`.
+#[uniffi::export]
+pub fn wall_tops() -> Vec<ChoiceItem> {
+    lot_model::Top::TITLES
+        .iter()
+        .enumerate()
+        .map(|(i, t)| ChoiceItem { title: (*t).into(), command: lot_edit::Command::SetWallTop(i as u32).id() })
+        .collect()
+}
+
+/// Füllungen einer Öffnung zur Auswahl (ADR 0047), in der Reihenfolge von `OpeningInfo::fill`.
+#[uniffi::export]
+pub fn opening_fills() -> Vec<ChoiceItem> {
+    lot_edit::openings::FILLS
+        .iter()
+        .enumerate()
+        .map(|(i, t)| ChoiceItem { title: (*t).into(), command: lot_edit::Command::SetOpeningFill(i as u32).id() })
+        .collect()
+}
+
+/// Eine Öffnung mit beiden Brüstungshöhen für den Inspektor (ADR 0047).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OpeningInfo {
+    pub element: u64,
+    /// Index in [`opening_fills`].
+    pub fill: u32,
+    /// Fertige Brüstung (BRH) über OKFF, führend.
+    pub sill: f64,
+    /// Rohbaubrüstung über Oberkante Rohdecke; fehlt ohne Decke vor der Öffnung.
+    pub rough_sill: Option<f64>,
+    /// Fußbodenaufbau vor der Öffnung, von der Rohdecke bis OKFF.
+    pub floor_build_up: Option<f64>,
+    /// Unterer Anschluss aus dem Typ.
+    pub sill_connection: f64,
+    /// Typ mit Kennzeichen, etwa „F1 · Fenster“; leer ohne Typ.
+    pub type_name: String,
+    /// Tiefe einer Nische; fehlt bei Öffnungen durch die ganze Wand.
+    pub recess_depth: Option<f64>,
+    /// Die Nische liegt auf der linken Wandseite (in Zeichenrichtung).
+    pub recess_left: bool,
+    /// Wie viele Öffnungen den Typ nutzen.
+    pub type_uses: u32,
+}
+
+/// Schichtfunktionen in der Reihenfolge von `LayerInfo::function`.
+const FUNCTIONS: [(lot_model::LayerFunction, &str); 5] = [
+    (lot_model::LayerFunction::Structure, "Tragschicht"),
+    (lot_model::LayerFunction::Insulation, "Dämmung"),
+    (lot_model::LayerFunction::AirGap, "Luftschicht"),
+    (lot_model::LayerFunction::Service, "Installationsebene"),
+    (lot_model::LayerFunction::Finish, "Putz oder Bekleidung"),
+];
+
+/// Die Schichtfunktionen zur Auswahl.
+#[uniffi::export]
+pub fn layer_functions() -> Vec<String> {
+    FUNCTIONS.iter().map(|(_, t)| (*t).into()).collect()
+}
+
+/// Die Materialien des Bürostandards: Titel ist der Name, `command` der Schlüssel.
+#[uniffi::export]
+pub fn materials() -> Vec<ChoiceItem> {
+    let mut list: Vec<ChoiceItem> = lot_plan::standard::OfficeStandard::default_standard()
+        .materials
+        .iter()
+        .map(|(key, m)| ChoiceItem { title: m.name.clone(), command: key.clone() })
+        .collect();
+    list.sort_by(|a, b| a.title.cmp(&b.title));
+    list
+}
+
+/// Eine Schicht eines Wandaufbaus.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct LayerInfo {
+    /// Schlüssel des Materials im Bürostandard.
+    pub material: String,
+    pub thickness: f64,
+    /// Index in [`layer_functions`].
+    pub function: u32,
+}
+
+/// Ein Wandaufbau mit seinen Schichten von außen nach innen.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct WallTypeInfo {
+    pub element: u64,
+    pub name: String,
+    pub layers: Vec<LayerInfo>,
+    /// Wie viele Wände den Aufbau nutzen.
+    pub uses: u32,
+}
+
+/// Eine Wand für den Inspektor.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct WallInfo {
+    pub element: u64,
+    /// Index in [`wall_alignments`].
+    pub alignment: u32,
+    /// Index in [`wall_tops`].
+    pub top: u32,
+    pub wall_type: u64,
+    /// Oberkante über OKFF des Geschosses, wie sie sich ergibt.
+    pub top_height: f64,
+}
+
 /// Flächen eines Geschosses in m².
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct StoreyAreaInfo {
@@ -212,6 +332,9 @@ pub struct LotDocument {
     inner: Mutex<Document>,
     /// Dateien im Projekt, etwa Unterlagen (6.05).
     attachments: Mutex<lot_io::project_file::Attachments>,
+    /// Fertige Brüstung und Rohbaubrüstung je Öffnung beim letzten Blick,
+    /// für den Hinweis, wenn sich die Rohbaubrüstung von selbst ändert (ADR 0047).
+    sills: Mutex<std::collections::BTreeMap<ElementId, (f64, f64)>>,
 }
 
 impl LotDocument {
@@ -221,7 +344,8 @@ impl LotDocument {
     }
 
     fn with(doc: Document, attachments: lot_io::project_file::Attachments) -> Arc<Self> {
-        Arc::new(Self { inner: Mutex::new(doc), attachments: Mutex::new(attachments) })
+        let sills = Mutex::new(doc.project().rough_sills());
+        Arc::new(Self { inner: Mutex::new(doc), attachments: Mutex::new(attachments), sills })
     }
 
     pub(crate) fn attachment_bytes(&self, name: &str) -> Option<Vec<u8>> {
@@ -359,6 +483,121 @@ impl LotDocument {
                     net_area: area.and_then(|a| a.net),
                     living_area: area.and_then(|a| a.living),
                 }
+            })
+            .collect()
+    }
+
+    /// Die Öffnungen unter den Elementen `ids`.
+    pub fn openings(&self, ids: Vec<u64>) -> Vec<OpeningInfo> {
+        let doc = self.lock();
+        let p = doc.project();
+        ids.iter()
+            .filter_map(|id| {
+                let Some(lot_model::Element::Opening(o)) = p.elements.get(&ElementId(*id)) else { return None };
+                let ty = o.opening_type.and_then(|t| p.opening_type(t));
+                Some(OpeningInfo {
+                    element: *id,
+                    fill: lot_edit::openings::fill_index(o) as u32,
+                    recess_depth: o.recess.map(|r| r.depth),
+                    recess_left: o.recess.is_none_or(|r| r.side == lot_model::WallSide::Left),
+                    sill: o.sill_height,
+                    rough_sill: p.rough_sill(o),
+                    floor_build_up: p.floor_build_up(o),
+                    sill_connection: p.sill_connection(o),
+                    type_name: ty.map(|t| format!("{} · {}", t.mark, t.name)).unwrap_or_default(),
+                    type_uses: o
+                        .opening_type
+                        .map_or(0, |t| p.openings().filter(|(_, x)| x.opening_type == Some(t)).count())
+                        as u32,
+                })
+            })
+            .collect()
+    }
+
+    /// Setzt die Rohbaubrüstung über Rohdecke; gespeichert wird die fertige Brüstung (ADR 0047).
+    pub fn set_rough_sill(&self, element: u64, value: f64) -> Result<(), LotError> {
+        let mut doc = self.lock();
+        let Some(lot_model::Element::Opening(o)) = doc.project().elements.get(&ElementId(element)).cloned() else {
+            return Err(LotError::Failed("Das ist keine Öffnung".into()));
+        };
+        let sill = lot_edit::openings::sill_for_rough(doc.project(), &o, value)
+            .ok_or_else(|| LotError::Failed("Vor der Öffnung liegt keine Decke, die Rohbaubrüstung fehlt".into()))?;
+        doc.set_param(ElementId(element), lot_model::Param::OpeningSillHeight, sill).map_err(LotError::from_display)
+    }
+
+    /// Hinweise auf Rohbaubrüstungen, die sich seit dem letzten Aufruf von
+    /// selbst geändert haben, weil der Fußbodenaufbau anders wurde.
+    pub fn rough_sill_notices(&self) -> Vec<String> {
+        let doc = self.lock();
+        let now = doc.project().rough_sills();
+        let mut sills = self.sills.lock().unwrap_or_else(|e| e.into_inner());
+        let notices = lot_model::rough_sill_changes(&sills, &now)
+            .into_iter()
+            .map(|(id, before, after)| {
+                format!(
+                    "{}: Rohbaubrüstung {} statt {}, weil sich der Fußbodenaufbau geändert hat. Die BRH bleibt.",
+                    lot_edit::select::label(doc.project(), id),
+                    lot_edit::format_m(after),
+                    lot_edit::format_m(before)
+                )
+            })
+            .collect();
+        *sills = now;
+        notices
+    }
+
+    /// Ein Wandaufbau mit seinen Schichten.
+    pub fn wall_type(&self, element: u64) -> Option<WallTypeInfo> {
+        let doc = self.lock();
+        let p = doc.project();
+        let t = p.wall_type(ElementId(element))?;
+        let layers = t
+            .layers
+            .iter()
+            .map(|l| LayerInfo {
+                material: l.material.clone(),
+                thickness: l.thickness,
+                function: FUNCTIONS.iter().position(|(f, _)| *f == l.function).unwrap_or(0) as u32,
+            })
+            .collect();
+        let uses = p.walls().filter(|(_, w)| w.wall_type.0 == element).count() as u32;
+        Some(WallTypeInfo { element, name: t.name.clone(), layers, uses })
+    }
+
+    /// Ändert Namen und Schichten eines Wandaufbaus in einem Schritt. Die
+    /// Bezugslinien der Wände bleiben stehen (ADR 0045).
+    pub fn set_wall_type(&self, element: u64, name: String, layers: Vec<LayerInfo>) -> Result<(), LotError> {
+        let mut doc = self.lock();
+        let new = lot_model::WallType {
+            name: name.trim().into(),
+            layers: layers
+                .into_iter()
+                .map(|l| lot_model::Layer {
+                    material: l.material,
+                    thickness: l.thickness,
+                    function: FUNCTIONS.get(l.function as usize).map_or(lot_model::LayerFunction::Finish, |f| f.0),
+                })
+                .collect(),
+        };
+        doc.replace(ElementId(element), lot_model::Element::WallType(new)).map_err(LotError::from_display)
+    }
+
+    /// Die Wände unter den Elementen `ids`.
+    pub fn walls(&self, ids: Vec<u64>) -> Vec<WallInfo> {
+        let doc = self.lock();
+        ids.iter()
+            .filter_map(|id| {
+                let w = doc.project().wall(ElementId(*id))?;
+                let alignment = lot_model::WallAlignment::ALL.iter().position(|a| *a == w.alignment)? as u32;
+                let p = doc.project();
+                let top_height = p.wall_extent(w)?.1 - p.storey(w.storey)?.elevation;
+                Some(WallInfo {
+                    element: *id,
+                    alignment,
+                    top: w.top.mode() as u32,
+                    top_height,
+                    wall_type: w.wall_type.0,
+                })
             })
             .collect()
     }
@@ -530,6 +769,32 @@ mod tests {
         let LotError::Failed(message) = doc.set_param(4, ParamKind::OpeningWidth, 21.5).unwrap_err();
         assert!(message.contains("ragt seitlich aus der Wand"), "{message}");
         assert_eq!(value(&doc, ParamKind::OpeningWidth), 1.5);
+    }
+
+    #[test]
+    fn wall_type_layers_change_in_one_step() {
+        let doc = LotDocument::new_sample();
+        let wall = doc.walls(vec![3]).pop().unwrap();
+        let mut info = doc.wall_type(wall.wall_type).unwrap();
+        assert_eq!(info.uses, 1);
+        let before = doc.lock().project().wall(ElementId(3)).unwrap().start;
+        info.layers[0].thickness = 0.02;
+        info.layers.insert(0, LayerInfo { material: "putz".into(), thickness: 0.01, function: 4 });
+        doc.set_wall_type(info.element, "Neu".into(), info.layers.clone()).unwrap();
+        let after = doc.wall_type(info.element).unwrap();
+        assert_eq!((after.name.as_str(), after.layers.len()), ("Neu", info.layers.len()));
+        // Die Bezugslinie bleibt stehen.
+        assert_eq!(doc.lock().project().wall(ElementId(3)).unwrap().start, before);
+        let LotError::Failed(message) = doc
+            .set_wall_type(
+                info.element,
+                "Neu".into(),
+                vec![LayerInfo { material: "putz".into(), thickness: 0.0, function: 4 }],
+            )
+            .unwrap_err();
+        assert!(message.contains("1 mm"), "{message}");
+        assert!(doc.undo().unwrap());
+        assert_eq!(doc.wall_type(info.element).unwrap().layers.len(), info.layers.len() - 1);
     }
 
     #[test]

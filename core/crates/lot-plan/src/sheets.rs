@@ -244,7 +244,7 @@ fn crop(project: &Project, center: [f64; 2], half: [f64; 2]) -> Project {
     let mut walls: Vec<ElementId> = Vec::new();
     for (id, e) in &project.elements {
         let keep = match e {
-            Element::Storey(_) | Element::WallType(_) | Element::SlabType(_) => true,
+            Element::Storey(_) | Element::WallType(_) | Element::SlabType(_) | Element::OpeningType(_) => true,
             Element::Slab(_)
             | Element::SlabOpening(_)
             | Element::Roof(_)

@@ -986,6 +986,7 @@ mod tests {
         p.elements.insert(
             id,
             Element::Wall(Wall {
+                joins: Default::default(),
                 phase: Default::default(),
                 storey: ElementId(1),
                 wall_type: ElementId(2),

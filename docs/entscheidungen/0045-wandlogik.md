@@ -1,6 +1,6 @@
 # 0045 Wandlogik: Bezugslinie, Anschlüsse, Höhen
 
-Status: entschieden von Ben · 26.10.2026
+Status: entschieden von Ben · 26.10.2026; umgesetzt am 28.10.2026 bis auf die Punkte unter „Folgen“
 
 ## Kontext
 
@@ -28,3 +28,6 @@ Ben am 26.10.2026: „8 ok“, zu den Anschlusstypen aus Revit „9 nein brauch 
 ## Folgen
 
 - Die Schichtregeln am Deckenanschluss kommen als Prüffrage mit Schnitt 1:50 ins nächste Prüfpaket.
+- **Umgesetzt am 28.10.2026** (Prüfpaket `pruefpakete/2026-10-28-waende-oeffnungen`): sechs Lagen der Bezugslinie, Umdrehen ohne Verschieben, Anschlüsse als auswählbare Knoten mit Erklärung und Ausnahmen, Neubau verbindet sich nicht mit Bestand, Oberkante an die Decke darüber, Schichten nach Bauablauf im 3D und Schnitt, Wandaufbau-Editor.
+- **Noch offen:** Durchlaufen an Knoten aus drei und mehr Wänden, Randstreifen am Estrich, die Ausnahme bleibt am Wandende statt am Knoten (zieht beim Verschieben mit).
+

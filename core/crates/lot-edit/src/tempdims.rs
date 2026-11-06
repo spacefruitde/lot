@@ -132,6 +132,42 @@ fn column_dims(project: &Project, storey: ElementId, c: &lot_model::Column) -> V
     out
 }
 
+/// Anschläge entlang einer geraden Wand, an denen Öffnungen Abstand nehmen,
+/// als Abstand vom Wandanfang: Wandenden, Flächen anstoßender Wände, Ränder
+/// anderer Öffnungen (außer `except`).
+pub fn stops(project: &Project, host: ElementId, except: Option<ElementId>) -> Vec<f64> {
+    let Some(wall) = project.wall(host) else { return Vec::new() };
+    if wall.is_curved() {
+        return Vec::new();
+    }
+    let (dx, dy) = wall.direction();
+    let length = wall.length();
+    let mut stops: Vec<f64> = vec![0.0, length];
+    for Straight { id: other, start, dir, length: olen, faces: [l, r] } in straight_walls(project, wall.storey) {
+        if other == host || (dir.0 * dy - dir.1 * dx).abs() < 0.01 {
+            continue;
+        }
+        let normal = (-dir.1, dir.0);
+        for t in [l, r] {
+            let q = Point2::new(start.x + normal.0 * t, start.y + normal.1 * t);
+            let denom = dx * normal.0 + dy * normal.1;
+            let s = ((q.x - wall.start.x) * normal.0 + (q.y - wall.start.y) * normal.1) / denom;
+            let hit = wall.point_at(s, 0.0);
+            let along = (hit.x - start.x) * dir.0 + (hit.y - start.y) * dir.1;
+            // Die Wand muss die Bezugslinie wirklich erreichen (Ecke oder T-Stoß).
+            if (-0.6..=length + 0.6).contains(&s) && along >= -0.6 && along <= olen + 0.6 {
+                stops.push(s);
+            }
+        }
+    }
+    for (other, n) in project.openings_in(host) {
+        if Some(other) != except {
+            stops.extend([n.offset, n.offset + n.width]);
+        }
+    }
+    stops
+}
+
 /// Abstände einer Öffnung entlang ihrer Wand: von den Laibungen zur nächsten
 /// Wandfläche einer anstoßenden Wand oder zur nächsten Öffnung.
 fn opening_dims(project: &Project, id: ElementId, o: &lot_model::Opening) -> Vec<TempDim> {
@@ -140,31 +176,7 @@ fn opening_dims(project: &Project, id: ElementId, o: &lot_model::Opening) -> Vec
         return Vec::new();
     }
     let (dx, dy) = host.direction();
-    let length = host.length();
-    // Hindernisse entlang der Bezugslinie: Flächen anstoßender Wände, Ränder anderer Öffnungen.
-    let mut stops: Vec<f64> = Vec::new();
-    for Straight { id: other, start, dir, length: olen, faces: [l, r] } in straight_walls(project, host.storey) {
-        if other == o.host || (dir.0 * dy - dir.1 * dx).abs() < 0.01 {
-            continue;
-        }
-        let normal = (-dir.1, dir.0);
-        for t in [l, r] {
-            let q = Point2::new(start.x + normal.0 * t, start.y + normal.1 * t);
-            let denom = dx * normal.0 + dy * normal.1;
-            let s = ((q.x - host.start.x) * normal.0 + (q.y - host.start.y) * normal.1) / denom;
-            let hit = host.point_at(s, 0.0);
-            let along = (hit.x - start.x) * dir.0 + (hit.y - start.y) * dir.1;
-            // Die Wand muss die Bezugslinie wirklich erreichen (Ecke oder T-Stoß).
-            if (-0.6..=length + 0.6).contains(&s) && along >= -0.6 && along <= olen + 0.6 {
-                stops.push(s);
-            }
-        }
-    }
-    for (other, n) in project.openings_in(o.host) {
-        if other != id {
-            stops.extend([n.offset, n.offset + n.width]);
-        }
-    }
+    let stops = stops(project, o.host, Some(id));
     let (start, end) = (o.offset, o.offset + o.width);
     let mut out = Vec::new();
     if let Some(s) = stops.iter().copied().filter(|s| *s < start - 1e-6).max_by(f64::total_cmp) {

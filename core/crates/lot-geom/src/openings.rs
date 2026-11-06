@@ -40,12 +40,11 @@ pub fn window_frame(wall_type: &WallType, offsets: &[(f64, f64)]) -> (f64, f64) 
 /// sie aufschlagen.
 pub fn opening_solids(project: &Project, opening: &Opening) -> Vec<(usize, String, Manifold)> {
     let Some(wall) = project.wall(opening.host) else { return Vec::new() };
-    let (Some(wall_type), Some((bottom, _))) = (project.wall_type(wall.wall_type), project.wall_extent(wall)) else {
+    let (Some(wall_type), Some((z0, z1))) = (project.wall_type(wall.wall_type), project.opening_span(opening)) else {
         return Vec::new();
     };
     let offsets = wall.layer_offsets(wall_type);
     let (a, b) = (opening.offset, opening.offset + opening.width);
-    let (z0, z1) = (bottom + opening.sill_height, bottom + opening.sill_height + opening.height);
     match opening.kind {
         OpeningKind::Plain => Vec::new(),
         OpeningKind::Window => {

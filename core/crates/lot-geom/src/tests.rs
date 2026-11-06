@@ -69,6 +69,7 @@ fn add_wall(
     p.elements.insert(
         id,
         Element::Wall(Wall {
+            joins: Default::default(),
             phase: Default::default(),
             storey: STOREY,
             wall_type,
@@ -429,6 +430,8 @@ fn opening_in_arc_is_cut_radially() {
     p.elements.insert(
         id,
         Element::Opening(lot_model::Opening {
+            recess: None,
+            opening_type: None,
             phase: Default::default(),
             host: arc,
             offset: 1.0,
@@ -569,6 +572,8 @@ fn two_spaces() -> (Project, ElementId) {
     p.elements.insert(
         id,
         Element::Opening(lot_model::Opening {
+            recess: None,
+            opening_type: None,
             phase: Default::default(),
             host: split,
             offset: 1.0,
@@ -710,4 +715,204 @@ fn slab_layers_stack_down_from_the_floor_level() {
     assert_eq!(layers.len(), 2);
     let (lo, hi) = layers[1].mesh.bounds().unwrap();
     assert!((hi[2] + 0.05).abs() < 1e-9 && (lo[2] + 0.25).abs() < 1e-9, "Rohdecke von -0,25 bis -0,05: {lo:?} {hi:?}");
+}
+
+fn set_wall(p: &mut Project, id: ElementId, change: impl FnOnce(&mut Wall)) {
+    if let Some(Element::Wall(w)) = p.elements.get_mut(&id) {
+        change(w);
+    }
+}
+
+#[test]
+fn new_wall_butts_against_existing_without_interlock() {
+    // Bestandsaußenwand, eine neue Innenwand stößt von Süden an (ADR 0045).
+    let mut p = project();
+    let outer = add_wall(&mut p, WDVS, (-4.0, 0.0), (4.0, 0.0), WallAlignment::Exterior);
+    let inner = add_wall(&mut p, INNEN, (0.0, -4.0), (0.0, -0.365), WallAlignment::Center);
+    set_wall(&mut p, outer, |w| w.phase = lot_model::Phase::Existing);
+    let r = regions(&p);
+    assert_no_overlaps(&r);
+    // Die Tragschicht der neuen Wand endet am Putz des Bestands, der Putz bleibt ganz.
+    let (_, hi) = region(&r, inner, 1).area.bounds().unwrap();
+    assert!((hi[1] - (-0.365)).abs() < 1e-6, "Tragschicht endet bei y = {}", hi[1]);
+    assert_eq!(region(&r, outer, 3).area.rings().len(), 1);
+    let j = junctions(&p, STOREY);
+    assert_eq!(j.len(), 1);
+    let arm = j[0].arms.iter().find(|a| a.wall == inner).unwrap();
+    assert_eq!((arm.role, arm.cause), (ArmRole::Separate, Some(Cause::Phase)));
+}
+
+#[test]
+fn butt_exception_lets_the_other_wall_run_through() {
+    let mut p = project();
+    let a = add_wall(&mut p, WDVS, (-4.0, 0.0), (0.0, 0.0), WallAlignment::Exterior);
+    let b = add_wall(&mut p, WDVS, (0.0, 0.0), (0.0, -4.0), WallAlignment::Exterior);
+    set_wall(&mut p, b, |w| w.joins[0] = lot_model::JoinRule::Butt);
+    let r = regions(&p);
+    assert_no_overlaps(&r);
+    // Wand a läuft bis an die Außenkante von b durch (x = 0), b beginnt an der Fläche von a.
+    let (_, hi) = region(&r, a, 1).area.bounds().unwrap();
+    assert!((hi[0] - 0.0).abs() < 1e-6, "Dämmung von a endet bei x = {}", hi[0]);
+    let (_, hi) = region(&r, b, 2).area.bounds().unwrap();
+    assert!((hi[1] - (-0.365)).abs() < 1e-6, "Tragschicht von b beginnt bei y = {}", hi[1]);
+    let t: f64 = 0.365;
+    assert!((total_area(&r) - (2.0 * 4.0 * t - t * t)).abs() < 1e-8, "{}", total_area(&r));
+    let j = &junctions(&p, STOREY)[0];
+    let role = |id| j.arms.iter().find(|x| x.wall == id).map(|x| (x.role, x.cause));
+    assert_eq!(role(a), Some((ArmRole::Through, Some(Cause::Exception))));
+    assert_eq!(role(b), Some((ArmRole::Separate, Some(Cause::Exception))));
+}
+
+#[test]
+fn through_exception_keeps_layers_interlocked() {
+    let mut p = project();
+    let a = add_wall(&mut p, WDVS, (-4.0, 0.0), (0.0, 0.0), WallAlignment::Exterior);
+    let b = add_wall(&mut p, WDVS, (0.0, 0.0), (0.0, -4.0), WallAlignment::Exterior);
+    set_wall(&mut p, b, |w| w.joins[0] = lot_model::JoinRule::Through);
+    let r = regions(&p);
+    assert_no_overlaps(&r);
+    // b läuft bis an die Außenkante von a (y = 0), a stößt an.
+    let (_, hi) = region(&r, b, 0).area.bounds().unwrap();
+    assert!(hi[1].abs() < 1e-6, "Putz von b endet bei y = {}", hi[1]);
+    let j = &junctions(&p, STOREY)[0];
+    let role = |id| j.arms.iter().find(|x| x.wall == id).map(|x| x.role);
+    assert_eq!((role(a), role(b)), (Some(ArmRole::Butts), Some(ArmRole::Through)));
+}
+
+#[test]
+fn junction_explains_which_layer_cuts_which() {
+    let mut p = project();
+    let outer = add_wall(&mut p, WDVS, (-4.0, 0.0), (4.0, 0.0), WallAlignment::Exterior);
+    let inner = add_wall(&mut p, INNEN, (0.0, -4.0), (0.0, -0.365), WallAlignment::Center);
+    let j = junction_at(&p, STOREY, Point2::new(0.05, -0.3), 0.05).expect("T-Stoß gefunden");
+    assert!(j.arms.iter().any(|a| a.wall == outer && a.end.is_none() && a.role == ArmRole::Through));
+    let c = contacts(&p, STOREY, &j);
+    // Kalksandstein der Innenwand schneidet den Innenputz der Außenwand.
+    assert!(c.iter().any(|c| c.cuts
+        && c.first.wall == inner
+        && c.first.material == "kalksandstein"
+        && c.second.wall == outer
+        && c.second.layer == 3));
+    // Kalksandstein stößt an Kalksandstein.
+    assert!(c.iter().any(|c| !c.cuts && c.first.material == "kalksandstein" && c.second.material == "kalksandstein"));
+}
+
+#[test]
+fn core_alignments_follow_the_structure_layers() {
+    let p = project();
+    let t = p.wall_type(WDVS).unwrap();
+    assert!((WallAlignment::CoreExterior.depth(t) - 0.175).abs() < 1e-12);
+    assert!((WallAlignment::CoreInterior.depth(t) - 0.35).abs() < 1e-12);
+    assert!((WallAlignment::CoreCenter.depth(t) - 0.2625).abs() < 1e-12);
+    assert_eq!(WallAlignment::CoreExterior.mirrored(), WallAlignment::CoreInterior);
+}
+
+#[test]
+fn layers_follow_the_construction_sequence() {
+    // EG und OG, Außenwände WDVS außen gezeichnet, eine Innenwand. Decke über EG:
+    // Estrich 6,5 cm, Trittschall 3,5 cm, Stahlbeton 20 cm, Deckenputz 1,5 cm (ADR 0045).
+    use LayerFunction::*;
+    let mut p = project();
+    let og = p.next_id();
+    p.elements.insert(og, Element::Storey(Storey { name: "OG".into(), elevation: 2.75, height: 2.75 }));
+    let ty = p.next_id();
+    p.elements.insert(
+        ty,
+        Element::SlabType(lot_model::SlabType {
+            name: "Geschossdecke".into(),
+            layers: vec![
+                layer("estrich", 0.065, Finish),
+                layer("trittschall", 0.035, Insulation),
+                layer("stahlbeton", 0.2, Structure),
+                layer("putz", 0.015, Finish),
+            ],
+        }),
+    );
+    let mut eg_inner = ElementId(0);
+    let mut og_inner = ElementId(0);
+    for storey in [STOREY, og] {
+        for (a, b) in
+            [((0.0, 0.0), (0.0, 6.0)), ((0.0, 6.0), (8.0, 6.0)), ((8.0, 6.0), (8.0, 0.0)), ((8.0, 0.0), (0.0, 0.0))]
+        {
+            let id = add_wall(&mut p, WDVS, a, b, WallAlignment::Exterior);
+            set_wall(&mut p, id, |w| w.storey = storey);
+        }
+        let id = add_wall(&mut p, INNEN, (4.0, 0.0), (4.0, 6.0), WallAlignment::Center);
+        set_wall(&mut p, id, |w| w.storey = storey);
+        if storey == STOREY { eg_inner = id } else { og_inner = id }
+    }
+    let outline: Vec<Point2> = slabs::slab_outlines(&p, og)[0].iter().map(|q| Point2::new(q[0], q[1])).collect();
+    let slab = p.next_id();
+    p.elements.insert(
+        slab,
+        Element::Slab(lot_model::Slab {
+            phase: Default::default(),
+            storey: og,
+            slab_type: ty,
+            outline,
+            top_offset: 0.0,
+            kind: lot_model::SlabKind::Floor,
+        }),
+    );
+    let g = build(&p).unwrap();
+    let bounds = |id: ElementId, layer: usize| {
+        g.elements.iter().find(|e| e.id == id && e.layer == layer).and_then(|e| e.mesh.bounds()).unwrap()
+    };
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    // Rohdecke von 2,45 bis 2,65; OKFF OG 2,75.
+    // Tragschicht und Innenputz der Innenwand im EG enden unter der Rohdecke.
+    assert!(close(bounds(eg_inner, 1).1[2], 2.45), "Tragschicht EG bis {:?}", bounds(eg_inner, 1));
+    assert!(close(bounds(eg_inner, 0).1[2], 2.45), "Innenputz EG bis {:?}", bounds(eg_inner, 0));
+    // Die Wand im OG steht auf der Rohdecke, ihr Putz beginnt dort auch.
+    assert!(close(bounds(og_inner, 1).0[2], 2.65), "Tragschicht OG ab {:?}", bounds(og_inner, 1));
+    assert!(close(bounds(og_inner, 0).0[2], 2.65), "Innenputz OG ab {:?}", bounds(og_inner, 0));
+    // Die Dämmung der Außenwand im EG läuft vor der Deckenstirn bis OKFF OG durch.
+    let outer = p.walls_on(STOREY).map(|(id, _)| id).next().unwrap();
+    assert!(close(bounds(outer, 1).1[2], 2.75));
+    // Estrich und Deckenputz liegen nicht im Mauerwerk der Innenwand (x = 3,8975 bis 4,1025).
+    for layer in [0, 1, 3] {
+        let m = &g.elements.iter().find(|e| e.id == slab && e.layer == layer).unwrap().mesh;
+        let at = |x: f64| m.positions.iter().any(|q| (q[0] - x).abs() < 1e-6);
+        assert!(at(3.8975) && at(4.1025), "Schicht {layer} der Decke endet nicht am Innenputz");
+        assert!(m.positions.iter().all(|q| !(q[0] > 3.9 && q[0] < 4.1)), "Schicht {layer} reicht in die Innenwand");
+    }
+    // Die Rohdecke liegt auf der Innenwand auf.
+    let m = &g.elements.iter().find(|e| e.id == slab && e.layer == 2).unwrap().mesh;
+    assert!(!m.positions.iter().any(|q| (q[0] - 3.8975).abs() < 1e-6));
+}
+
+#[test]
+fn wall_top_follows_the_slab_above() {
+    let mut p = project();
+    let og = p.next_id();
+    p.elements.insert(og, Element::Storey(Storey { name: "OG".into(), elevation: 2.75, height: 2.75 }));
+    let ty = p.next_id();
+    p.elements.insert(
+        ty,
+        Element::SlabType(lot_model::SlabType {
+            name: "Decke".into(),
+            layers: vec![layer("stahlbeton", 0.2, LayerFunction::Structure)],
+        }),
+    );
+    let slab = p.next_id();
+    p.elements.insert(
+        slab,
+        Element::Slab(lot_model::Slab {
+            phase: Default::default(),
+            storey: og,
+            slab_type: ty,
+            outline: vec![Point2::new(0.0, -1.0), Point2::new(4.0, -1.0), Point2::new(4.0, 1.0), Point2::new(0.0, 1.0)],
+            top_offset: -0.4,
+            kind: lot_model::SlabKind::Floor,
+        }),
+    );
+    let under = add_wall(&mut p, INNEN, (0.0, 0.0), (4.0, 0.0), WallAlignment::Exterior);
+    let beside = add_wall(&mut p, INNEN, (6.0, 0.0), (9.0, 0.0), WallAlignment::Center);
+    for id in [under, beside] {
+        set_wall(&mut p, id, |w| w.top = Top::Slab { offset: 0.0 });
+    }
+    let top = |id| p.wall_extent(p.wall(id).unwrap()).unwrap().1;
+    assert!((top(under) - 2.35).abs() < 1e-9, "{}", top(under));
+    // Ohne Decke darüber bis zum Geschoss.
+    assert!((top(beside) - 2.75).abs() < 1e-9);
 }
