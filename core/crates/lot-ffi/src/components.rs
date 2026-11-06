@@ -1,5 +1,6 @@
 //! Decken, Dächer und Treppen im Inspektor (ADR 0051).
 
+use lot_edit::stairs::{self, StairForm};
 use lot_model::{Element, ElementId, FallPurpose, RoofEdge, SlabKind};
 
 use crate::LotDocument;
@@ -51,6 +52,20 @@ pub struct StairInfo {
     /// Etwa „16 Stg. 17,2/28,5“.
     pub summary: String,
     pub problems: Vec<String>,
+    /// Hinweise mit zulässigen Ausnahmen, etwa mehr als 18 Steigungen.
+    pub notes: Vec<String>,
+    /// Index in [`stair_forms`].
+    pub form: u32,
+    pub turns_left: bool,
+    pub width: f64,
+    pub tread: f64,
+    pub risers: u32,
+    /// Steigungen des ersten Laufs bei zwei Läufen, sonst 0.
+    pub first_risers: u32,
+    pub necessary: bool,
+    pub eye: f64,
+    pub radius: f64,
+    pub spindle: f64,
 }
 
 #[uniffi::export]
@@ -154,6 +169,17 @@ impl LotDocument {
                         cm(check.step)
                     ),
                     problems: check.problems,
+                    notes: check.notes,
+                    form: StairForm::ALL.iter().position(|f| *f == stairs::form_of(stair)).unwrap_or(0) as u32,
+                    turns_left: stairs::turns_left(stair),
+                    width: stair.width,
+                    tread: stair.tread,
+                    risers: stair.risers(),
+                    first_risers: if stair.flights.len() >= 2 { stair.flights[0].risers } else { 0 },
+                    necessary: stair.necessary,
+                    eye: stair.eye,
+                    radius: stair.spiral.map_or(0.0, |s| s.radius),
+                    spindle: stair.spiral.map_or(0.0, |s| s.spindle),
                 })
             })
             .collect()
@@ -173,4 +199,17 @@ pub fn fall_purpose_field(index: Option<u32>) -> String {
         Some(p) => format!("SetFallPurpose(Some({p:?}))"),
         None => "SetFallPurpose(None)".into(),
     }
+}
+
+/// Formen von Treppen für die Auswahl im Inspektor.
+#[uniffi::export]
+pub fn stair_forms() -> Vec<String> {
+    StairForm::ALL.iter().map(|f| f.title().to_string()).collect()
+}
+
+/// RON eines Befehls `SetStair` für die Form nach Index.
+#[uniffi::export]
+pub fn stair_form_command(stair: u64, index: u32) -> String {
+    let form = StairForm::ALL.get(index as usize).copied().unwrap_or_default();
+    lot_edit::Command::SetStair(stair, stairs::StairEdit::Form(form)).id()
 }

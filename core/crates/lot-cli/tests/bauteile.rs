@@ -197,3 +197,47 @@ fn pruefbilder() {
         write(name, &centered(&format!("{}, EG 1:50", form.title()), plan(doc.project(), eg, 50.0)));
     }
 }
+
+#[test]
+#[ignore]
+fn pruefbilder_offen() {
+    let out = std::env::var("LOT_OUT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../out/bauteile-offen"));
+    std::fs::create_dir_all(&out).unwrap();
+    let write = |name: &str, sheet: &Sheet| {
+        std::fs::write(out.join(format!("{name}.png")), lot_io::png::to_png(sheet, 150.0).unwrap()).unwrap();
+    };
+    for (form, name, a, b) in [
+        (stairs::StairForm::QuarterWinder, "viertelgewendelt-gelaender", (6.0, 0.8), (6.0, 4.0)),
+        (stairs::StairForm::HalfWinder, "halbgewendelt-gelaender", (6.0, 0.8), (6.0, 4.0)),
+        (stairs::StairForm::Spiral, "spindeltreppe-gelaender", (5.0, 3.0), (6.4, 3.0)),
+    ] {
+        let (doc, eg, _) = stair_house_with(form, a, b);
+        write(name, &centered(&format!("{} mit Geländer, EG 1:50", form.title()), plan(doc.project(), eg, 50.0)));
+    }
+}
+
+#[test]
+fn winder_and_spiral_stairs_get_railings_over_their_steps() {
+    for (form, a, b) in
+        [(stairs::StairForm::HalfWinder, (6.0, 0.8), (6.0, 4.0)), (stairs::StairForm::Spiral, (5.0, 3.0), (6.4, 3.0))]
+    {
+        let (doc, eg, _) = stair_house_with(form, a, b);
+        let steps = doc
+            .project()
+            .railings_on(eg)
+            .filter(|(_, r)| matches!(r.path, lot_model::RailingPath::Steps { .. }))
+            .count();
+        assert!(steps >= 1, "{form:?}");
+        // Und als Körper im 3D.
+        let g = lot_geom::build(doc.project()).unwrap();
+        let railing = doc
+            .project()
+            .railings_on(eg)
+            .find(|(_, r)| matches!(r.path, lot_model::RailingPath::Steps { .. }))
+            .unwrap()
+            .0;
+        assert!(g.elements.iter().any(|e| e.id == railing), "{form:?}");
+    }
+}

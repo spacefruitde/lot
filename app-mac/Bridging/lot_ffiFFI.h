@@ -788,6 +788,17 @@ RustBuffer uniffi_lot_ffi_fn_func_fall_purposes(RustCallStatus *_Nonnull out_sta
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_STAIR_FORM_COMMAND
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_STAIR_FORM_COMMAND
+RustBuffer uniffi_lot_ffi_fn_func_stair_form_command(uint64_t stair, uint32_t index, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_STAIR_FORMS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_STAIR_FORMS
+RustBuffer uniffi_lot_ffi_fn_func_stair_forms(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_SHEET_FORMATS
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_FN_FUNC_SHEET_FORMATS
 RustBuffer uniffi_lot_ffi_fn_func_sheet_formats(RustCallStatus *_Nonnull out_status
@@ -1139,6 +1150,18 @@ uint16_t uniffi_lot_ffi_checksum_func_fall_purpose_field(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_FALL_PURPOSES
 #define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_FALL_PURPOSES
 uint16_t uniffi_lot_ffi_checksum_func_fall_purposes(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_STAIR_FORM_COMMAND
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_STAIR_FORM_COMMAND
+uint16_t uniffi_lot_ffi_checksum_func_stair_form_command(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_STAIR_FORMS
+#define UNIFFI_FFIDEF_UNIFFI_LOT_FFI_CHECKSUM_FUNC_STAIR_FORMS
+uint16_t uniffi_lot_ffi_checksum_func_stair_forms(void
     
 );
 #endif

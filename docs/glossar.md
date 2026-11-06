@@ -188,6 +188,9 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Wendelstufen, gewendelte Treppe | `Landing::Winder*`, `Step` | | Stufen statt Podest in der Wendung, verzogen nach der Verhältnismethode (DIN 18065:2020-08, 6.2.5) |
 | Spindeltreppe | `Spiral` | | Stufen um eine Spindel, Lauflinie 4/10 der Laufbreite von außen |
 | Treppenauge | `Stair::eye` | | Abstand der Läufe einer halbgewendelten Treppe |
+| Geländer über die Stufen | `RailingPath::Steps` | | an der inneren oder äußeren Begrenzung gewendelter und Spindeltreppen |
+| Treppe ändern | `stairs::StairEdit`, `stairs::StairGrip` | | Form, Wendung, Maße, Vorschlag; Griffe für Antritt, Laufbreite, Aufteilung, Radius |
+| Neigungsgriff | `roofs::slope_grips` | | Griff an der Traufe, wo das Dach 1 m steigt |
 | Mindestauftritt innen | `MIN_INNER_GENERAL`, `MIN_INNER_SMALL_RESIDENTIAL` | | 10 cm, in Wohngebäuden 5 cm (DIN 18065:2020-08, Tabelle 1, Nr. 6.2.1) |
 | Maßstabsleiste | `scale_bar` | | |
 | Nordpfeil | `north_arrow` | | Richtung aus `ProjectInfo::north` |

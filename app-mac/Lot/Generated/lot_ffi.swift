@@ -4779,16 +4779,56 @@ public struct StairInfo: Equatable, Hashable {
      */
     public var summary: String
     public var problems: [String]
+    /**
+     * Hinweise mit zulässigen Ausnahmen, etwa mehr als 18 Steigungen.
+     */
+    public var notes: [String]
+    /**
+     * Index in [`stair_forms`].
+     */
+    public var form: UInt32
+    public var turnsLeft: Bool
+    public var width: Double
+    public var tread: Double
+    public var risers: UInt32
+    /**
+     * Steigungen des ersten Laufs bei zwei Läufen, sonst 0.
+     */
+    public var firstRisers: UInt32
+    public var necessary: Bool
+    public var eye: Double
+    public var radius: Double
+    public var spindle: Double
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
     public init(element: UInt64, 
         /**
          * Etwa „16 Stg. 17,2/28,5“.
-         */summary: String, problems: [String]) {
+         */summary: String, problems: [String], 
+        /**
+         * Hinweise mit zulässigen Ausnahmen, etwa mehr als 18 Steigungen.
+         */notes: [String], 
+        /**
+         * Index in [`stair_forms`].
+         */form: UInt32, turnsLeft: Bool, width: Double, tread: Double, risers: UInt32, 
+        /**
+         * Steigungen des ersten Laufs bei zwei Läufen, sonst 0.
+         */firstRisers: UInt32, necessary: Bool, eye: Double, radius: Double, spindle: Double) {
         self.element = element
         self.summary = summary
         self.problems = problems
+        self.notes = notes
+        self.form = form
+        self.turnsLeft = turnsLeft
+        self.width = width
+        self.tread = tread
+        self.risers = risers
+        self.firstRisers = firstRisers
+        self.necessary = necessary
+        self.eye = eye
+        self.radius = radius
+        self.spindle = spindle
     }
 
     
@@ -4809,7 +4849,18 @@ public struct FfiConverterTypeStairInfo: FfiConverterRustBuffer {
             try StairInfo(
                 element: FfiConverterUInt64.read(from: &buf), 
                 summary: FfiConverterString.read(from: &buf), 
-                problems: FfiConverterSequenceString.read(from: &buf)
+                problems: FfiConverterSequenceString.read(from: &buf), 
+                notes: FfiConverterSequenceString.read(from: &buf), 
+                form: FfiConverterUInt32.read(from: &buf), 
+                turnsLeft: FfiConverterBool.read(from: &buf), 
+                width: FfiConverterDouble.read(from: &buf), 
+                tread: FfiConverterDouble.read(from: &buf), 
+                risers: FfiConverterUInt32.read(from: &buf), 
+                firstRisers: FfiConverterUInt32.read(from: &buf), 
+                necessary: FfiConverterBool.read(from: &buf), 
+                eye: FfiConverterDouble.read(from: &buf), 
+                radius: FfiConverterDouble.read(from: &buf), 
+                spindle: FfiConverterDouble.read(from: &buf)
         )
     }
 
@@ -4817,6 +4868,17 @@ public struct FfiConverterTypeStairInfo: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.element, into: &buf)
         FfiConverterString.write(value.summary, into: &buf)
         FfiConverterSequenceString.write(value.problems, into: &buf)
+        FfiConverterSequenceString.write(value.notes, into: &buf)
+        FfiConverterUInt32.write(value.form, into: &buf)
+        FfiConverterBool.write(value.turnsLeft, into: &buf)
+        FfiConverterDouble.write(value.width, into: &buf)
+        FfiConverterDouble.write(value.tread, into: &buf)
+        FfiConverterUInt32.write(value.risers, into: &buf)
+        FfiConverterUInt32.write(value.firstRisers, into: &buf)
+        FfiConverterBool.write(value.necessary, into: &buf)
+        FfiConverterDouble.write(value.eye, into: &buf)
+        FfiConverterDouble.write(value.radius, into: &buf)
+        FfiConverterDouble.write(value.spindle, into: &buf)
     }
 }
 
@@ -6958,6 +7020,28 @@ public func fallPurposes() -> [String]  {
 })
 }
 /**
+ * RON eines Befehls `SetStair` für die Form nach Index.
+ */
+public func stairFormCommand(stair: UInt64, index: UInt32) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_stair_form_command(
+        FfiConverterUInt64.lower(stair),
+        FfiConverterUInt32.lower(index),uniffiCallStatus
+    )
+})
+}
+/**
+ * Formen von Treppen für die Auswahl im Inspektor.
+ */
+public func stairForms() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_lot_ffi_fn_func_stair_forms(uniffiCallStatus
+    )
+})
+}
+/**
  * Blattformate für die Auswahl im Inspektor.
  */
 public func sheetFormats() -> [String]  {
@@ -7056,6 +7140,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_func_fall_purposes() != 56835) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_stair_form_command() != 26944) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_lot_ffi_checksum_func_stair_forms() != 49567) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_lot_ffi_checksum_func_sheet_formats() != 34468) {

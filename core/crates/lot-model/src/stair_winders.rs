@@ -246,7 +246,13 @@ impl Stair {
             }
             outline.extend(back);
             outline.push(o0);
-            steps.push(Step { outline, top: (k + 1) as f64 * rise, front: (i0, o0), inner: i0.distance(i1) });
+            steps.push(Step {
+                outline,
+                top: (k + 1) as f64 * rise,
+                front: (i0, o0),
+                back: (i1, o1),
+                inner: i0.distance(i1),
+            });
         }
         StairLayout {
             width: self.width,
@@ -298,6 +304,7 @@ impl Stair {
                 outline,
                 top: (k + 1) as f64 * rise,
                 front: (at(spiral.spindle.max(0.0), t0), at(r_out, t0)),
+                back: (at(spiral.spindle.max(0.0), t1), at(r_out, t1)),
                 inner: 2.0 * r_in * (step / 2.0).sin(),
             });
         }

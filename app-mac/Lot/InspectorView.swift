@@ -1119,19 +1119,77 @@ private struct RoofSection: View {
     }
 }
 
-/// Gewählte Treppe: Prüfung nach DIN 18065 als Ampel.
+/// Gewählte Treppe: Form, Maße und die Prüfung nach DIN 18065 als Ampel (ADR 0051).
 private struct StairSection: View {
+    @Environment(AppModel.self) private var model
     let info: StairInfo
+
+    private func set(_ edit: String) {
+        model.run("SetStair(\(info.element),\(edit))")
+    }
+
+    private var form: String { AppModel.stairForms.indices.contains(Int(info.form)) ? AppModel.stairForms[Int(info.form)] : "" }
 
     var body: some View {
         Section("Treppe") {
             Label(info.summary, systemImage: info.problems.isEmpty ? "checkmark.circle.fill" : "xmark.octagon.fill")
                 .foregroundStyle(info.problems.isEmpty ? Color.green : Color.red)
             ForEach(info.problems, id: \.self) { Text($0).font(.callout).foregroundStyle(.red) }
-            if info.problems.isEmpty {
-                Text("Erfüllt DIN 18065:2020-08 (Steigung, Auftritt, Schrittmaß, Laufbreite, Durchgangshöhe).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            ForEach(info.notes, id: \.self) { Text($0).font(.callout).foregroundStyle(.orange) }
+            Picker("Form", selection: Binding(
+                get: { Int(info.form) },
+                set: { model.run(stairFormCommand(stair: info.element, index: UInt32($0))) }
+            )) {
+                ForEach(Array(AppModel.stairForms.enumerated()), id: \.offset) { Text($1).tag($0) }
+            }
+            if form != "gerade" && form != "gerade mit Zwischenpodest" {
+                Picker(form == "Spindeltreppe" ? "Drehsinn" : "Wendung", selection: Binding(
+                    get: { info.turnsLeft },
+                    set: { set("TurnLeft(\($0))") }
+                )) {
+                    Text(form == "Spindeltreppe" ? "gegen den Uhrzeigersinn" : "nach links").tag(true)
+                    Text(form == "Spindeltreppe" ? "im Uhrzeigersinn" : "nach rechts").tag(false)
+                }
+            }
+            if form == "Spindeltreppe" {
+                MetreRow(title: "Außenradius", value: info.radius) { set("Radius(\($0))") }
+                MetreRow(title: "Spindelradius", value: info.spindle) { set("Spindle(\($0))") }
+            } else {
+                MetreRow(title: "Laufbreite", value: info.width) { set("Width(\($0))") }
+            }
+            MetreRow(title: "Auftritt", value: info.tread) { set("Tread(\($0))") }
+            if info.firstRisers > 0 {
+                Stepper("Erster Lauf: \(info.firstRisers) von \(info.risers) Steigungen", value: Binding(
+                    get: { Int(info.firstRisers) },
+                    set: { set("FirstRisers(\($0))") }
+                ), in: 2...Int(max(info.risers, 4)) - 2)
+            }
+            if form == "halbgewendelt" {
+                MetreRow(title: "Treppenauge", value: info.eye) { set("Eye(\($0))") }
+            }
+            Toggle("Baurechtlich notwendig", isOn: Binding(get: { info.necessary }, set: { set("Necessary(\($0))") }))
+            Button("Steigungen und Auftritt nach DIN 18065 vorschlagen") { set("Propose") }
+            Text("Griffe im Plan: Antritt verschieben, Laufbreite oder Radius ziehen, Podest oder Wendelung verschieben.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Zahl in Metern mit Einheit, übernommen mit ⏎.
+private struct MetreRow: View {
+    let title: String
+    let value: Double
+    let onCommit: (Double) -> Void
+
+    var body: some View {
+        LabeledContent(title) {
+            HStack(spacing: 4) {
+                TextField("", value: Binding(get: { value }, set: { if abs($0 - value) > 1e-9 { onCommit($0) } }),
+                          format: .number.precision(.fractionLength(2)))
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 56)
+                Text("m").foregroundStyle(.secondary)
             }
         }
     }

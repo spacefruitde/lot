@@ -62,6 +62,18 @@ pub fn draw_stairs(
             draw_stair(objects, project, id, stair, cut_height, Mode::FromBelow, &cover, style, viewport);
         }
     }
+    // Geländer über die Stufen gewendelter und Spindeltreppen: unter der Schnitthöhe durchgezogen.
+    for (_, railing) in project.railings_on(storey) {
+        if let RailingPath::Steps { stair, outer } = railing.path
+            && let Some(layout) = project.stair(stair).and_then(|s| project.stair_layout(s))
+        {
+            for w in layout.steps_side(outer, lot_geom::stairs::RAILING_INSET).windows(2) {
+                let look = if w[0].1 <= cut_height { Look::Solid } else { Look::Dashed };
+                let (a, b) = (viewport.to_paper(w[0].0.x, w[0].0.y), viewport.to_paper(w[1].0.x, w[1].0.y));
+                objects.push(line(vec![a, b], style.pens.view, look));
+            }
+        }
+    }
     // Freie Geländer stehen auf OKFF und werden geschnitten.
     for (_, railing) in project.railings_on(storey) {
         if let RailingPath::Points(points) = &railing.path {

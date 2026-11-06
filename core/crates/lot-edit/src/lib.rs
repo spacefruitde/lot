@@ -195,6 +195,18 @@ enum Drag {
         end: End,
         current: Point2,
     },
+    /// Griff an einer Treppe: Laufbreite, Aufteilung, Radius, Antritt (ADR 0051).
+    StairGrip {
+        stair: ElementId,
+        grip: stairs::StairGrip,
+        current: Point2,
+    },
+    /// Neigungsgriff an einer Traufe.
+    RoofSlope {
+        roof: ElementId,
+        edge: usize,
+        current: Point2,
+    },
 }
 
 /// Was der Renderer über dem Plan zeigt, in Modellkoordinaten.
@@ -840,6 +852,25 @@ impl Editor {
                     self.drag = None;
                     return Response { open: Some(navigation::ViewRef::Section(id.0)), ..Response::redraw() };
                 }
+                // Griff an einer gewählten Treppe oder Neigungsgriff an einem gewählten Dach?
+                for &id in &self.selection {
+                    if let Some(stair) = project.stair(id) {
+                        for (grip, p) in stairs::grips(stair) {
+                            if p.distance(input.point) <= input.tolerance {
+                                self.drag = Some(Drag::StairGrip { stair: id, grip, current: p });
+                                return Response::redraw();
+                            }
+                        }
+                    }
+                    if let Some(roof) = project.roof(id) {
+                        for (edge, p) in roofs::slope_grips(roof) {
+                            if p.distance(input.point) <= input.tolerance {
+                                self.drag = Some(Drag::RoofSlope { roof: id, edge, current: p });
+                                return Response::redraw();
+                            }
+                        }
+                    }
+                }
                 // Griff an einem Ende einer gewählten Schnittlinie?
                 for &id in &self.selection {
                     let Some(Element::SectionView(v)) = project.elements.get(&id) else { continue };
@@ -943,6 +974,23 @@ impl Editor {
                 }
                 Response::redraw()
             }
+            Some(Drag::StairGrip { grip, .. }) => {
+                let p = if grip == stairs::StairGrip::Start {
+                    self.snap(project, self.storey, input.point, input.tolerance, None, false, &[]).point
+                } else {
+                    input.point
+                };
+                if let Some(Drag::StairGrip { current, .. }) = &mut self.drag {
+                    *current = p;
+                }
+                Response::redraw()
+            }
+            Some(Drag::RoofSlope { .. }) => {
+                if let Some(Drag::RoofSlope { current, .. }) = &mut self.drag {
+                    *current = input.point;
+                }
+                Response::redraw()
+            }
             Some(Drag::SectionEnd { view, end, .. }) => {
                 let other = match project.elements.get(&view) {
                     Some(Element::SectionView(v)) => Some(if end == End::Start { v.end } else { v.start }),
@@ -1017,6 +1065,23 @@ impl Editor {
                 Some(change) => ("Schnittlinie ändern", vec![change]),
                 None => return Response::redraw(),
             },
+            Drag::StairGrip { stair, grip, current } => {
+                let Some(edit) = doc.project().stair(stair).and_then(|s| stairs::grip_edit(s, grip, current)) else {
+                    return Response::redraw();
+                };
+                return match stairs::edit_ops(doc.project(), stair, &edit) {
+                    Ok(ops) => self.apply_ops(doc, "Treppe ändern", ops),
+                    Err(e) => Response { error: Some(e), ..Response::redraw() },
+                };
+            }
+            Drag::RoofSlope { roof, edge, current } => {
+                let Some(slope) = doc.project().roof(roof).and_then(|r| roofs::slope_from_grip(r, edge, current))
+                else {
+                    return Response::redraw();
+                };
+                let ops = roofs::edge_ops(doc.project(), roof, edge, Some(slope), None);
+                return self.apply_ops(doc, "Dachneigung", ops);
+            }
         };
         Response::from_result(replace_all(doc, label, changes))
     }
@@ -1040,6 +1105,21 @@ impl Editor {
             Drag::Endpoint { wall, end, current } => as_elements(moved_endpoint(project, *wall, *end, *current)),
             Drag::SectionEnd { view, end, current } => {
                 moved_section_end(project, *view, *end, *current).into_iter().collect()
+            }
+            Drag::StairGrip { stair, grip, current } => {
+                let s = project.stair(*stair)?;
+                let edit = stairs::grip_edit(s, *grip, *current)?;
+                let new = stairs::edited(project, s, &edit)?;
+                vec![(*stair, Element::Stair(new))]
+            }
+            Drag::RoofSlope { roof, edge, current } => {
+                let r = project.roof(*roof)?;
+                let slope = roofs::slope_from_grip(r, *edge, *current)?;
+                let mut n = r.clone();
+                if let Some(lot_model::RoofEdge::Eave { slope: s, .. }) = n.edges.get_mut(*edge) {
+                    *s = slope;
+                }
+                vec![(*roof, Element::Roof(n))]
             }
             Drag::Pending { .. } | Drag::Frame { .. } | Drag::Lasso { .. } => return None,
         };
@@ -1384,6 +1464,10 @@ impl Editor {
                 });
                 Response::from_result(replace_all(doc, "Gefälle", changes))
             }
+            Command::SetStair(id, edit) => match stairs::edit_ops(doc.project(), ElementId(*id), edit) {
+                Ok(ops) => self.apply_ops(doc, "Treppe ändern", ops),
+                Err(e) => Response { error: Some(e), ..Response::redraw() },
+            },
             Command::ClearDrains => {
                 let changes = self.selected_slabs(&doc.project().clone(), |s| {
                     if let Some(f) = s.fall.as_mut() {
@@ -2045,6 +2129,45 @@ impl Editor {
                 let far = |p: Point2| Point2::new(p.x + n.0 * v.depth, p.y + n.1 * v.depth);
                 overlay.guides.extend([(far(v.start), far(v.end)), (v.start, far(v.start)), (v.end, far(v.end))]);
             }
+        }
+        // Griffe an gewählten Treppen und Neigungsgriffe an gewählten Dächern (ADR 0051).
+        for id in &self.selection {
+            if let Some(stair) = project_now.stair(*id) {
+                overlay.handles.extend(stairs::grips(stair).into_iter().map(|(_, p)| p));
+            }
+            if let Some(roof) = project_now.roof(*id) {
+                overlay.handles.extend(roofs::slope_grips(roof).into_iter().map(|(_, p)| p));
+            }
+        }
+        match &self.drag {
+            Some(Drag::StairGrip { stair, current, .. }) => {
+                if let Some(s) = project_now.stair(*stair) {
+                    let text = match stairs::form_of(s) {
+                        stairs::StairForm::Spiral => {
+                            format!("R {}", format_m(s.spiral.map_or(0.0, |sp| sp.radius)))
+                        }
+                        _ if s.flights.len() >= 2 => format!(
+                            "Breite {} · {} + {} Stg.",
+                            format_m(s.width),
+                            s.flights[0].risers,
+                            s.flights[1].risers
+                        ),
+                        _ => format!("Breite {}", format_m(s.width)),
+                    };
+                    overlay.label = Some((*current, text));
+                    if let Some((_, problems)) = stairs::verdict(project, s) {
+                        overlay.verdict = Some(problems.is_empty());
+                    }
+                }
+            }
+            Some(Drag::RoofSlope { roof, edge, current }) => {
+                if let Some(lot_model::RoofEdge::Eave { slope, .. }) =
+                    project_now.roof(*roof).and_then(|r| r.edges.get(*edge).copied())
+                {
+                    overlay.label = Some((*current, format!("{}°", format!("{slope:.1}").replace('.', ","))));
+                }
+            }
+            _ => {}
         }
         // Kanten gewählter Decken: folgt einer Wand oder frei (ADR 0051).
         for id in &self.selection {

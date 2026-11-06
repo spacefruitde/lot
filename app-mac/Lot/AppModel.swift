@@ -111,6 +111,7 @@ final class AppModel {
     private(set) var roofInfos: [RoofInfo] = []
     private(set) var stairInfos: [StairInfo] = []
     static let fallPurposes = Lot.fallPurposes()
+    static let stairForms = Lot.stairForms()
     static let phases = phaseFilters()
 
     static let fileType = UTType(filenameExtension: "lot") ?? .data

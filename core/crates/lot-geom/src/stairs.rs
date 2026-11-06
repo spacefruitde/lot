@@ -137,6 +137,16 @@ pub fn railing_solids(project: &Project, railing: &Railing) -> Vec<(usize, Strin
             // Die Vorderkante der ersten Stufe liegt eine Steigung über dem Antritt.
             segments.push(Segment { a, b, za, zb, steps: Some((f.base, layout.rise, layout.tread)) });
         }
+        RailingPath::Steps { stair, outer } => {
+            let Some(s) = project.stair(*stair) else { return Vec::new() };
+            let Some(layout) = project.stair_layout(s) else { return Vec::new() };
+            // Je Stufe ein Stück; die Stäbe stehen auf dieser Stufe.
+            for w in layout.steps_side(*outer, RAILING_INSET).windows(2) {
+                let ((a, za), (b, zb)) = (w[0], w[1]);
+                let len = a.distance(b).max(1e-9);
+                segments.push(Segment { a, b, za, zb, steps: Some((za - layout.rise, layout.rise, len + 1e-6)) });
+            }
+        }
     }
     let h = railing.height;
     let mut rails: Vec<Manifold> = Vec::new();

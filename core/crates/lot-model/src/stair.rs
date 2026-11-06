@@ -161,6 +161,8 @@ pub struct Step {
     pub top: f64,
     /// Vorderkante von der inneren zur äußeren Begrenzung.
     pub front: (Point2, Point2),
+    /// Hinterkante: Vorderkante der nächsten Stufe oder des Austritts.
+    pub back: (Point2, Point2),
     /// Auftritt an der inneren Begrenzung der Laufbreite, als Sehne (DIN 18065:2020-08, 6.2.2).
     pub inner: f64,
 }
@@ -239,6 +241,21 @@ impl Stair {
 }
 
 impl StairLayout {
+    /// Seite einer gewendelten oder Spindeltreppe, um `inset` nach innen gerückt:
+    /// Punkte an jeder Vorderkante und am Austritt, mit der Höhe der Stufenvorderkante.
+    pub fn steps_side(&self, outer: bool, inset: f64) -> Vec<(Point2, f64)> {
+        let pick = |(i, o): (Point2, Point2)| {
+            let (from, to) = if outer { (o, i) } else { (i, o) };
+            let len = from.distance(to).max(1e-12);
+            Point2::new(from.x + (to.x - from.x) / len * inset, from.y + (to.y - from.y) / len * inset)
+        };
+        let mut out: Vec<(Point2, f64)> = self.steps.iter().map(|s| (pick(s.front), s.top)).collect();
+        if let Some(last) = self.steps.last() {
+            out.push((pick(last.back), last.top + self.rise));
+        }
+        out
+    }
+
     /// Stufen eines Laufs, von unten nach oben. Ein Lauf mit n Steigungen hat
     /// n - 1 Stufen; die letzte Steigung führt auf das Podest oder den Austritt.
     pub fn treads(&self, flight: &FlightLayout) -> Vec<Tread> {
@@ -346,6 +363,9 @@ pub enum RailingPath {
     Points(Vec<Point2>),
     /// An einer Seite eines Treppenlaufs (links oder rechts in Gehrichtung nach oben).
     Flight { stair: ElementId, flight: usize, side: WallSide },
+    /// Über alle Stufen einer gewendelten oder Spindeltreppe, an der äußeren
+    /// oder der inneren Begrenzung (ADR 0051).
+    Steps { stair: ElementId, outer: bool },
 }
 
 /// Innere Ecke eines Viertelpodests: auf Höhe des Laufendes, auf der Seite des nächsten Laufs.

@@ -195,9 +195,18 @@ pub fn check_project(project: &Project, geometry: &ModelGeometry) -> CheckReport
             de(c.tread * 100.0, 1),
             de(c.step * 100.0, 1),
             de(project.stair(c.stair).map_or(0.0, |s| s.width), 2),
-            if c.problems.is_empty() { String::new() } else { format!(": {}", c.problems.join("; ")) }
+            {
+                let all: Vec<String> = c.problems.iter().chain(&c.notes).cloned().collect();
+                if all.is_empty() { String::new() } else { format!(": {}", all.join("; ")) }
+            }
         );
-        let status = if c.problems.is_empty() { Status::Ok } else { Status::Fail };
+        let status = if !c.problems.is_empty() {
+            Status::Fail
+        } else if !c.notes.is_empty() {
+            Status::Note
+        } else {
+            Status::Ok
+        };
         let mut finding = Finding::new(status, text, "DIN 18065:2020-08, Tabelle 1");
         if let Some(st) = project.stair(c.stair) {
             finding = finding.located(st.storey, st.start);
