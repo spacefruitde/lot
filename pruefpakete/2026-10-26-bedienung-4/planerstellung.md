@@ -4,20 +4,22 @@ Quellen und Einzelheiten: `recherche-planerstellung.md`. Was Lot heute kann: `lo
 
 ## Kurzvergleich
 
-| Thema | Revit | Archicad | Vectorworks | Allplan | Lot heute |
-|---|---|---|---|---|---|
-| Plankopf | Familie mit gemeinsamen Parametern | 2D mit Autotext auf dem Master | Planrahmen-Objekt als Stil | Legende aus Plan- und Projektattributen | fest im Kern |
-| kennt Maßstab, Format, Inhalt | nein, nur über Parameter | nein, nur über Zeichnungstitel | Maßstab nein | ja, über Attribute | ja |
-| Format wechseln | Familie tauschen | Master tauschen | Rahmen ändern | Rahmen und Kopf passen sich an | Feld in der Datei |
-| gleiche Lage über Blätter | erst seit 2026 (Anker) | über den Master | zentriert verteilen | unbelegt | Koordinate je Ansicht |
-| Revisionen | je Plan anhaken | aus Modelländerungen, Sätze sperren | Title Block Manager | Indextabelle | ein Textfeld |
-| Ausgabe | PDF-Satz mit Namensregel | Publisher-Sätze | „Veröffentlichen“ | Stapeldruck, langsam | Kommandozeile |
-| Faltmarken DIN 824 | unbelegt | Büros zeichnen sie selbst | unbelegt | unbelegt | nein |
-| Bauantrag-Plankopf mit Unterschriften | nicht gefunden | nicht gefunden | nicht gefunden | nicht gefunden | ja (M5) |
+| Thema | Revit | Archicad | Vectorworks | Allplan | Synaps | Lot heute |
+|---|---|---|---|---|---|---|
+| Plankopf | Familie mit gemeinsamen Parametern | 2D mit Autotext auf dem Master | Planrahmen-Objekt als Stil | Legende aus Plan- und Projektattributen | nicht gefunden | fest im Kern |
+| kennt Maßstab, Format, Inhalt | nein, nur über Parameter | nein, nur über Zeichnungstitel | Maßstab nein | ja, über Attribute | unbelegt | ja |
+| Format wechseln | Familie tauschen | Master tauschen | Rahmen ändern | Rahmen und Kopf passen sich an | Feld am Papier, ISO oder frei | Feld in der Datei |
+| gleiche Lage über Blätter | erst seit 2026 (Anker) | über den Master | zentriert verteilen | unbelegt | unbelegt | Koordinate je Ansicht |
+| Revisionen | je Plan anhaken | aus Modelländerungen, Sätze sperren | Title Block Manager | Indextabelle | unbelegt | ein Textfeld |
+| Ausgabe | PDF-Satz mit Namensregel | Publisher-Sätze | „Veröffentlichen“ | Stapeldruck, langsam | Papiere als ein PDF oder einzeln, DXF je Papier | Kommandozeile |
+| Faltmarken DIN 824 | unbelegt | Büros zeichnen sie selbst | unbelegt | unbelegt | unbelegt | nein |
+| Bauantrag-Plankopf mit Unterschriften | nicht gefunden | nicht gefunden | nicht gefunden | nicht gefunden | nicht gefunden | ja (M5) |
 
 **Was Nutzer am meisten ärgert:** In Revit hakt man eine Revision bei 50 Plänen 50 Mal an [44], unfertige Revisionen stehen schon im Plankopf [45], eigene Felder zeigen „?“ und das Format erscheint nicht von selbst [47]; Archicads Master kennt die platzierte Zeichnung nicht, Autotexte fehlen im DWG-Export seit über zehn Jahren [51, 52]; Vectorworks hat keine zentrale Stelle für Revisionen [56]; DIN-Rahmen falten falsch oder Faltmarken fehlen [53]; Allplan braucht 15 Minuten für 12 PDFs [61].
 
 **Wo Lot schon vorn ist:** Der Plankopf aus M5 liest Projektangaben, Grundstück, Entwurfsverfasser, Maßstab und Format selbst und hat die Unterschriftszeile für den Bauantrag; ein Grundriss darf auf mehreren Blättern liegen.
+
+**Synaps** (ergänzt am 6.11.2026, nur aus Website und Doku): Papiere in ISO-Formaten oder frei, je Papier ein Maßstab, mehrere Papiere als ein PDF [65, 66]; laut Website Plansätze mit laufendem Index, automatischen Nummern und Umsortieren per Ziehen [67, 68]. Plankopf, Revisionen und Faltmarken beschreibt die Doku nicht. Am Vorschlag ändert das nichts: Punkt 4 deckt Index und Planliste schon ab.
 
 ## Vorschlag für Lot
 
