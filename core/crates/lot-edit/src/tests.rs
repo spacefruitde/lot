@@ -153,6 +153,8 @@ fn delete_removes_wall_with_openings() {
     let (mut doc, mut ed) = house();
     let inner = wall_with(&doc, Point2::new(3.0, 0.0), Point2::new(3.0, 4.0));
     doc.insert(lot_model::Element::Opening(Opening {
+        own: Default::default(),
+        props: Default::default(),
         recess: None,
         opening_type: None,
         phase: Default::default(),
@@ -181,6 +183,8 @@ fn flip_keeps_openings_in_place() {
     let bottom = wall_with(&doc, Point2::new(6.0, 0.0), Point2::new(0.0, 0.0));
     let id = doc
         .insert(lot_model::Element::Opening(Opening {
+            own: Default::default(),
+            props: Default::default(),
             recess: None,
             opening_type: None,
             phase: Default::default(),
@@ -1308,6 +1312,8 @@ fn flip_keeps_the_wall_and_swaps_its_layers() {
         doc.project().walls().find(|(_, w)| w.start.y.abs() < 1.0 && w.end.y.abs() < 1.0).map(|(id, _)| id).unwrap();
     let door = doc
         .insert(lot_model::Element::Opening(Opening {
+            own: Default::default(),
+            props: Default::default(),
             recess: None,
             opening_type: None,
             phase: Default::default(),
@@ -1402,6 +1408,8 @@ fn house_with_window() -> (Document, Editor, ElementId) {
         doc.project().walls().find(|(_, w)| w.start.y.abs() < 1e-9 && w.end.y.abs() < 1e-9).map(|(id, _)| id).unwrap();
     let id = doc
         .insert(lot_model::Element::Opening(Opening {
+            own: Default::default(),
+            props: Default::default(),
             recess: None,
             phase: Default::default(),
             host: bottom,
@@ -1435,7 +1443,7 @@ fn rough_sill_follows_floor_build_up_and_sill_connection() {
     ed.run(&mut doc, &Command::SetSillConnection(0.03));
     let o = opening(&doc, id);
     let ty = doc.project().opening_type(o.opening_type.unwrap()).unwrap();
-    assert_eq!((ty.mark.as_str(), ty.name.as_str()), ("F1", "Fenster"));
+    assert_eq!((ty.props.mark.as_deref(), ty.name.as_str()), (Some("F1"), "Fenster 1,26 × 1,385"));
     assert!((doc.project().rough_sill(&o).unwrap() - 1.03).abs() < 1e-9);
     assert!((doc.project().opening_span(&o).unwrap().0 - 0.87).abs() < 1e-9);
     // Die Rohbaubrüstung getippt: die BRH folgt.
@@ -1552,4 +1560,113 @@ fn space_turns_the_door_before_placing() {
     seen.sort_by_key(|(s, e)| (*s == lot_model::WallSide::Left, *e));
     seen.dedup();
     assert_eq!(seen.len(), 4, "alle vier Lagen");
+}
+
+#[test]
+fn wall_properties_come_from_the_type_until_they_differ() {
+    use lot_model::Property;
+    use types::Origin;
+    let (mut doc, mut ed) = house();
+    let walls: Vec<ElementId> = doc.project().walls().map(|(id, _)| id).collect();
+    let t = doc.project().wall(walls[0]).unwrap().wall_type;
+    ed.run(&mut doc, &Command::SetTypeProperty(t.0, Property::FireRating, "F 90-A".into()));
+    assert_eq!(types::value(doc.project(), walls[0], Property::FireRating), (Some("F 90-A".into()), Origin::Type));
+    // Eine Wand weicht ab, die anderen bleiben beim Typ.
+    ed.selection = vec![walls[0]];
+    ed.run(&mut doc, &Command::SetElementProperty(Property::FireRating, "F 30-A".into()));
+    assert_eq!(types::value(doc.project(), walls[0], Property::FireRating).1, Origin::Element);
+    assert_eq!(types::value(doc.project(), walls[1], Property::FireRating).1, Origin::Type);
+    // In den Typ übernehmen: jetzt gilt F 30-A für alle.
+    ed.run(&mut doc, &Command::ApplyToType(Property::FireRating));
+    for w in &walls {
+        assert_eq!(types::value(doc.project(), *w, Property::FireRating), (Some("F 30-A".into()), Origin::Type));
+    }
+    // Im Typ festgelegt: Abweichen geht nicht mehr.
+    ed.run(&mut doc, &Command::SetTypeLocked(t.0, Property::FireRating, true));
+    let r = ed.run(&mut doc, &Command::SetElementProperty(Property::FireRating, "F 60".into()));
+    assert!(r.error.unwrap().contains("festgelegt"));
+    // Gleich dem Typwert heißt: vom Typ.
+    ed.run(&mut doc, &Command::SetTypeLocked(t.0, Property::FireRating, false));
+    ed.run(&mut doc, &Command::SetElementProperty(Property::Mark, "AW1".into()));
+    ed.run(&mut doc, &Command::ResetToType(Property::Mark));
+    assert_eq!(types::value(doc.project(), walls[0], Property::Mark).1, Origin::None);
+}
+
+#[test]
+fn opening_sizes_follow_their_type_unless_overridden() {
+    use lot_model::Property;
+    let (mut doc, mut ed, window) = house_with_window();
+    let host = opening(&doc, window).host;
+    let second = doc.insert(lot_model::Element::Opening(Opening { offset: 3.0, ..opening(&doc, window) })).unwrap();
+    assert_eq!(opening(&doc, second).host, host);
+    // Typ F1 mit Rohbaumaß 1,01 × 1,385 für beide Fenster.
+    ed.selection = vec![window, second];
+    ed.run(&mut doc, &Command::SetSillConnection(0.0));
+    let t = opening(&doc, window).opening_type.unwrap();
+    ed.run(&mut doc, &Command::SetTypeSize(t.0, Property::Width, Some(1.01)));
+    assert_eq!((opening(&doc, window).width, opening(&doc, second).width), (1.01, 1.01));
+    // Ein Fenster wird breiter: Es bestimmt seine Breite jetzt selbst.
+    doc.set_param(second, lot_model::Param::OpeningWidth, 1.51).unwrap();
+    assert_eq!(opening(&doc, second).own, vec![Property::Width]);
+    ed.run(&mut doc, &Command::SetTypeSize(t.0, Property::Width, Some(0.885)));
+    assert_eq!((opening(&doc, window).width, opening(&doc, second).width), (0.885, 1.51));
+    // Festlegen setzt alle zurück, danach lässt sich die Breite nur im Typ ändern.
+    ed.run(&mut doc, &Command::SetTypeLocked(t.0, Property::Width, true));
+    assert_eq!(opening(&doc, second).width, 0.885);
+    let e = doc.set_param(second, lot_model::Param::OpeningWidth, 1.2).unwrap_err();
+    assert!(e.to_string().contains("festgelegt"), "{e}");
+}
+
+#[test]
+fn types_are_duplicated_replaced_and_deleted_with_a_replacement() {
+    let (mut doc, mut ed) = house();
+    let used = doc.project().walls().next().unwrap().1.wall_type;
+    let before = doc.project().wall_types().count();
+    ed.run(&mut doc, &Command::DuplicateType(used.0));
+    let copy = doc.project().wall_types().find(|(_, t)| t.name.ends_with("Kopie")).unwrap().0;
+    assert_eq!(doc.project().wall_types().count(), before + 1);
+    ed.run(&mut doc, &Command::RenameType(copy.0, "AW neu".into()));
+    assert_eq!(doc.project().wall_type(copy).unwrap().name, "AW neu");
+    // Löschen ohne Ersatz geht nicht, solange Wände den Typ nutzen.
+    let r = ed.run(&mut doc, &Command::DeleteType(used.0, None));
+    assert!(r.error.unwrap().contains("Ersatz"));
+    let n = types::uses(doc.project(), used).len();
+    ed.run(&mut doc, &Command::DeleteType(used.0, Some(copy.0)));
+    assert!(doc.project().wall_type(used).is_none());
+    assert_eq!(types::uses(doc.project(), copy).len(), n);
+    // Ein Schritt zurück bringt Typ und Wände zurück.
+    assert!(doc.undo().unwrap());
+    assert_eq!(types::uses(doc.project(), used).len(), n);
+}
+
+#[test]
+fn library_types_come_in_one_by_one_with_a_comparison() {
+    use library::{ImportMode, Library, Status};
+    let (mut doc, _ed) = house();
+    let lib = Library::builtin();
+    assert!(lib.wall_types.len() >= 5 && !lib.opening_types.is_empty());
+    let names = |k: &str| k.to_uppercase();
+    let list = library::compare(doc.project(), &lib, &names);
+    // Der Aufbau aus der Vorlage heißt gleich, hat im Projekt aber noch keine IFC-Klasse.
+    let wdvs = list.iter().find(|c| c.name == "Außenwand WDVS 36").unwrap();
+    assert_eq!(wdvs.status, Status::Different);
+    assert!(wdvs.differences.iter().any(|d| d.contains("IFC-Klasse")), "{:?}", wdvs.differences);
+    assert!(wdvs.uses > 0);
+    let klinker = list.iter().find(|c| c.name.contains("Klinker")).unwrap();
+    assert_eq!(klinker.status, Status::New);
+    // Neu holen, dann ersetzen: Die Wände behalten ihren Typ, der Typ ändert sich.
+    let (id, ops) = library::import_ops(doc.project(), &lib, klinker.index, ImportMode::Add).unwrap();
+    doc.apply(lot_model::Operation::Group { label: "Aus der Bibliothek".into(), ops }).unwrap();
+    assert_eq!(doc.project().wall_type(id).unwrap().layers.len(), 5);
+    let existing = wdvs.existing.unwrap();
+    let (same, ops) = library::import_ops(doc.project(), &lib, wdvs.index, ImportMode::Replace).unwrap();
+    doc.apply(lot_model::Operation::Group { label: "Aus der Bibliothek".into(), ops }).unwrap();
+    assert_eq!(same, existing);
+    assert_eq!(doc.project().wall_type(existing).unwrap().props.ifc_class.as_deref(), Some("IfcWall"));
+    let again = library::compare(doc.project(), &lib, &names);
+    assert_eq!(again[wdvs.index].status, Status::Same);
+    // Ein eigener Typ in die Bibliothek und zurück gelesen.
+    let mine = lib.with_type(doc.project(), id).unwrap();
+    let back = Library::parse(&mine.to_ron()).unwrap();
+    assert_eq!(back, mine);
 }

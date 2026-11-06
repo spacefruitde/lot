@@ -24,6 +24,8 @@ fn project() -> Project {
     p.elements.insert(
         WDVS,
         Element::WallType(WallType {
+            locked: Default::default(),
+            props: Default::default(),
             name: "Außenwand WDVS".into(),
             layers: vec![
                 layer("putz", 0.015, Finish),
@@ -36,6 +38,8 @@ fn project() -> Project {
     p.elements.insert(
         INNEN,
         Element::WallType(WallType {
+            locked: Default::default(),
+            props: Default::default(),
             name: "Innenwand tragend".into(),
             layers: vec![
                 layer("putz", 0.015, Finish),
@@ -47,6 +51,8 @@ fn project() -> Project {
     p.elements.insert(
         TRENN,
         Element::WallType(WallType {
+            locked: Default::default(),
+            props: Default::default(),
             name: "Trennwand".into(),
             layers: vec![
                 layer("putz", 0.015, Finish),
@@ -69,6 +75,7 @@ fn add_wall(
     p.elements.insert(
         id,
         Element::Wall(Wall {
+            props: Default::default(),
             joins: Default::default(),
             phase: Default::default(),
             storey: STOREY,
@@ -430,6 +437,8 @@ fn opening_in_arc_is_cut_radially() {
     p.elements.insert(
         id,
         Element::Opening(lot_model::Opening {
+            own: Default::default(),
+            props: Default::default(),
             recess: None,
             opening_type: None,
             phase: Default::default(),
@@ -572,6 +581,8 @@ fn two_spaces() -> (Project, ElementId) {
     p.elements.insert(
         id,
         Element::Opening(lot_model::Opening {
+            own: Default::default(),
+            props: Default::default(),
             recess: None,
             opening_type: None,
             phase: Default::default(),
@@ -691,6 +702,8 @@ fn slab_layers_stack_down_from_the_floor_level() {
     p.elements.insert(
         ty,
         Element::SlabType(lot_model::SlabType {
+            locked: Default::default(),
+            props: Default::default(),
             name: "Decke".into(),
             layers: vec![
                 layer("estrich", 0.05, LayerFunction::Finish),
@@ -702,6 +715,7 @@ fn slab_layers_stack_down_from_the_floor_level() {
     p.elements.insert(
         id,
         Element::Slab(lot_model::Slab {
+            props: Default::default(),
             phase: Default::default(),
             storey: STOREY,
             slab_type: ty,
@@ -819,6 +833,8 @@ fn layers_follow_the_construction_sequence() {
     p.elements.insert(
         ty,
         Element::SlabType(lot_model::SlabType {
+            locked: Default::default(),
+            props: Default::default(),
             name: "Geschossdecke".into(),
             layers: vec![
                 layer("estrich", 0.065, Finish),
@@ -846,6 +862,7 @@ fn layers_follow_the_construction_sequence() {
     p.elements.insert(
         slab,
         Element::Slab(lot_model::Slab {
+            props: Default::default(),
             phase: Default::default(),
             storey: og,
             slab_type: ty,
@@ -890,6 +907,8 @@ fn wall_top_follows_the_slab_above() {
     p.elements.insert(
         ty,
         Element::SlabType(lot_model::SlabType {
+            locked: Default::default(),
+            props: Default::default(),
             name: "Decke".into(),
             layers: vec![layer("stahlbeton", 0.2, LayerFunction::Structure)],
         }),
@@ -898,6 +917,7 @@ fn wall_top_follows_the_slab_above() {
     p.elements.insert(
         slab,
         Element::Slab(lot_model::Slab {
+            props: Default::default(),
             phase: Default::default(),
             storey: og,
             slab_type: ty,

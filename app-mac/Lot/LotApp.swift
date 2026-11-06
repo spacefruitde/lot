@@ -11,9 +11,12 @@ struct LotApp: App {
         }
         // Bürostandard des Büros, bevor der erste Plan gezeichnet wird (2.08).
         let standardError = OfficeStandardFile.install()
+        let libraryError = OfficeLibraryFile.install()
         let model = AppModel()
         if let standardError {
             model.errorMessage = "Bürostandard: \(standardError)"
+        } else if let libraryError {
+            model.errorMessage = "Bibliothek: \(libraryError)"
         }
         _model = State(initialValue: model)
     }
@@ -66,10 +69,13 @@ struct LotApp: App {
                     .keyboardShortcut("h", modifiers: [.command, .shift])
                 Divider()
                 Button("Bürostandard bearbeiten …") { OfficeStandardFile.edit() }
+                Button("Bibliothek des Büros bearbeiten …") { OfficeLibraryFile.edit() }
             }
             CommandMenu("Werkzeug") {
                 Button("Befehle …") { model.showPalette.toggle() }
                     .keyboardShortcut("k")
+                Button("Typen …") { model.openTypes() }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
                 Divider()
                 Button("Auswählen (Esc)") { model.run("SelectTool") }
                 Button("Wand zeichnen (WA)") { model.run("WallTool") }

@@ -1,0 +1,78 @@
+// Eingebaute Typen-Bibliothek (ADR 0048), ein Vorschlag zum Start. Ein Büro
+// ersetzt sie durch seine eigene: `~/Library/Application Support/Lot/bibliothek.ron`.
+// Materialien sind Schlüssel aus dem Bürostandard. Rohbaumaße nach DIN 18100:1983-10.
+(
+    wall_types: [
+        (name: "Außenwand WDVS 36", layers: [
+            (material: "putz", thickness: 0.01, function: Finish),
+            (material: "daemmung_hart", thickness: 0.16, function: Insulation),
+            (material: "kalksandstein", thickness: 0.175, function: Structure),
+            (material: "putz", thickness: 0.015, function: Finish),
+        ], props: (ifc_class: Some("IfcWall"))),
+        (name: "Außenwand Ziegel monolithisch 39", layers: [
+            (material: "putz", thickness: 0.02, function: Finish),
+            (material: "ziegel", thickness: 0.365, function: Structure),
+            (material: "putz", thickness: 0.015, function: Finish),
+        ], props: (ifc_class: Some("IfcWall"))),
+        (name: "Außenwand zweischalig Klinker 49", layers: [
+            (material: "klinker", thickness: 0.115, function: Structure),
+            (material: "luftschicht", thickness: 0.04, function: AirGap),
+            (material: "daemmung_hart", thickness: 0.14, function: Insulation),
+            (material: "kalksandstein", thickness: 0.175, function: Structure),
+            (material: "putz", thickness: 0.015, function: Finish),
+        ], props: (ifc_class: Some("IfcWall"))),
+        (name: "Innenwand tragend KS 17,5", layers: [
+            (material: "putz", thickness: 0.015, function: Finish),
+            (material: "kalksandstein", thickness: 0.175, function: Structure),
+            (material: "putz", thickness: 0.015, function: Finish),
+        ], props: (ifc_class: Some("IfcWall"))),
+        (name: "Innenwand tragend KS 24", layers: [
+            (material: "putz", thickness: 0.015, function: Finish),
+            (material: "kalksandstein", thickness: 0.24, function: Structure),
+            (material: "putz", thickness: 0.015, function: Finish),
+        ], props: (ifc_class: Some("IfcWall"))),
+        (name: "Innenwand nichttragend KS 11,5", layers: [
+            (material: "putz", thickness: 0.015, function: Finish),
+            (material: "kalksandstein", thickness: 0.115, function: Structure),
+            (material: "putz", thickness: 0.015, function: Finish),
+        ], props: (ifc_class: Some("IfcWall.PARTITIONING"))),
+        (name: "Trockenbauwand 10", layers: [
+            (material: "gipskarton", thickness: 0.0125, function: Finish),
+            (material: "daemmung", thickness: 0.075, function: Service),
+            (material: "gipskarton", thickness: 0.0125, function: Finish),
+        ], props: (ifc_class: Some("IfcWall.PARTITIONING"))),
+        (name: "Trockenbauwand 12,5 doppelt beplankt", layers: [
+            (material: "gipskarton", thickness: 0.025, function: Finish),
+            (material: "daemmung", thickness: 0.075, function: Service),
+            (material: "gipskarton", thickness: 0.025, function: Finish),
+        ], props: (ifc_class: Some("IfcWall.PARTITIONING"))),
+        (name: "Stahlbetonwand 25", layers: [
+            (material: "stahlbeton", thickness: 0.25, function: Structure),
+        ], props: (ifc_class: Some("IfcWall"))),
+    ],
+    slab_types: [
+        (name: "Geschossdecke StB 20", layers: [
+            (material: "estrich", thickness: 0.05, function: Finish),
+            (material: "daemmung", thickness: 0.03, function: Insulation),
+            (material: "stahlbeton", thickness: 0.2, function: Structure),
+            (material: "putz", thickness: 0.015, function: Finish),
+        ], props: (ifc_class: Some("IfcSlab.FLOOR"))),
+        (name: "Bodenplatte StB 25", layers: [
+            (material: "estrich", thickness: 0.06, function: Finish),
+            (material: "daemmung_hart", thickness: 0.1, function: Insulation),
+            (material: "stahlbeton", thickness: 0.25, function: Structure),
+        ], props: (ifc_class: Some("IfcSlab.BASESLAB"))),
+        (name: "Steildach Sparren 22", layers: [
+            (material: "dachziegel", thickness: 0.06, function: Finish),
+            (material: "daemmung", thickness: 0.22, function: Insulation),
+            (material: "gipskarton", thickness: 0.0125, function: Finish),
+        ], props: (ifc_class: Some("IfcRoof"))),
+    ],
+    opening_types: [
+        (name: "Fenster 1,01 × 1,26", width: Some(1.01), height: Some(1.26), props: (ifc_class: Some("IfcWindow"))),
+        (name: "Fenster 1,26 × 1,385", width: Some(1.26), height: Some(1.385), props: (ifc_class: Some("IfcWindow"))),
+        (name: "Fenstertür 1,01 × 2,26", width: Some(1.01), height: Some(2.26), props: (ifc_class: Some("IfcWindow"))),
+        (name: "Tür 0,885 × 2,01", width: Some(0.885), height: Some(2.01), props: (ifc_class: Some("IfcDoor"))),
+        (name: "Tür 1,01 × 2,135", width: Some(1.01), height: Some(2.135), props: (ifc_class: Some("IfcDoor"))),
+    ],
+)

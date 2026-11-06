@@ -2,7 +2,7 @@
 //! „KI-Assistent“). Die Befehlspalette (8.04) zeigt sie, später ruft die KI
 //! dieselben Befehle auf.
 
-use lot_model::{JoinRule, Phase, WallAlignment, WallEnd, WallSide};
+use lot_model::{JoinRule, Phase, Property, WallAlignment, WallEnd, WallSide};
 use serde::{Deserialize, Serialize};
 
 /// Ein Befehl des Editors. Die Kennung ist seine RON-Schreibweise, etwa
@@ -63,6 +63,29 @@ pub enum Command {
     SetRecess(WallSide, f64),
     /// Unterer Anschluss am Typ der gewählten Öffnungen, in Metern.
     SetSillConnection(f64),
+    /// Textwert am Typ setzen, leer löscht ihn (ADR 0048).
+    SetTypeProperty(u64, Property, String),
+    /// Rohbaumaß am Tür- oder Fenstertyp; `None`: die Öffnungen bestimmen es selbst.
+    SetTypeSize(u64, Property, Option<f64>),
+    /// Wert im Typ festlegen (Bauteile dürfen nicht abweichen) oder freigeben.
+    SetTypeLocked(u64, Property, bool),
+    /// Textwert an den gewählten Bauteilen; gleich dem Typwert heißt „vom Typ“.
+    SetElementProperty(Property, String),
+    /// Gewählte Bauteile übernehmen den Wert wieder vom Typ.
+    ResetToType(Property),
+    /// Wert des gewählten Bauteils in seinen Typ übernehmen.
+    ApplyToType(Property),
+    /// Typ kopieren; die Kopie ist danach gewählt im Inspektor der Übersicht.
+    DuplicateType(u64),
+    RenameType(u64, String),
+    /// Typ löschen, seine Bauteile bekommen den Ersatz.
+    DeleteType(u64, Option<u64>),
+    /// Gewählten Bauteilen einen Typ geben; bei Öffnungen auch keinen.
+    AssignType(Option<u64>),
+    /// Alle Bauteile eines Typs bekommen einen anderen.
+    ReplaceType(u64, u64),
+    /// Für gewählte Öffnungen ohne Typ einen Typ aus ihrem Rohbaumaß anlegen.
+    CreateOpeningTypes,
     /// Oberkante der gewählten Wände: Index in `Top::TITLES` (Geschoss, Decke, Dach, fest).
     SetWallTop(u32),
     /// Ausnahme am Anschluss eines Wandendes: Wand, Ende, Regel (ADR 0045).

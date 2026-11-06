@@ -1,6 +1,6 @@
 # 0048 Typen und Eigenschaften
 
-Status: entschieden von Ben · 26.10.2026; die Typenverwaltung testet Ben in der App
+Status: entschieden von Ben · 26.10.2026; umgesetzt am 28.10.2026 bis auf die Punkte unter „Folgen“, die Typenverwaltung testet Ben in der App
 
 ## Kontext
 
@@ -22,3 +22,6 @@ Ben am 26.10.2026: „18 ok“, zur Typenverwaltung „19 muss ich testen check 
 ## Folgen
 
 - Tür- und Fenstertypen kommen mit den Öffnungen (ADR 0047).
+- **Umgesetzt am 28.10.2026** (Prüfpaket `pruefpakete/2026-10-28-typen`): Eigenschaften am Typ mit Abweichung am Bauteil (`Properties`), Schloss je Wert (`locked`), Rohbaumaß am Tür- und Fenstertyp mit Abweichung an der Öffnung (`Opening::own`), Typen-Übersicht, Büro-Bibliothek (`bibliothek.ron`) mit Vorher-Nachher-Vergleich, Kennzeichen in der Tür- und Fensterliste.
+- **Noch offen:** Suche und Anheften im Inspektor, verknüpfte Bibliothek mit Update-Hinweis, DIN 276.
+

@@ -74,19 +74,52 @@ pub fn set_sill_connection_ops(project: &Project, ids: &[ElementId], value: f64)
             });
         }
     }
+    ops.extend(new_types_ops(project, &openings, value));
+    ops
+}
+
+/// Legt für die Öffnungen `ids` ohne Typ je Füllung einen Typ an und weist ihn
+/// zu, etwa „Fenster 1,26 × 1,385“ mit Kennzeichen F1. Haben alle Öffnungen
+/// einer Füllung dasselbe Rohbaumaß, gibt der Typ es vor.
+pub fn create_types_ops(project: &Project, ids: &[ElementId]) -> Vec<Operation> {
+    let openings: Vec<(ElementId, &Opening)> = ids
+        .iter()
+        .filter_map(|id| match project.elements.get(id) {
+            Some(Element::Opening(o)) => Some((*id, o)),
+            _ => None,
+        })
+        .collect();
+    new_types_ops(project, &openings, 0.0)
+}
+
+fn new_types_ops(project: &Project, openings: &[(ElementId, &Opening)], sill_connection: f64) -> Vec<Operation> {
+    let mut ops = Vec::new();
     let mut next = project.next_id().0;
+    let mut marks: Vec<String> = project.opening_types().filter_map(|(_, t)| t.props.mark.clone()).collect();
     for fill in 0..FILLS.len() {
         let untyped: Vec<&(ElementId, &Opening)> =
             openings.iter().filter(|(_, o)| o.opening_type.is_none() && fill_index(o) == fill).collect();
-        if untyped.is_empty() {
-            continue;
-        }
+        let Some((_, first)) = untyped.first() else { continue };
         let letter = ["D", "N", "T", "F"][fill];
-        let used = |n: usize| project.opening_types().any(|(_, t)| t.mark == format!("{letter}{n}"));
-        let number = (1..).find(|n| !used(*n)).unwrap_or(1);
+        let number = (1..).find(|n| !marks.contains(&format!("{letter}{n}"))).unwrap_or(1);
+        marks.push(format!("{letter}{number}"));
+        let same = untyped.iter().all(|(_, o)| o.width == first.width && o.height == first.height);
+        let size = |v: f64| format!("{}", (v * 1000.0).round() / 1000.0).replace('.', ",");
+        let name = if same {
+            format!("{} {} × {}", FILLS[fill], size(first.width), size(first.height))
+        } else {
+            FILLS[fill].to_string()
+        };
         let id = ElementId(next);
         next += 1;
-        let ty = OpeningType { name: FILLS[fill].into(), mark: format!("{letter}{number}"), sill_connection: value };
+        let ty = OpeningType {
+            name,
+            sill_connection,
+            width: same.then_some(first.width),
+            height: same.then_some(first.height),
+            props: lot_model::Properties { mark: Some(format!("{letter}{number}")), ..Default::default() },
+            locked: Vec::new(),
+        };
         ops.push(Operation::Insert { id, element: Element::OpeningType(ty) });
         for (oid, o) in untyped {
             let mut n = (*o).clone();

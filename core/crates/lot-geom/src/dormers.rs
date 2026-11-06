@@ -235,6 +235,8 @@ mod tests {
         p.elements.insert(
             ElementId(2),
             Element::SlabType(lot_model::SlabType {
+                locked: Default::default(),
+                props: Default::default(),
                 name: "Dach".into(),
                 layers: vec![Layer { material: "holz".into(), thickness: 0.2, function: LayerFunction::Structure }],
             }),
@@ -242,6 +244,8 @@ mod tests {
         p.elements.insert(
             ElementId(3),
             Element::WallType(WallType {
+                locked: Default::default(),
+                props: Default::default(),
                 name: "Gaubenwand".into(),
                 layers: vec![Layer { material: "holz".into(), thickness: 0.15, function: LayerFunction::Structure }],
             }),

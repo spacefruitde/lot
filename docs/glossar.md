@@ -37,6 +37,13 @@ Bezeichner im Code sind englisch. Diese Liste legt fest, welcher Begriff wofür 
 | Fußbodenaufbau | `Project::floor_build_up` | | Schichten der Decke über der Rohdecke, bis OKFF |
 | Unterer Anschluss | `OpeningType::sill_connection` | | von der Rohbaubrüstung bis zur fertigen Brüstung (Fensterbank, Ausgleich) |
 | Tür- und Fenstertyp | `OpeningType` | IfcDoorType, IfcWindowType | füllt eine Öffnung, mit Kennzeichen wie F1 |
+| Typ | `types::TypeKind` | | Wandaufbau, Deckenaufbau, Tür- oder Fenstertyp; gibt Werte für alle seine Bauteile vor (ADR 0048) |
+| Eigenschaften | `Properties` | | Kennzeichen, IFC-Klasse, Brandschutz, Schallschutz; am Typ, am Bauteil nur die Abweichung |
+| Kennzeichen | `Properties::mark` | | etwa AW1, F1, T3 |
+| Brandschutz, Feuerwiderstand | `Properties::fire_rating` | | etwa F 90-A oder REI 90 |
+| Schallschutz | `Properties::acoustic_rating` | | etwa R'w = 53 dB |
+| im Typ festgelegt | `WallType::locked` | | Bauteile dürfen hier nicht abweichen |
+| abweichend am Bauteil | `Opening::own` | | Rohbaumaß, das die Öffnung statt des Typs bestimmt |
 | Rohbauöffnung | `Project::opening_span` | | Unter- und Oberkante der Öffnung im Rohbau |
 | Nische | `Recess` | | Öffnung, die nur von einer Seite so tief wie angegeben in die Wand reicht |
 | Sturz, Sturzhöhe | `head_height` | | |

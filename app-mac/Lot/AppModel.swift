@@ -27,8 +27,15 @@ final class AppModel {
     private(set) var walls: [WallInfo] = []
     /// Gewählter Anschluss (Doppelklick an einem Wandknoten), ADR 0045.
     private(set) var junction: JunctionInfo?
-    /// Wandaufbau der gewählten Wände, wenn sie alle denselben haben.
-    private(set) var wallType: WallTypeInfo?
+    /// Typ der gewählten Bauteile, wenn sie alle denselben haben (ADR 0048).
+    private(set) var selectedType: TypeInfo?
+    /// Werte des gewählten Bauteils, die sein Typ vorgibt, mit Herkunft.
+    private(set) var properties: [PropertyInfo] = []
+    /// Alle Typen des Projekts, für Auswahl und Übersicht.
+    private(set) var types: [TypeInfo] = []
+    /// Typen der Büro-Bibliothek im Vergleich zum Projekt.
+    private(set) var libraryItems: [LibraryItemInfo] = []
+    var showTypes = false
     /// Materialien des Bürostandards und Schichtfunktionen für den Wandaufbau.
     static let materials = Lot.materials()
     static let functions = layerFunctions()
@@ -132,8 +139,10 @@ final class AppModel {
         doors = state.selection.isEmpty ? [] : document.doors(ids: state.selection)
         walls = state.selection.isEmpty ? [] : document.walls(ids: state.selection)
         openings = state.selection.isEmpty ? [] : document.openings(ids: state.selection)
-        let types = Set(walls.map(\.wallType))
-        wallType = types.count == 1 ? document.wallType(element: types.first!) : nil
+        let selectedTypes = Set(state.selection.compactMap { document.elementType(element: $0) })
+        let typed = state.selection.allSatisfy { document.elementType(element: $0) != nil }
+        selectedType = selectedTypes.count == 1 && typed ? document.typeInfo(element: selectedTypes.first!) : nil
+        properties = state.selection.count == 1 ? document.elementProperties(element: state.selection[0]) : []
         junction = viewport.junction()
         let phases = Set(state.selection.compactMap { document.elementPhase(element: $0) })
         selectionPhase = phases.isEmpty ? nil : (phases.count == 1 ? Int(phases.first!) : -1)
@@ -189,10 +198,10 @@ final class AppModel {
         requestRedraw?()
     }
 
-    /// Ändert Namen und Schichten eines Wandaufbaus in einem Undo-Schritt.
-    func setWallType(_ info: WallTypeInfo, name: String? = nil, layers: [LayerInfo]? = nil) {
+    /// Ändert Namen und Schichten eines Wand- oder Deckenaufbaus in einem Undo-Schritt.
+    func setTypeLayers(_ info: TypeInfo, name: String? = nil, layers: [LayerInfo]? = nil) {
         do {
-            try document.setWallType(element: info.element, name: name ?? info.name, layers: layers ?? info.layers)
+            try document.setTypeLayers(element: info.element, name: name ?? info.name, layers: layers ?? info.layers)
         } catch {
             errorMessage = Self.message(for: error)
         }
@@ -202,6 +211,38 @@ final class AppModel {
         refresh()
         updateViewState()
         requestRedraw?()
+    }
+
+    /// Öffnet die Typen-Übersicht mit dem Vergleich zur Bibliothek.
+    func openTypes() {
+        types = document.types()
+        libraryItems = document.libraryItems()
+        showTypes = true
+    }
+
+    /// Holt einen Typ aus der Bibliothek: neu oder als Ersatz für den gleichnamigen.
+    func importFromLibrary(_ item: LibraryItemInfo, replace: Bool) {
+        do {
+            _ = try document.importFromLibrary(index: item.index, replace: replace)
+        } catch {
+            errorMessage = Self.message(for: error)
+        }
+        if let viewport {
+            stats.rebuildMs = viewport.refresh()
+        }
+        refresh()
+        libraryItems = document.libraryItems()
+        updateViewState()
+        requestRedraw?()
+    }
+
+    /// Legt einen Typ des Projekts in die Bibliothek des Büros.
+    func saveToLibrary(_ type: TypeInfo) {
+        guard let text = document.libraryWithType(element: type.element) else { return }
+        if let error = OfficeLibraryFile.save(text) {
+            errorMessage = error
+        }
+        libraryItems = document.libraryItems()
     }
 
     /// Wählt genau diese Elemente, etwa eine Gruppe aus dem Inspektor.
@@ -333,6 +374,8 @@ final class AppModel {
         canUndo = document.canUndo()
         canRedo = document.canRedo()
         storeyAreas = document.storeyAreas()
+        types = document.types()
+        if showTypes { libraryItems = document.libraryItems() }
         notices += document.roughSillNotices()
     }
 

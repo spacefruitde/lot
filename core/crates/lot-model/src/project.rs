@@ -564,7 +564,15 @@ impl Project {
             ("Stahlbetonwand 25", vec![layer("stahlbeton", 0.25, Structure)]),
         ];
         for (i, (name, layers)) in types.into_iter().enumerate() {
-            p.elements.insert(ElementId(10 + i as u64), Element::WallType(WallType { name: name.into(), layers }));
+            p.elements.insert(
+                ElementId(10 + i as u64),
+                Element::WallType(WallType {
+                    locked: Default::default(),
+                    props: Default::default(),
+                    name: name.into(),
+                    layers,
+                }),
+            );
         }
         let slabs = [
             (
@@ -594,8 +602,15 @@ impl Project {
             ),
         ];
         for (i, (name, layers)) in slabs.into_iter().enumerate() {
-            p.elements
-                .insert(ElementId(20 + i as u64), Element::SlabType(crate::SlabType { name: name.into(), layers }));
+            p.elements.insert(
+                ElementId(20 + i as u64),
+                Element::SlabType(crate::SlabType {
+                    locked: Default::default(),
+                    props: Default::default(),
+                    name: name.into(),
+                    layers,
+                }),
+            );
         }
         p
     }
@@ -616,6 +631,8 @@ impl Project {
         p.elements.insert(
             ElementId(2),
             Element::WallType(WallType {
+                locked: Default::default(),
+                props: Default::default(),
                 name: "Kalksandstein 30".into(),
                 layers: vec![Layer {
                     material: "kalksandstein".into(),
@@ -627,6 +644,7 @@ impl Project {
         p.elements.insert(
             ElementId(3),
             Element::Wall(Wall {
+                props: Default::default(),
                 joins: Default::default(),
                 phase: Default::default(),
                 storey: ElementId(1),
@@ -642,6 +660,8 @@ impl Project {
         p.elements.insert(
             ElementId(4),
             Element::Opening(Opening {
+                own: Default::default(),
+                props: Default::default(),
                 recess: None,
                 opening_type: None,
                 phase: Default::default(),

@@ -256,14 +256,101 @@ pub struct GridLine {
     pub end: Point2,
 }
 
+/// Eigenschaften für Pläne, Listen und den Austausch (ADR 0048). Am Typ
+/// stehen die Werte für alle Bauteile, am Bauteil nur, was dort abweicht.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Properties {
+    /// Kennzeichen, etwa „AW1“ oder „F1“.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mark: Option<String>,
+    /// IFC-Klasse, etwa „IfcWall“ oder mit vordefiniertem Typ „IfcWall.PARTITIONING“.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ifc_class: Option<String>,
+    /// Feuerwiderstand, etwa „F 90-A“ oder „REI 90“.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fire_rating: Option<String>,
+    /// Schallschutz, etwa „R'w = 53 dB“.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acoustic_rating: Option<String>,
+}
+
+impl Properties {
+    pub fn is_empty(&self) -> bool {
+        *self == Properties::default()
+    }
+
+    pub fn get(&self, p: Property) -> Option<&String> {
+        match p {
+            Property::Mark => self.mark.as_ref(),
+            Property::IfcClass => self.ifc_class.as_ref(),
+            Property::FireRating => self.fire_rating.as_ref(),
+            Property::AcousticRating => self.acoustic_rating.as_ref(),
+            Property::Width | Property::Height => None,
+        }
+    }
+
+    /// Setzt einen Wert; ein leerer Text gilt als keiner.
+    pub fn set(&mut self, p: Property, value: Option<String>) {
+        let value = value.map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+        match p {
+            Property::Mark => self.mark = value,
+            Property::IfcClass => self.ifc_class = value,
+            Property::FireRating => self.fire_rating = value,
+            Property::AcousticRating => self.acoustic_rating = value,
+            Property::Width | Property::Height => {}
+        }
+    }
+}
+
+/// Ein Wert, den ein Typ vorgibt und den das Bauteil übernehmen oder, wenn
+/// der Typ es zulässt, abweichend haben kann (ADR 0048).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Property {
+    Mark,
+    IfcClass,
+    FireRating,
+    AcousticRating,
+    /// Breite einer Öffnung (Rohbaumaß), nur bei Tür- und Fenstertypen.
+    Width,
+    /// Höhe einer Öffnung (Rohbaumaß), nur bei Tür- und Fenstertypen.
+    Height,
+}
+
+impl Property {
+    /// Eigenschaften, die jeder Typ hat.
+    pub const TEXT: [Property; 4] =
+        [Property::Mark, Property::IfcClass, Property::FireRating, Property::AcousticRating];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Property::Mark => "Kennzeichen",
+            Property::IfcClass => "IFC-Klasse",
+            Property::FireRating => "Brandschutz",
+            Property::AcousticRating => "Schallschutz",
+            Property::Width => "Breite (Rohbau)",
+            Property::Height => "Höhe (Rohbau)",
+        }
+    }
+}
+
+fn no_props(p: &Properties) -> bool {
+    p.is_empty()
+}
+
 /// Wandaufbau (IfcWallType): Schichten von außen nach innen.
 ///
 /// „Außen“ ist die linke Seite in Zeichenrichtung der Wand. Wer ein Haus im
-/// Uhrzeigersinn zeichnet, hat die Außenseite also immer außen.
+/// Uhrzeigersinn zeichnet, hat die Außenseite also immer außen. Die Schichten
+/// gehören fest zum Typ; Höhe und Bezugslinie gehören zur Wand (ADR 0045).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WallType {
     pub name: String,
     pub layers: Vec<Layer>,
+    #[serde(default, skip_serializing_if = "no_props")]
+    pub props: Properties,
+    /// Eigenschaften, die an den Wänden nicht abweichen dürfen.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locked: Vec<Property>,
 }
 
 impl WallType {
@@ -451,6 +538,9 @@ pub struct Wall {
     /// Ausnahmen am Anschluss für Anfang und Ende (ADR 0045).
     #[serde(default, skip_serializing_if = "JoinRule::both_auto")]
     pub joins: [JoinRule; 2],
+    /// Eigenschaften, die vom Wandaufbau abweichen (ADR 0048).
+    #[serde(default, skip_serializing_if = "no_props")]
+    pub props: Properties,
 }
 
 /// Ausnahme am Anschluss eines Wandendes (ADR 0045). Ohne Ausnahme greifen die
@@ -671,6 +761,12 @@ pub struct Opening {
     /// Nische statt Durchgang: nur so tief in die Wand.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recess: Option<Recess>,
+    /// Eigenschaften, die vom Typ abweichen (ADR 0048).
+    #[serde(default, skip_serializing_if = "no_props")]
+    pub props: Properties,
+    /// Maße, die der Typ vorgibt, die diese Öffnung aber selbst bestimmt.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub own: Vec<Property>,
     /// Bestand, Abbruch oder Neubau (2.05).
     #[serde(default, skip_serializing_if = "Phase::is_new")]
     pub phase: Phase,
@@ -688,13 +784,32 @@ pub struct Recess {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OpeningType {
     pub name: String,
-    /// Kennzeichen in Plänen und Listen, etwa „F1“.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub mark: String,
     /// Unterer Anschluss: von der Rohbaubrüstung bis zur fertigen Brüstung
     /// (Fensterbank, Ausgleich), in Metern.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub sill_connection: f64,
+    /// Rohbaumaß, das alle Öffnungen des Typs übernehmen; ohne Angabe bestimmt es die Öffnung.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<f64>,
+    /// Kennzeichen (etwa „F1“), IFC-Klasse, Brand- und Schallschutz.
+    #[serde(default, skip_serializing_if = "no_props")]
+    pub props: Properties,
+    /// Werte, die an den Öffnungen nicht abweichen dürfen.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locked: Vec<Property>,
+}
+
+impl OpeningType {
+    /// Das Rohbaumaß, das der Typ vorgibt.
+    pub fn size(&self, p: Property) -> Option<f64> {
+        match p {
+            Property::Width => self.width,
+            Property::Height => self.height,
+            _ => None,
+        }
+    }
 }
 
 /// Was in einer Öffnung sitzt.
@@ -932,6 +1047,10 @@ pub enum WallEnd {
 pub struct SlabType {
     pub name: String,
     pub layers: Vec<Layer>,
+    #[serde(default, skip_serializing_if = "no_props")]
+    pub props: Properties,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locked: Vec<Property>,
 }
 
 impl SlabType {
@@ -955,6 +1074,9 @@ pub struct Slab {
     /// Bestand, Abbruch oder Neubau (2.05).
     #[serde(default, skip_serializing_if = "Phase::is_new")]
     pub phase: Phase,
+    /// Eigenschaften, die vom Deckenaufbau abweichen (ADR 0048).
+    #[serde(default, skip_serializing_if = "no_props")]
+    pub props: Properties,
 }
 
 /// Durchbruch in einer Decke (IfcOpeningElement), etwa für eine Treppe oder einen Schacht.
@@ -1174,6 +1296,7 @@ mod tests {
 
     fn arc_wall(sagitta: f64) -> Wall {
         Wall {
+            props: Default::default(),
             joins: Default::default(),
             phase: Default::default(),
             storey: ElementId(1),
