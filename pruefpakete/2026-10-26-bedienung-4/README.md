@@ -4,7 +4,8 @@
 
 ## Was drin ist
 
-- **`bauteile-bauen.md`**, **`planerstellung.md`**, **`3d-materialien.md`**: je Thema ein Kurzvergleich (Revit, Archicad, Vectorworks, Allplan, Lot heute), was Nutzer dort am meisten ärgert, und mein Vorschlag für Lot. Je eine Seite.
+- **`bauteile-bauen.md`**, **`planerstellung.md`**, **`3d-materialien.md`**: je Thema ein Kurzvergleich (Revit, Archicad, Vectorworks, Allplan, Synaps, Lot heute), was Nutzer dort am meisten ärgert, und mein Vorschlag für Lot. Je eine Seite.
+- **Neu am 6.11.2026: Synaps** (Zeichenwerkzeug mit KI im Browser, aus Wien) als fünfte Spalte, nur aus Website und Doku, nicht ausprobiert. Daraus Punkt 7 in `bauteile-bauen.md` (Wände aus dem Scan vorschlagen), er gehört zu Frage 2.
 - `lot-heute.md`: was Lot bei diesen Themen heute kann.
 - `recherche-bauteile-bauen.md`, `recherche-planerstellung.md`, `recherche-3d-materialien.md`: die Recherche mit Quellen. Die Foren sperrten diesmal das direkte Lesen; Forenkritik stammt aus Suchauszügen und ist mit Stern markiert.
 
@@ -17,7 +18,7 @@ Antwort jeweils „Vorschlag ok“, „wie Revit“ oder ein Satz, was anders se
 **Eigene Bauteile und Bestand** (`bauteile-bauen.md`)
 
 1. **Häufigste Bestandssituationen:** Welche kommen bei dir am meisten vor? Vorschlag für die Reihenfolge: Wand mit wechselnder Dicke und schiefen Fluchten, Kamin, Unterzug und Vorsprung, Nische und Schlitz, Holzbalkendecke, Kappendecke und Gewölbe, Fachwerk, Bestandstreppe.
-2. **Wand aus dem Aufmaß und Körper an Ort und Stelle:** Bestandswand mit eigenen Punkten je Seite statt Stückelung; jeder gezeichnete Körper ist sofort ein Bauteil mit Art, Material und Bauzustand, Abzugskörper schneiden Wände und Decken und erscheinen im Grundriss. Vorschlag ok?
+2. **Wand aus dem Aufmaß und Körper an Ort und Stelle:** Bestandswand mit eigenen Punkten je Seite statt Stückelung; jeder gezeichnete Körper ist sofort ein Bauteil mit Art, Material und Bauzustand, Abzugskörper schneiden Wände und Decken und erscheinen im Grundriss. Neu (Punkt 7, für später): Lot schlägt Wände aus einem kalibrierten Scan vor, du bestätigst sie. Vorschlag ok?
 3. **Eigene Bauteile als Typ:** Körper „als Bauteil sichern“, Parameter durch benannte Maße im Modell, oder in Worten beschreiben und Claude schreibt die Definition. Welches Bauteil würdest du als erstes bauen (etwa Einbauküche, Sprossenfenster, Kamin)?
 4. **Bauzustand je Teilbereich und Schicht:** Abbruchbereich als Rechteck in einer Bestandswand, einzelne Schicht abbrechen, ohne die Wand zu teilen. Vorschlag ok?
 
